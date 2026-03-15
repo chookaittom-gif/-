@@ -1171,15 +1171,12 @@ function getIntegratedDailyReport(targetDate) {
 
     const data = sh.getDataRange().getValues();
     
-    // ดึง Template ของกรณีไม่มีงานมาเป็น Source of Truth
     const noJobMsg = (typeof getNoJobTemplate_ === 'function') 
       ? getNoJobTemplate_(dateHeader) 
       : `📋 รายงานประจำวันระบบจองยานพาหนะ\n📅 ${dateHeader}\n──────────────\n\n🍃 วันนี้ไม่มีภารกิจเดินทางค่ะ`;
 
-    // เงื่อนไข 1: ไม่มีข้อมูลในตาราง
     if (data.length < 2) return noJobMsg;
 
-    // 1. Mapping Headers
     const h = data[0].map(x => String(x).trim());
     const idx = {
       id: h.indexOf('Booking ID'),
@@ -1194,10 +1191,9 @@ function getIntegratedDailyReport(targetDate) {
       endT: h.indexOf('เวลาสิ้นสุด')
     };
 
-    const groups = { pending: [], approved: [], driver_special_approved: [], rejected: [], cancelled:[] };
+    const groups = { pending:[], approved: [], driver_special_approved: [], rejected: [], cancelled:[] };
     let totalFound = 0;
 
-    // 2. Filter & Group Data
     for (let i = 1; i < data.length; i++) {
       const r = data[i];
       const sIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.startD]) : "";
@@ -1214,11 +1210,8 @@ function getIntegratedDailyReport(targetDate) {
       totalFound++;
     }
 
-    // เงื่อนไข 2: มีข้อมูลในตารางแต่ไม่ตรงกับวันนี้
     if (totalFound === 0) return noJobMsg;
 
-    // 3. Build Message Content (กรณีมีงาน)
-    // ปรับ Header ให้สอดคล้องกับ Requirement ใหม่
     let lines =[`📋 <b>รายงานประจำวันระบบจองยานพาหนะ</b>`, `📅 ${dateHeader}`, '', '📊 <b>สถิติจำนวนงานวันนี้</b>'];
 
     const statusConfig =[
@@ -1257,7 +1250,19 @@ function getIntegratedDailyReport(targetDate) {
         const tGo = parseT(r[idx.startT]) || "--:--";
         const tBack = parseT(r[idx.endT]);
         
-        const timeRange = tBack ? `${tGo} น. - ${tBack} น.` : `${tGo} น.`;
+        const sIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.startD]) : "";
+        const eIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.endD]) : sIso;
+        
+        let timeRange = '';
+        if (!sIso || sIso === eIso) {
+            timeRange = tBack ? `${tGo} น. - ${tBack} น.` : `${tGo} น.`;
+        } else {
+            const sDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(r[idx.startD]) : sIso;
+            const eDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(r[idx.endD]) : eIso;
+            const sDShort = sDateTH !== '-' ? sDateTH.substring(0, 5) : '-';
+            const eDShort = eDateTH !== '-' ? eDateTH.substring(0, 5) : '-';
+            timeRange = `ข้ามวัน (${sDShort} ${tGo} → ${eDShort} ${tBack || ''})`;
+        }
 
         const place = String(r[idx.place] || '-');
         const name = String(r[idx.name] || '-');
@@ -1289,6 +1294,7 @@ function getIntegratedDailyReport(targetDate) {
     return "❌ เกิดข้อผิดพลาดในการสร้างรายงาน: " + e.message;
   }
 }
+
 
 
 function getNoJobTemplate_(dateHeader) {
@@ -1528,13 +1534,11 @@ function buildTimeBlock_(dStart, dEnd, tStart, tEnd, reportDateISO) {
   return lines.join('\n');
 }
 
-/* 🍓 [BERRY FULL FIX] ปรับปรุงการแสดงผล วันที่ (พ.ศ.) และ เวลา (HH:mm) */
 function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   rowObj = rowObj || {};
   var st = getStatusKeySafe_(statusKey || rowObj.status || rowObj['สถานะ'] || 'pending');
   if (st === 'driver_claimed') st = 'pending';
 
-  // 🍓 BERRY FIX: เช็คว่าเป็นเคสแก้ไขการมอบหมายงานหรือไม่
   var isUpdate = reasonFromPayload && (reasonFromPayload.indexOf('อัปเดต') > -1 || reasonFromPayload.indexOf('เปลี่ยน') > -1);
 
   var headMap = {
@@ -1561,21 +1565,63 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
     return '';
   }
 
-  // ดึงค่าพื้นฐาน
   var id = getV(['Booking ID', 'id', 'bookingId']);
   var name = getV(['ชื่อ-สกุล', 'name', 'ผู้จอง']);
+  var position = getV(['ตำแหน่ง', 'position']);
+  var phone = getV(['เบอร์โทร', 'เบอร์โทรศัพท์', 'phone']);
   var workType = getV(['ประเภทงาน', 'workType', 'jobType']);
   var workName = getV(['งาน/โครงการ', 'ชื่อโครงการ/งาน', 'workName', 'projectName', 'project']);
   var place = getV(['สถานที่', 'destination', 'place']);
   
-  // 🍓 BERRY FIX: จัดการ วันที่ และ เวลา ให้เป็นรูปแบบ พ.ศ. และ HH:mm
   var sDateRaw = getV(['วันเริ่มต้น', 'startDate']);
-  var sDate = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(sDateRaw) : sDateRaw;
+  var eDateRaw = getV(['วันสิ้นสุด', 'endDate']);
+  var sDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(sDateRaw) : String(sDateRaw||'-');
+  var eDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(eDateRaw) : String(eDateRaw||sDateTH);
   
   var sTimeRaw = getV(['เวลาเริ่มต้น', 'startTime']);
   var eTimeRaw = getV(['เวลาสิ้นสุด', 'endTime']);
-  var sTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(sTimeRaw) : sTimeRaw;
-  var eTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(eTimeRaw) : eTimeRaw;
+  var sTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(sTimeRaw) : String(sTimeRaw||'00:00').replace('น.','').trim();
+  var eTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(eTimeRaw) : String(eTimeRaw||'00:00').replace('น.','').trim();
+
+  var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+  function toDateObj(v) {
+    if (!v) return null;
+    if (v instanceof Date && !isNaN(v.getTime())) return v;
+    var s = String(v).trim();
+    if (!s) return null;
+    var mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (mIso) return new Date(Number(mIso[1]), Number(mIso[2])-1, Number(mIso[3]));
+    var mDm = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (mDm) {
+      let yy = Number(mDm[3]);
+      if (yy > 2400) yy -= 543;
+      return new Date(yy, Number(mDm[2])-1, Number(mDm[1]));
+    }
+    var dt = new Date(s);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  var sDateObj = toDateObj(sDateRaw);
+  var eDateObj = toDateObj(eDateRaw) || sDateObj;
+  var isoStart = sDateObj ? Utilities.formatDate(sDateObj, tz, 'yyyy-MM-dd') : '';
+  var isoEnd = eDateObj ? Utilities.formatDate(eDateObj, tz, 'yyyy-MM-dd') : isoStart;
+
+  var sDateShort = sDateTH !== '-' ? sDateTH.substring(0, 5) : '-';
+  var eDateShort = eDateTH !== '-' ? eDateTH.substring(0, 5) : '-';
+
+  var timeBlock =[];
+  if (!isoStart || isoStart === isoEnd) {
+    timeBlock.push('📅 วันที่: ' + sDateTH);
+    timeBlock.push('🕒 เวลา: ' + (sTime || '--:--') + ' - ' + (eTime || '--:--') + ' น.');
+  } else {
+    timeBlock.push('');
+    timeBlock.push('🕒 งานข้ามวัน');
+    timeBlock.push('ไป: ' + sDateTH + ' ' + (sTime || '--:--') + ' น.');
+    timeBlock.push('กลับ: ' + eDateTH + ' ' + (eTime || '--:--') + ' น.');
+    timeBlock.push('ช่วงงาน: ' + sDateShort + ' ' + (sTime || '--:--') + ' → ' + eDateShort + ' ' + (eTime || '--:--'));
+    timeBlock.push('🌙 ค้างคืน');
+    timeBlock.push('');
+  }
 
   var plate = getV(['เลขทะเบียนรถ', 'vehicle', 'plate']);
   var driver = getV(['พนักงานขับรถ', 'driver']);
@@ -1583,19 +1629,25 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   var carType = getV(['ประเภทรถ', 'carType', 'vehicleType']) || 'รถยนต์';
   var vCount = getV(['จำนวนรถที่ต้องการ', 'vehicleCount', 'carCount']) || '1';
 
+  var userDisplay = name;
+  if (position && position !== '-') userDisplay += ' (' + position + ')';
+
   var lines = [];
   lines.push('<b>' + (headMap[st] || headMap.pending) + '</b>');
   lines.push('🆔 Booking ID: ' + (id || '-'));
   lines.push('──────────────');
-  lines.push('👤 ผู้จอง: ' + name);
-  lines.push('🎯 ประเภทงาน: ' + (workType || '-'));
+  lines.push('👤 ผู้จอง: ' + userDisplay);
+  if (phone && phone !== '-') lines.push('📞 ' + phone);
+  
+  if (workType && workType !== '-') lines.push('🎯 ประเภทงาน: ' + workType);
   lines.push('📝 งาน/โครงการ: ' + (workName || '-'));
   lines.push('📍 สถานที่: ' + place);
-  lines.push('📅 วันที่: ' + (sDate || '-'));
-  lines.push('🕒 เวลา: ' + (sTime || '--:--') + ' - ' + (eTime || '--:--') + ' น.');
+  
+  lines = lines.concat(timeBlock);
+
+  lines.push('👥 ผู้ร่วมเดินทาง: ' + pax + ' คน');
   lines.push('🚐 ประเภทรถ: ' + carType);
   lines.push('🚗 จำนวนที่ขอ: ' + vCount + ' คัน');
-  lines.push('👥 ผู้ร่วมเดินทาง: ' + pax + ' คน');
 
   if (st === 'approved' || st === 'driver_special_approved') {
     lines.push('──────────────');
@@ -1612,10 +1664,10 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
     lines.push('💬 ' + (st === 'rejected' || st === 'cancelled' ? 'เหตุผล: ' : 'หมายเหตุ: ') + note);
   }
 
-  // ล้างอักขระขยะก่อนส่ง
   return lines.join('\n')
     .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/gi, '')
     .replace(/D\s*น\./gi, '')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -7475,8 +7527,24 @@ function runFullTelegramLogTest() {
     Logger.log("----------------------------------------");
   }
 
-  // 1-6. ทดสอบแต่ละสถานะ (อิงจาก logic จริงใน buildBookingStatusMessage)
-  runIndividualCase("1. จองใหม่ (Pending)", "pending");
+  // 1. ทดสอบจองใหม่ (ปรับให้เป็น Mock งานข้ามวัน ตาม Requirement ของผู้ใช้)
+  runIndividualCase("1. จองใหม่ (Pending) - งานข้ามวัน", "pending", {
+    "Booking ID": "1383",
+    "ชื่อ-สกุล": "ผศ.ดร.นพพร แพทย์รัตน์",
+    "ตำแหน่ง": "อาจารย์",
+    "เบอร์โทร": "0992361553",
+    "ประเภทงาน": "", 
+    "งาน/โครงการ": "อบรม",
+    "สถานที่": "มหาวิทยาลัยสวนดุสิต กรุงเทพมหานคร",
+    "วันเริ่มต้น": "2026-03-08",
+    "เวลาเริ่มต้น": "09:00",
+    "วันสิ้นสุด": "2026-03-10",
+    "เวลาสิ้นสุด": "17:00",
+    "จำนวนผู้ร่วมเดินทาง": "3",
+    "จำนวนรถที่ต้องการ": "1"
+  });
+
+  // 2-6. ทดสอบแต่ละสถานะ
   runIndividualCase("2. [SPECIAL TEST] อนุมัติกรณีพิเศษ", "driver_special_approved", { "เลขทะเบียนรถ": "นข-9999", "พนักงานขับรถ": "นายสมชาย" });
   runIndividualCase("3. อนุมัติปกติ", "approved", { "เลขทะเบียนรถ": "ฮค-1234", "พนักงานขับรถ": "พี่ยอด" });
   runIndividualCase("4. [RE-ASSIGN] เปลี่ยนรถ/คนขับ", "approved", { "เลขทะเบียนรถ": "กท-5555", "พนักงานขับรถ": "นายเอกชัย", "Reason": "อัปเดตการมอบหมายรถ/คนขับใหม่" });
@@ -7488,7 +7556,7 @@ function runFullTelegramLogTest() {
 
   var mockHeaders =["Booking ID", "สถานะ", "ชื่อ-สกุล", "ประเภทงาน", "งาน/โครงการ", "สถานที่", "เลขทะเบียนรถ", "พนักงานขับรถ", "วันเริ่มต้น", "เวลาเริ่มต้น", "วันสิ้นสุด", "เวลาสิ้นสุด"];
   var mockDataRowsJobs = [
-    mockHeaders,["BK-001", "approved", "สมชาย จองจริง", "ประชุม", "งานแผน", "ศูนย์ฯ ลำปาง", "ฮค-4964", "ประเสริฐ", "2026-03-12", "09:00", "2026-03-12", "12:00"],["BK-002", "pending", "สมหญิง พึ่งพา", "อบรม", "โครงการ A", "กทม.", "", "", "2026-03-12", "07:00", "2026-03-12", "17:00"],["BK-003", "driver_special_approved", "ผอ.ศูนย์", "รับรอง", "ต้อนรับแขก", "สนามบิน", "นข-1111", "พี่ยอด", "2026-03-12", "14:00", "2026-03-12", "16:00"]
+    mockHeaders,["BK-001", "approved", "สมชาย จองจริง", "ประชุม", "งานแผน", "ศูนย์ฯ ลำปาง", "ฮค-4964", "ประเสริฐ", "2026-03-12", "09:00", "2026-03-12", "12:00"],["BK-002", "pending", "สมหญิง พึ่งพา", "อบรม", "โครงการ A", "กทม.", "", "", "2026-03-12", "07:00", "2026-03-14", "17:00"], // จำลองงานข้ามวันใน Daily Report["BK-003", "driver_special_approved", "ผอ.ศูนย์", "รับรอง", "ต้อนรับแขก", "สนามบิน", "นข-1111", "พี่ยอด", "2026-03-12", "14:00", "2026-03-12", "16:00"]
   ];
 
   var originalGetActive = SpreadsheetApp.getActiveSpreadsheet;
@@ -7496,7 +7564,6 @@ function runFullTelegramLogTest() {
   SpreadsheetApp.getActiveSpreadsheet = function() {
     return { getSheetByName: function() { return { getDataRange: function() { return { getValues: function() { return mockDataRowsJobs; } }; } }; } };
   };
-  
   var dailyMsgJobs = getIntegratedDailyReport(new Date(2026, 2, 12));
   Logger.log(dailyMsgJobs);
   Logger.log("\n----------------------------------------");
