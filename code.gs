@@ -7485,7 +7485,7 @@ function runFullTelegramLogTest() {
   
   runIndividualCase("5. ไม่อนุมัติ", "rejected", { "Reason": "รถติดภารกิจ" });
   runIndividualCase("6. ยกเลิกการจอง", "cancelled", { "CancelReason": "ยกเลิกโครงการ" });
-14:10 15/3/2569
+
   // 7. ทดสอบรายงานประจำวัน (Daily Summary: มีงาน)
   Logger.log("📋 [7. รายงานสรุปประจำวัน (Daily Summary: มีงาน - 05:00 AM)]\n");
 
