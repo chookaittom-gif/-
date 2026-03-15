@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
+    body { font-family: 'Sarabun', sans-serif; padding: 10mm; color: #000; line-height: 1.5; }
+    .header { text-align: center; margin-bottom: 25px; border-bottom: 2.5px solid #1e3a8a; padding-bottom: 15px; }
+    .title { font-size: 20pt; font-weight: bold; color: #1e3a8a; margin: 0; }
+    .subtitle { font-size: 16pt; margin-top: 5px; }
+    .note { font-size: 10pt; color: #dc2626; font-style: italic; margin-top: 5px; }
+
+    .summary-box { 
+      background-color: #f8fafc; border: 1px solid #cbd5e1; 
+      padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14pt;
+    }
+
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
+    th, td { 
+      border: 1px solid #444; padding: 6px; font-size: 11pt; 
+      text-align: center; word-wrap: break-word; vertical-align: top;
+    }
+    th { background-color: #f1f5f9; font-weight: bold; }
+    .text-left { text-align: left; }
+    .text-right { text-align: right; }
+
+    /* จำกัด Cell ละไม่เกิน 5 บรรทัด ตามกฎ */
+    .limit-lines {
+      display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    .badge-active { color: #166534; font-weight: bold; }
+    .badge-expired { color: #991b1b; font-weight: bold; }
+    
+    .footer { margin-top: 30px; text-align: right; font-size: 10pt; color: #666; border-top: 1px solid #ddd; padding-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">รายงานสรุปข้อมูลประกันภัยยานพาหนะประจำปี</div>
+    <div class="subtitle">ปีงบประมาณ พ.ศ. <?= yearBE ?></div>
+    <? if (periodNote) { ?><div class="note"><?= periodNote ?></div><? } ?>
+  </div>
+
+  <div class="summary-box">
+    <strong>สถิติรวม:</strong> รายการทั้งหมด <?= stats.total ?> คัน | 
+    คุ้มครอง <span class="badge-active"><?= stats.active ?></span> | 
+    หมดอายุ <span class="badge-expired"><?= stats.expired ?></span><br>
+    <strong>รวมงบประมาณค่าเบี้ยประกันภัย:</strong> <?= stats.cost.toLocaleString('th-TH', {minimumFractionDigits:2}) ?> บาท
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:12%">ทะเบียน</th>
+        <th style="width:18%">บริษัทประกัน</th>
+        <th style="width:15%">เลขกรมธรรม์</th>
+        <th style="width:15%">วันเริ่ม-สิ้นสุด</th>
+        <th style="width:12%">ค่าเบี้ย (บาท)</th>
+        <th style="width:10%">สถานะ</th>
+        <th style="width:18%">หมายเหตุ</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? if (list.length === 0) { ?>
+        <tr><td colspan="7" style="padding: 20px;">-- ไม่พบข้อมูล --</td></tr>
+      <? } else { 
+          for (var i = 0; i < list.length; i++) { ?>
+        <tr>
+          <td><strong><?= list[i].plate ?></strong></td>
+          <td class="text-left"><?= list[i].provider ?></td>
+          <td><div class="limit-lines"><?= list[i].policy ?></div></td>
+          <td><?= list[i].startTxt ?><br>ถึง <?= list[i].endTxt ?></td>
+          <td class="text-right"><?= list[i].costTxt ?></td>
+          <td class="<?= list[i].statusTxt === 'คุ้มครอง' ? 'badge-active' : 'badge-expired' ?>"><?= list[i].statusTxt ?></td>
+          <td class="text-left"><div class="limit-lines"><?= list[i].remark ?></div></td>
+        </tr>
+      <? } } ?>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    ออกรายงานโดย: <?= systemName ?><br>
+    วันที่ออกรายงาน: <?= generatedAt ?>
+  </div>
+</body>
+</html>

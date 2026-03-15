@@ -1,0 +1,55 @@
+ปรับ Prompt 
+โฟกัสปํญหานี้ 
+1.เสนอไอเดียการออกแบบเพิ่มเติมแทบไทมไลน์ให้คลิกแล้ว Modal เปิดเป็นรายละเอียดการจองดีไหมควรปรับปรุงฟีเจอร์อะไรเพิ่มข้อความคิดเห็น
+ที่ทำให้น่าใช้งานมากขึ้น
+userCodeAppPanel?createOAuthDialog=true:2819 ✅ [V-Berry] Complete UI Wiring System Exported!
+userCodeAppPanel?createOAuthDialog=true:7797 ✅ [V-Berry] All functions exported to Global Scope successfully!
+userCodeAppPanel?createOAuthDialog=true:5266 🚀 Initializing Vehicle Booking System (V-Berry Fix)...
+2166288962-warden_bin_i18n_warden__th.js:149 Net state changed from IDLE to BUSY
+userCodeAppPanel?createOAuthDialog=true:2048 🚀 Application Starting...
+userCodeAppPanel?createOAuthDialog=true:3276 📅 Initializing Calendar View...
+userCodeAppPanel?createOAuthDialog=true:1458 🔌 Wiring Form Submissions (Stable Mode)...
+userCodeAppPanel?createOAuthDialog=true:1486    ✅ Form #insurance-form wired successfully.
+userCodeAppPanel?createOAuthDialog=true:1486    ✅ Form #maintenance-form wired successfully.
+userCodeAppPanel?createOAuthDialog=true:7115 🚗 Populating Vehicle & Driver Selects...
+userCodeAppPanel?createOAuthDialog=true:2036 ✅ [Calendar] Reflow logic executed.
+userCodeAppPanel?createOAuthDialog=true:1853 ✅ [Calendar] Reflow after tab shown PASS
+userCodeAppPanel?createOAuthDialog=true:7223    ✅ Drivers populated.
+userCodeAppPanel?createOAuthDialog=true:450 📇 Reindexed 93 bookings
+userCodeAppPanel?createOAuthDialog=true:4227 ✅ User Chookait logged in as admin
+userCodeAppPanel?createOAuthDialog=true:2507 🧩 initUiComponents(): Starting wiring phases...
+userCodeAppPanel?createOAuthDialog=true:807 ✅ wireDashboardButtons complete
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Dashboard Buttons
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Tab Router
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Header Buttons
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Calendar Month Controls
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Status Filters
+userCodeAppPanel?createOAuthDialog=true:6247 ✅ Footer force show applied (z-index=4000)
+userCodeAppPanel?createOAuthDialog=true:2415 📅 Forcing initial tab to Calendar: #calendar-tab
+userCodeAppPanel?createOAuthDialog=true:2004 🔄 Switched to tab: #calendar-tab
+userCodeAppPanel?createOAuthDialog=true:454 📊 Updating counters...
+userCodeAppPanel?createOAuthDialog=true:466    Counters updated: P=32, A=52, R=0, C=9
+userCodeAppPanel?createOAuthDialog=true:4181 🧪 Self-Test functionality moved to Admin Panel. (Floating disabled)
+userCodeAppPanel?createOAuthDialog=true:4227 ✅ User Chookait logged in as admin
+userCodeAppPanel?createOAuthDialog=true:4276 ✅ Vehicle Count Auto-Clamp Wired!
+userCodeAppPanel?createOAuthDialog=true:5331 ✅ Application initialized successfully!
+userCodeAppPanel?createOAuthDialog=true:1853 ✅ [Calendar] Reflow after tab shown PASS
+userCodeAppPanel?createOAuthDialog=true:2520 🧪 initUiComponents(): Starting deferred wiring...
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Thai Date System
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Submit Logic (With Locking)
+userCodeAppPanel?createOAuthDialog=true:6638 ✅ Wired Availability Listeners (Final + Watchdog + DirtyReset)
+userCodeAppPanel?createOAuthDialog=true:6208 ✅ installVehicleLoaderOnce() installed
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Vehicle Loader
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Availability Listeners
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Vehicle Count Clamp
+userCodeAppPanel?createOAuthDialog=true:4181 🧪 Self-Test functionality moved to Admin Panel. (Floating disabled)
+userCodeAppPanel?createOAuthDialog=true:4227 ✅ User Chookait logged in as admin
+userCodeAppPanel?createOAuthDialog=true:2492 ✅ Self-Test Button
+userCodeAppPanel?createOAuthDialog=true:2529 ✅ initUiComponents(): All phases complete.
+userCodeAppPanel?createOAuthDialog=true:2004 🔄 Switched to tab: #bookings-tab
+userCodeAppPanel?createOAuthDialog=true:5572 🚀 [V-Berry] Loading Bookings View with Date Range Fix...
+2166288962-warden_bin_i18n_warden__th.js:149 Net state changed from BUSY to IDLE
+userCodeAppPanel?createOAuthDialog=true:7177    ✅ Vehicles populated.
+userCodeAppPanel?createOAuthDialog=true:2004 🔄 Switched to tab: #timeline-tab
+2166288962-warden_bin_i18n_warden__th.js:149 Net state changed from IDLE to BUSY
+2166288962-warden_bin_i18n_warden__th.js:149 Net state changed from BUSY to IDLE

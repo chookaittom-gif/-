@@ -1,0 +1,4090 @@
+<style>
+/* ==================== ROOT VARIABLES ==================== */
+:root {
+  --primary: #667eea;
+  --primary-dark: #5568d3;
+  --secondary: #a8edea;
+  --success: #16A34A;
+  --warning: #F59E0B;
+  --danger: #DC2626;
+  --info: #3B82F6;
+  --light: #F8FAFC;
+  --dark: #1F2937;
+  --gray: #6B7280;
+  --gray-light: #F3F4F6;
+  --gray-medium: #E5E7EB;
+  --gray-dark: #4B5563;
+
+  --radius: 12px;
+  --radius-lg: 16px;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.15);
+  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ✅ SINGLE SOURCE: main container controls */
+  --main-container-padding: 2rem 1rem;
+  --main-container-minh: calc(100vh - 160px);
+}
+
+/* ==================== RESET & BASE ==================== */
+/* ===== BERRY: Global Reset & Safe Overflow ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ✅ กัน horizontal overflow แบบชัวร์ทุก device */
+html, body {
+  overflow-x: hidden;
+}
+
+body {
+  font-family: 'Sarabun', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: #F4F6FA;
+  background-image: radial-gradient(circle at 50% 0,
+      rgba(102, 126, 234, 0.08) 0%,
+      #F4F6FA 40%,
+      #F4F6FA 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  color: var(--dark);
+  line-height: 1.6;
+}
+
+/* ✅ มือถือบางเครื่อง fixed background ทำให้กระตุก / viewport jump */
+@media (max-width: 768px) {
+  body {
+    background-attachment: scroll;
+  }
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* ==================== UTILITIES ==================== */
+.hidden { display: none !important; }
+
+.text-center { text-align: center; }
+.text-left { text-align: left; }
+.text-right { text-align: right; }
+
+.text-muted { color: var(--gray); }
+.text-primary { color: var(--primary); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-danger { color: var(--danger); }
+
+.mt-1 { margin-top: 0.5rem; }
+.mt-2 { margin-top: 1rem; }
+.mt-3 { margin-top: 1.5rem; }
+.mt-4 { margin-top: 2rem; }
+
+.mb-1 { margin-bottom: 0.5rem; }
+.mb-2 { margin-bottom: 1rem; }
+.mb-3 { margin-bottom: 1.5rem; }
+.mb-4 { margin-bottom: 2rem; }
+
+/* ==================== HEADER ==================== */
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1rem 0;
+  box-shadow: var(--shadow-lg);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  max-width: none;
+  margin: 0;
+  width: 100%;
+  padding: 0 1rem;
+}
+
+.header-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-title h1 {
+  font-size: 1.25rem;
+  margin: 0;
+}
+
+.header-title small {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.header-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: nowrap;
+}
+
+.btn .icon {
+  font-size: 1.2rem;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.btn .btn-text {
+  transition: all 0.2s ease-in-out;
+  pointer-events: none;
+}
+
+/* 🍓 BERRY FIX: จัดการข้อความ Mobile ให้อยู่เฉพาะบนมือถือ */
+.header-actions .btn-text-mobile { display: none; }
+.header-actions .btn-icon { line-height: 1; }
+
+/* Focus Ring Accessibility สำหรับปุ่ม Header */
+.header-actions .btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.8), 0 0 0 6px var(--primary);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .header { padding: 0.75rem 0; }
+
+  .header .container {
+    flex-direction: column;
+    align-items: stretch; /* ให้เต็มขอบจอเสมอ */
+  }
+
+  .header-title { margin-bottom: 0.25rem; text-align: center; }
+  .header-title h1 { font-size: 1.15rem; }
+
+  /* 🍓 BERRY FIX: ปรับ Grid ให้รองรับกรณีปุ่มเยอะ (4-5 ปุ่ม) โดยปัดตกบรรทัดไม่ล้นจอ */
+  .header-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 0.5rem;
+    justify-content: center;
+  }
+
+  .header-actions .user-info { width: 100%; margin-bottom: 4px; }
+
+  .header-actions .btn {
+    flex: 1 1 calc(25% - 6px); /* ให้แชร์พื้นที่ และยอม Wrap อัตโนมัติ */
+    min-width: 60px; /* ถ้าพื้นที่น้อยกว่า 60px ให้ปัดลงบรรทัดใหม่ */
+    max-width: 120px; /* กันปุ่มยืดกว้างเกินไปกรณีเหลือปุ่มเดียวในบรรทัดล่าง */
+    height: auto;
+    min-height: 48px; /* Touch target ปลอดภัย >= 44px */
+    padding: 8px 2px;
+    flex-direction: column;
+    justify-content: center;  /* 🍓 ส่วนที่หายไปเบอรี่เติมให้แล้วค่ะ */
+    align-items: center;
+    border-radius: 10px;
+    gap: 4px;
+  }
+
+  /* 🍓 เติมส่วนจัดการข้อความและไอคอนบนมือถือที่ถูกตัดหายไปกลับมา */
+  .header-actions .btn-icon {
+    margin: 0;
+    font-size: 18px; 
+  }
+
+  .header-actions .btn-text { display: none !important; }
+
+  .header-actions .btn-text-mobile {
+    display: block !important;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+} /* ปิดปีกกาของ @media 768px */
+
+/* รองรับจอที่เล็กมากๆ (เช่น iPhone SE หรือ 320px) */
+@media (max-width: 360px) {
+  .header-actions { gap: 6px; }
+  .header-actions .btn { padding: 6px 2px; }
+  .header-actions .btn-text-mobile { font-size: 11px; }
+  .header-actions .btn-icon { font-size: 16px; }
+} /* ปิดปีกกาของ @media 360px */
+
+/* ==================== USER WELCOME BADGE ==================== */
+.user-info {
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-right: 0.5rem;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  max-width: clamp(220px, 22vw, 360px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.user-info:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: translateY(-1px);
+}
+
+.user-info.hidden { display: none !important; }
+
+@media (max-width: 768px) {
+  .user-info {
+    width: 100%;
+    justify-content: center;
+    margin: 0 0 0.5rem 0;
+    max-width: 150px;
+    font-size: 0.82rem;
+    padding: 0.3rem 0.6rem;
+    text-align: center;
+    white-space: normal;
+    flex-wrap: wrap;
+    line-height: 1.15;
+    word-break: break-word;
+  }
+}
+
+/* ==================== NAVIGATION TABS ==================== */
+.nav-tabs {
+  position: -webkit-sticky;
+  position: sticky;
+  background: #FFFFFF;
+  top: 74px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--gray-medium);
+  width: 100%;
+  left: 0;
+  min-height: 44px;
+  overflow: visible;
+}
+
+@media (max-width: 768px) {
+  .nav-tabs { top: 135px; }
+}
+
+.nav-container { position: relative; width: 100%; }
+
+.nav-scroll {
+  display: flex;
+  padding: 0.5rem 1rem;
+  gap: 0.25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.nav-scroll::-webkit-scrollbar { display: none; }
+
+.tab-btn {
+  position: relative;
+  background: transparent;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--gray);
+  min-width: fit-content;
+  overflow: hidden;
+}
+
+.tab-btn:hover {
+  transform: translateY(-1px);
+  color: var(--primary);
+  background: rgba(102, 126, 234, 0.08);
+}
+
+.tab-btn.active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  transform: translateY(-1px);
+}
+
+.tab-icon {
+  font-size: 1.3rem;
+  transition: transform 0.3s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.tab-btn:hover .tab-icon { transform: scale(1.1); }
+
+.tab-btn.active .tab-icon {
+  transform: scale(1.15);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+}
+
+.tab-text {
+  font-weight: 600;
+  position: relative;
+  z-index: 2;
+  transition: all 0.3s ease;
+}
+
+@media (max-width: 768px) {
+  .nav-scroll { padding: 0.5rem 0.75rem; gap: 0.125rem; }
+
+  .tab-btn {
+    padding: 0.6rem 0.8rem;
+    font-size: 0.8rem;
+    border-radius: var(--radius);
+    min-width: auto;
+    justify-content: center;
+  }
+
+  .tab-icon { font-size: 1.2rem; }
+  .tab-text { display: none; }
+  .tab-btn { padding: 0.5rem; min-width: 50px; }
+}
+
+@keyframes tabSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.tab-content.active { animation: tabSlideIn 0.4s ease-out forwards; }
+
+.tab-btn.active { animation: tabPulse 0.4s ease-out; }
+@keyframes tabPulse {
+  0% { transform: translateY(-1px) scale(1); }
+  50% { transform: translateY(-1px) scale(1.05); }
+  100% { transform: translateY(-1px) scale(1); }
+}
+
+.tabbar, .tabs, .tab-header {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+[data-tab-target] { cursor: pointer; }
+[data-tab-target]::selection { background: transparent; }
+
+.is-switching *, .is-switching *::before, .is-switching *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-btn, .tab-content { transition: none !important; animation: none !important; }
+}
+
+/* ==================== CONTAINER ==================== */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* ✅ SINGLE RULE: main.container */
+main.container {
+  padding: var(--main-container-padding);
+  min-height: var(--main-container-minh);
+  padding-bottom: 0 !important;
+}
+
+/* Mobile: ปรับค่าผ่านตัวแปรเท่านั้น */
+@media (max-width: 768px) {
+  :root {
+    --main-container-padding: 1rem;
+    --main-container-minh: calc(100vh - 140px);
+  }
+}
+
+/* Print: ปรับค่าผ่านตัวแปรเท่านั้น */
+@media print {
+  :root {
+    --main-container-padding: 0;
+    --main-container-minh: auto;
+  }
+}
+
+/* ==================== TAB CONTENT (SINGLE SOURCE) ==================== */
+.tab-content {
+  display: none;
+  height: 0;
+  overflow: hidden;
+  animation: fadeIn 0.3s ease-in-out;
+  min-height: calc(100vh - 200px);
+  padding-bottom: 2rem;
+}
+
+.tab-content.active {
+  display: block;
+  height: auto;
+  overflow: visible;
+}
+
+[hidden] { display: none !important; }
+
+/* ==================== CARD ==================== */
+.card {
+  background: white;
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-lg);
+  margin-bottom: 1.5rem;
+  transition: var(--transition);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
+}
+
+.card-title {
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+  color: var(--dark);
+}
+
+@media (max-width: 768px) {
+  .card {
+    padding: 1rem;
+    border-radius: var(--radius);
+  }
+}
+
+/* ==================== BUTTONS ==================== */
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  font-family: inherit;
+  position: relative;
+  z-index: 1;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.btn:active { transform: translateY(0); }
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: white;
+}
+
+.btn-secondary { background: #6B7280; color: white; }
+.btn-success { background: var(--success); color: white; }
+.btn-warning { background: var(--warning); color: white; }
+.btn-danger { background: var(--danger); color: white; }
+
+.btn-sm {
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+.btn-block {
+  width: 100%;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .btn {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+  }
+}
+
+/* ==================== STATUS BADGES ==================== */
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  border: 1px solid transparent;
+  /* 🍓 BERRY UX: เพิ่ม Cursor และ Transition ให้ดูเป็นปุ่มที่กดได้ */
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* เงาบางๆ ให้ดูลอย */
+  transition: all 0.2s ease-in-out; 
+}
+
+.status-badge.approved {
+  background-color: #D1FAE5;
+  color: #065F46;
+  border-color: #A7F3D0;
+}
+
+.status-badge.pending {
+  background-color: #FEF3C7;
+  color: #92400E;
+  border-color: #FDE68A;
+}
+
+.status-badge.rejected {
+  background-color: #FEE2E2;
+  color: #991B1B;
+  border-color: #FECACA;
+}
+
+.status-badge.cancelled {
+  background-color: #E5E7EB;
+  color: #4B5563;
+  border-color: #D1D5DB;
+}
+
+.status-badge:hover {
+  transform: translateY(-2px); /* 🍓 ลอยขึ้นนิดนึงตอน Hover */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12); /* 🍓 เงาเข้มขึ้น */
+  filter: brightness(0.95);
+}
+/* ==================== TABLES ==================== */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  font-size: 0.9rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem;
+  text-align: left;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--gray-medium);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+.data-table td {
+  white-space: normal;
+  max-width: 200px;
+  line-height: 1.4;
+}
+
+.data-table td:nth-child(2),
+.data-table td:nth-child(3),
+.data-table td:nth-child(4) {
+  max-width: 150px;
+  min-width: 120px;
+}
+
+.data-table th {
+  background: var(--gray-light);
+  font-weight: 600;
+  color: var(--dark);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.data-table tbody tr { transition: background-color 0.2s ease; }
+.data-table tbody tr:hover { background: var(--gray-light); }
+
+@media (max-width: 768px) {
+  .data-table { font-size: 0.8rem; }
+  .data-table th,
+  .data-table td { padding: 0.5rem 0.25rem; }
+  .data-table td { max-width: none; } /* ✅ ปลดล็อกความกว้าง */
+}
+
+.bookings-table.small { font-size: 0.85rem; }
+.bookings-table.small th, .bookings-table.small td { padding: 0.5rem; }
+.bookings-table.small td { max-width: 120px; }
+
+/* ==================== BOOKINGS STATS ROW ==================== */
+.bookings-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-start;
+  background: #FFFFFF;
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+  border-left: 5px solid var(--primary);
+}
+
+.stat-card .stat-icon { font-size: 1.5rem; margin-bottom: 0.25rem; }
+.stat-card .stat-label { font-size: 0.85rem; color: var(--gray-dark); margin: 0; font-weight: 500; }
+.stat-card .stat-number { font-size: 1.75rem; font-weight: 700; color: var(--dark); margin: 0; line-height: 1; }
+
+.stat-card.stat-success { border-left-color: var(--success); }
+.stat-card.stat-danger { border-left-color: var(--danger); }
+.stat-card.stat-secondary { border-left-color: var(--gray); }
+.stat-card.stat-warning { border-left-color: var(--warning); }
+
+.stat-card[data-status] {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.stat-card[data-status]:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+.stat-card.filter-active {
+  box-shadow: 0 0 0 3px var(--primary);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 768px) {
+  .bookings-stats-row { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+  .stat-card .stat-number { font-size: 1.5rem; }
+}
+
+/* ==================== CALENDAR STYLES ==================== */
+#calendar-tab,
+#calendar-tab * {
+  min-width: 0;
+}
+
+#calendar-tab .card {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* ===== Header ===== */
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.calendar-title {
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-align: center;
+  max-width: 100%;
+  word-break: break-word;
+  flex: 1 1 auto;
+}
+
+#calendar-tab .calendar-header .btn,
+#calendar-tab .calendar-header button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+
+/* ===== KPI / Status Pills ===== */
+#calendar-kpi-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  width: 100%;
+}
+
+#calendar-kpi-bar .kpi-pill,
+#calendar-kpi-bar .status-pill,
+#calendar-kpi-bar button {
+  min-height: 36px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: none;
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 1;
+  filter: none;
+}
+
+/* ===== Week Labels ===== */
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+
+.day-label {
+  text-align: center;
+  font-weight: 700;
+  color: var(--gray);
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  border-radius: 10px;
+}
+
+/* ===== Grid ===== */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+
+/* ===== Cell ===== */
+.calendar-day {
+  background: #ffffff;
+  border-radius: var(--radius);
+  padding: 4px;
+  border: 1px solid var(--gray-medium);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  height: 110px;
+  min-height: 110px;
+  max-height: 110px;
+  overflow: hidden;
+  position: relative;
+}
+
+.calendar-day:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.15);
+  z-index: 2;
+}
+
+.calendar-day.empty {
+  background: #f8fafc;
+  border-color: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.calendar-day.today {
+  border: 2px solid var(--primary);
+  background: #f5f8ff;
+}
+
+.day-number {
+  font-weight: 700;
+  color: var(--gray-dark);
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+  align-self: flex-end;
+  line-height: 1;
+}
+
+.calendar-day.today .day-number {
+  color: white;
+  background: var(--primary);
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== Event Button ===== */
+.calendar-event {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0 4px;
+  border-radius: 6px;
+  color: #fff !important;
+  cursor: pointer;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  opacity: 1 !important;
+  filter: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-clip: padding-box !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  text-decoration: none !important;
+  font: inherit !important;
+  margin: 0 !important;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+.calendar-event:focus,
+.calendar-event:active,
+.calendar-event:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.05) !important;
+}
+
+.calendar-event.status-approved { background: linear-gradient(135deg, #22C55E, #15803D) !important; border-color: #15803D !important; }
+.calendar-event.status-pending { background: linear-gradient(135deg, #F59E0B, #B45309) !important; border-color: #B45309 !important; }
+.calendar-event.status-rejected { background: linear-gradient(135deg, #EF4444, #991B1B) !important; border-color: #991B1B !important; }
+.calendar-event.status-cancelled { background: linear-gradient(135deg, #94A3B8, #475569) !important; border-color: #475569 !important; }
+.calendar-event.status-driver_claimed { background: linear-gradient(135deg, #0EA5E9, #0369A1) !important; border-color: #0369A1 !important; }
+.calendar-event.status-driver_special_approved { background: linear-gradient(135deg, #8B5CF6, #5B21B6) !important; border-color: #5B21B6 !important; }
+.calendar-event.status-driver_block { background: linear-gradient(135deg, #F97316, #C2410C) !important; border-color: #C2410C !important; }
+.calendar-event.status-vehicle_block { background: linear-gradient(135deg, #991B1B, #7F1D1D) !important; border-color: #7F1D1D !important; }
+.calendar-event.dim {
+  opacity: 0.45 !important;
+  filter: none !important;
+  pointer-events: auto !important;
+}
+
+.evt-chip {
+  background: rgba(255, 255, 255, 0.25);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1.2;
+  color: #ffffff !important;
+}
+
+.evt-title {
+  font-size: 0.7rem;
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ffffff !important;
+}
+
+/* ===== More Button ===== */
+.more-events-btn,
+.more-events-btn:hover,
+.more-events-btn:focus,
+.more-events-btn:active {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--primary) !important;
+  background: rgba(102, 126, 234, 0.1) !important;
+  border-radius: 4px;
+  text-align: center;
+  height: 20px;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-top: auto;
+  border: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  font-family: inherit !important;
+}
+
+.more-events-btn:hover {
+  background: rgba(102, 126, 234, 0.2) !important;
+}
+
+/* ===== Tooltip ===== */
+.vberry-tooltip {
+  position: fixed;
+  z-index: 15000;
+  background: #ffffff;
+  color: #1e293b;
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  border: 1px solid #e2e8f0;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity 0.2s, transform 0.2s;
+  max-width: 300px;
+  font-family: 'Sarabun', sans-serif;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  white-space: normal;
+}
+
+.vberry-tooltip.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+/* ==================== RESPONSIVE BREAKPOINTS ==================== */
+
+/* Tablet Mode (768px - 1023px) */
+@media (max-width: 1023px) and (min-width: 768px) {
+  .calendar-days, .calendar-grid { gap: 0.25rem; }
+  .calendar-day { height: 100px; min-height: 100px; max-height: 100px; }
+  .calendar-event { height: 20px; min-height: 20px; }
+  .evt-title { font-size: 0.65rem; }
+}
+
+/* 📱 Mobile Mode (<= 767px): Scan Mode (Chip Only) */
+@media (max-width: 767px) {
+  .calendar-header {
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    align-items: center; 
+    gap: 0.5rem;
+  }
+  .calendar-title { font-size: clamp(1rem, 4vw, 1.15rem); text-align: center; }
+  #calendar-tab .calendar-header .btn { width: 44px; height: 44px; padding: 0; }
+
+  .calendar-days, .calendar-grid { gap: 2px; }
+  
+  .calendar-day { 
+    height: 100px; /* ขยายกล่องให้พอดีกับ 4 งาน */
+    min-height: 100px; 
+    max-height: 100px;
+    padding: 3px; 
+    border-radius: 6px;
+  }
+  .day-label { font-size: 10px; padding: 0.2rem; }
+  .day-number { font-size: 0.75rem; margin-bottom: 2px; }
+  .calendar-day.today .day-number { width: 20px; height: 20px; font-size: 0.7rem; }
+  
+  #calendar-grid .events-container { gap: 2px; }
+  #calendar-grid {
+  animation: calendarPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes calendarPop {
+  0% { opacity: 0; transform: scale(0.98) translateY(10px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+  
+  /* หัวใจสำคัญ: ซ่อนชื่องานบนมือถือ */
+  .evt-title { display: none !important; }
+  
+  /* ปรับ Event ให้เน้น Chip ตรงกลาง */
+  .calendar-event {
+    justify-content: center;
+    padding: 0 1px;
+    height: 18px; 
+    min-height: 18px;
+    border-radius: 3px;
+  }
+  
+  .evt-chip {
+padding: 1px 2px;
+font-size: 9px;
+letter-spacing: -0.2px;
+background: transparent;
+width: 100%;
+text-align: center;
+overflow: hidden;
+text-overflow: clip;
+white-space: nowrap;
+font-weight: 800;
+}
+  
+  .more-events-btn { 
+    height: 18px; 
+    min-height: 18px; 
+    font-size: 0.6rem; 
+    margin-top: auto;
+  }
+}
+
+/* ===== KPI Bar ===== */
+.calendar-kpi-bar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  background: var(--gray-light);
+  border-radius: var(--radius);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.kpi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--bg);
+  color: #ffffff !important; /* 🍓 BERRY FIX: บังคับสีขาว */
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); /* 🍓 BERRY FIX: ใส่เงากล่องให้ชัดขึ้น */
+  transform: translateY(4px);
+  opacity: 0;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  cursor: pointer;
+  user-select: none;
+  max-width: 100%;
+}
+
+.kpi-chip.pop-in { transform: translateY(0); opacity: 1; }
+
+.kpi-chip .kpi-ico { font-size: 0.9rem; }
+.kpi-chip .kpi-label { 
+  font-size: 0.8rem; 
+  font-weight: 600; 
+  color: #ffffff !important; 
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); 
+}
+.kpi-chip .kpi-num { 
+  font-weight: 800; 
+  min-width: 1.5ch; 
+  text-align: right; 
+  font-size: 0.95rem; 
+  color: #ffffff !important; 
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); 
+}
+
+.kpi-approved { --bg: linear-gradient(135deg, #22c55e, #15803d); --fg: #fff; }
+.kpi-pending  { --bg: linear-gradient(135deg, #f59e0b, #b45309); --fg: #fff; }
+.kpi-rejected { --bg: linear-gradient(135deg, #ef4444, #991b1b); --fg: #fff; }
+.kpi-cancelled{ --bg: linear-gradient(135deg, #94a3b8, #475569); --fg: #fff; }
+.kpi-total    { --bg: linear-gradient(135deg, var(--primary), var(--primary-dark)); --fg: #fff; }
+
+.kpi-chip:hover { box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12); transform: translateY(-2px); }
+.kpi-chip.active { box-shadow: 0 0 0 3px var(--primary); transform: translateY(-2px); }
+
+/* ===== Responsive ===== */
+@media (max-width: 900px) {
+  .calendar-days, .calendar-grid { gap: 0.4rem; }
+  .calendar-day { min-height: 100px; }
+  .day-label { font-size: 12px; padding: 0.4rem; }
+}
+
+@media (max-width: 600px) {
+  #calendar-tab .card { padding: 12px; }
+
+  /* ✅ header บนมือถือให้จัดเป็น grid ลดปุ่มทับกัน */
+  .calendar-header {
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .calendar-title {
+    font-size: clamp(1.05rem, 5vw, 1.25rem);
+    text-align: center;
+  }
+
+  /* ปุ่ม prev/next ให้เป็น 44px แบบชัวร์ */
+  #calendar-tab .calendar-header .btn,
+  #calendar-tab .calendar-header button {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  .calendar-days, .calendar-grid { gap: 0.25rem; }
+  .calendar-day { min-height: 76px; padding: 0.45rem; }
+  .day-number { font-size: 12px; margin-bottom: 0.25rem; }
+
+  .calendar-event {
+    font-size: 11px;
+    padding: 4px 6px;
+    -webkit-line-clamp: 1;
+  }
+
+  .more-events-btn { font-size: 11px; }
+}
+
+@media (max-width: 420px) {
+  .calendar-day { min-height: 70px; }
+  .day-label { font-size: 11px; padding: 0.35rem; }
+}
+
+/* ==================== FORMS (LAYOUT FIX) ==================== */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem 1.25rem;
+  align-items: start;
+}
+
+.form-section {
+  margin-bottom: 2rem;
+  padding: 0 0.25rem;
+}
+
+.form-section h3 {
+  font-size: 1rem;
+  color: var(--primary);
+  margin-bottom: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px dashed rgba(0,0,0,0.15);
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ✅ single source of truth */
+.form-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;                 /* ✅ กันทับ */
+  margin-bottom: 0.75rem;
+  width: 100%;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  position: static !important;  /* ✅ ปิด floating label */
+  font-size: 0.95rem;
+  line-height: 1.25;
+  font-weight: 700;
+  color: #374151;
+  padding: 0 2px;
+  background: transparent;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  max-width: 100%;
+}
+
+/* ✅ Inputs */
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: 'Sarabun', sans-serif;
+  font-weight: 500;
+  color: #111827;
+  background: #fff;
+  padding: 0.75rem 0.9rem;
+  line-height: 1.35;
+  outline: none;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+.form-group textarea {
+  min-height: 120px;
+  resize: vertical;
+  padding-top: 0.8rem;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
+}
+
+/* Dropdown arrow */
+.form-group select {
+  padding-right: 2.6rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%236B7280'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.9rem center;
+  background-size: 1.1rem;
+  cursor: pointer;
+  /* 🍓 BERRY UX FIX: ป้องกันข้อความยาวทับลูกศรในจอมือถือเล็ก */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.82rem;
+  color: #6b7280;
+  padding-left: 2px;
+}
+
+/* ✅ Responsive */
+@media (max-width: 1024px) {
+  .form-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+}
+
+@media (max-width: 768px) {
+  .form-grid { grid-template-columns: 1fr; gap: 0.9rem; }
+  .form-group input,
+  .form-group select,
+  .form-group textarea { font-size: 16px; } /* ✅ iOS zoom fix */
+}
+
+/* ---------- FILE CHOSEN / PREVIEW ---------- */
+.file-chosen-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #f3f4f6;
+  border-radius: 8px;
+  margin-top: 0.5rem;
+  border: 1px solid #e5e7eb;
+}
+
+#fuel-file-name, #maint-file-name {
+  flex-grow: 1;
+  font-size: 0.9rem;
+  color: #4b5563;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-preview {
+  margin-top: 1rem;
+  max-width: 200px;
+  border: 1px solid #ddd;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.file-preview img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 4px;
+}
+
+.file-clear-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.file-clear-btn:hover { background: #dc2626; }
+
+/* ---------- MAINTENANCE FORM ---------- */
+#maintenance-form .form-group:last-of-type { margin-top: 1.5rem; }
+
+/* ---------- TAB CARD LAYOUT ---------- */
+#fuel-tab .card,
+#insurance-tab .card,
+#maintenance-tab .card {
+  max-width: 1100px;
+  margin: 0 auto 1.25rem;
+}
+
+#fuel-tab .card-title,
+#insurance-tab .card-title,
+#maintenance-tab .card-title {
+  font-size: 1.1rem;
+}
+
+/* ---------- FORM GRID ---------- */
+#fuel-tab .form-grid,
+#insurance-tab .form-grid,
+#maintenance-tab .form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  column-gap: 1rem;
+  row-gap: 0.9rem;
+}
+
+#fuel-tab .form-group label,
+#insurance-tab .form-group label,
+#maintenance-tab .form-group label { font-size: 0.95rem; }
+
+#fuel-tab .form-group input,
+#fuel-tab .form-group select,
+#fuel-tab .form-group textarea,
+#insurance-tab .form-group input,
+#insurance-tab .form-group select,
+#insurance-tab .form-group textarea,
+#maintenance-tab .form-group input,
+#maintenance-tab .form-group select,
+#maintenance-tab .form-group textarea {
+  font-size: 0.95rem;
+  padding: 0.75rem 0.8rem;
+}
+
+#fuel-tab .form-group.full-width textarea,
+#insurance-tab .form-group.full-width textarea,
+#maintenance-tab .form-group.full-width textarea {
+  min-height: 80px;
+  max-height: 160px;
+  resize: vertical;
+}
+
+/* ---------- SUBMIT BUTTONS ---------- */
+#fuel-tab .btn.btn-block,
+#insurance-tab .btn.btn-block,
+#maintenance-tab .btn.btn-block {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7rem 1.6rem;
+}
+
+#fuel-tab .form-group.full-width .btn.btn-block,
+#insurance-tab .form-group.full-width .btn.btn-block,
+#maintenance-tab .form-group.full-width .btn.btn-block {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+#fuel-tab .form-group.full-width,
+#insurance-tab .form-group.full-width,
+#maintenance-tab .form-group.full-width { margin-top: 0.75rem; }
+
+/* ---------- MOBILE ---------- */
+@media (max-width: 768px) {
+  #fuel-tab .card,
+  #insurance-tab .card,
+  #maintenance-tab .card {
+    padding: 0.9rem;
+    margin-bottom: 1rem;
+  }
+
+  #fuel-tab .form-grid,
+  #insurance-tab .form-grid,
+  #maintenance-tab .form-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  #fuel-tab .form-group label,
+  #insurance-tab .form-group label,
+  #maintenance-tab .form-group label { font-size: 0.9rem; }
+
+  #fuel-tab .form-group input,
+  #fuel-tab .form-group select,
+  #fuel-tab .form-group textarea,
+  #insurance-tab .form-group input,
+  #insurance-tab .form-group select,
+  #insurance-tab .form-group textarea,
+  #maintenance-tab .form-group input,
+  #maintenance-tab .form-group select,
+  #maintenance-tab .form-group textarea {
+    font-size: 0.9rem;
+    padding: 0.7rem 0.75rem;
+  }
+
+  #fuel-tab .btn.btn-block,
+  #insurance-tab .btn.btn-block,
+  #maintenance-tab .btn.btn-block {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.9rem;
+    padding: 0.65rem 1rem;
+  }
+
+  /* ✅ FILE UPLOAD : SINGLE SOURCE (Mobile) */
+  #fuel-tab .file-upload-btn,
+  #maintenance-tab .file-upload-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ==================== [PATCH] VEHICLE SELECTION (ALWAYS VISIBLE) ==================== */
+#vehicle-selection {
+  min-height: 120px;
+  width: 100%;
+  position: relative;
+  z-index: 5;
+  display: block;
+  margin-top: 10px;
+
+  /* ✅ override inline center layout when grid injected */
+  text-align: left !important;
+}
+
+#vehicle-selection .vehicle-selection {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+
+  /* ✅ ป้องกันหายบนจอเล็ก */
+  max-height: 360px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+#vehicle-selection .vehicle-option { display: block; }
+
+#vehicle-selection .vehicle-option input[type="checkbox"],
+#vehicle-selection .vehicle-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+#vehicle-selection .vehicle-content {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  border: 2px solid #e5e7eb;
+  background: #fff;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.06);
+  min-height: 92px;
+}
+
+#vehicle-selection .vehicle-option:hover .vehicle-content {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(0,0,0,0.10);
+  border-color: rgba(102,126,234,0.5);
+}
+
+#vehicle-selection .vehicle-option input:checked + .vehicle-content {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(102,126,234,0.15);
+}
+
+#vehicle-selection .vehicle-icon { font-size: 1.8rem; line-height: 1; }
+#vehicle-selection .vehicle-info { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+#vehicle-selection .vehicle-name { font-weight: 800; color: #111827; line-height: 1.2; }
+#vehicle-selection .vehicle-type,
+#vehicle-selection .vehicle-status { font-size: 0.85rem; color: #6b7280; line-height: 1.2; }
+
+#vehicle-selection .vehicle-status.text-success { color: #16a34a; font-weight: 800; }
+#vehicle-selection .vehicle-status.text-danger { color: #ef4444; font-weight: 800; }
+
+@media (max-width: 768px) {
+  #vehicle-selection .vehicle-selection { grid-template-columns: 1fr; max-height: 320px; }
+}
+
+/* ==================== PAGINATION CONTROLS (SINGLE SOURCE) ==================== */
+.pagination-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.pagination-controls .page-info {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--gray-dark);
+}
+
+.pagination-controls .btn:disabled {
+  background: var(--gray-light);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+  .pagination-controls {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
+/* ==================== BOOKINGS TAB RESPONSIVE ==================== */
+.bookings-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius);
+}
+
+.data-table.bookings-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 860px;
+}
+
+.data-table.bookings-table.small { min-width: 640px; }
+
+@media (max-width: 900px) {
+  .data-table.bookings-table { min-width: 820px; }
+  .data-table.bookings-table.small { min-width: 620px; }
+}
+
+/* 🍓 BERRY FIX: Mobile Section Card Layout (≤768px) */
+@media (max-width: 768px) {
+  .data-table.bookings-table,
+  .data-table.bookings-table.small { min-width: 0; border: none; }
+
+  .data-table.bookings-table thead,
+  .data-table.bookings-table.small thead { display: none; }
+
+  .data-table.bookings-table tbody,
+  .data-table.bookings-table.small tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* 1 Card = 1 รายการจอง */
+  .data-table.bookings-table tr,
+  .data-table.bookings-table.small tr {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    padding: 14px;
+    border: 1px solid #e5e7eb;
+    gap: 12px;
+    position: relative;
+    outline: none;
+    transition: all 0.2s ease;
+    margin-bottom: 0;
+  }
+  
+  /* Accessibility: Focus Outline */
+  .data-table.bookings-table tr:focus-visible,
+  .data-table.bookings-table tr:active {
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.4);
+    border-color: var(--primary);
+  }
+
+  .data-table.bookings-table td:not([colspan]),
+  .data-table.bookings-table.small td:not([colspan]) {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0;
+    border: none;
+    margin: 0;
+    text-align: left;
+  }
+
+  /* --- Header Section (ID & Status) --- */
+  .data-table.bookings-table td[data-label="ID"] {
+    order: -2;
+    flex-direction: row;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: #4b5563;
+    border-bottom: 1px dashed #e5e7eb;
+    padding-bottom: 10px;
+    margin-bottom: 2px;
+  }
+  .data-table.bookings-table td[data-label="ID"]::before {
+    content: "ID";
+    margin-right: 6px;
+    color: #9ca3af;
+  }
+
+  .data-table.bookings-table td[data-label="สถานะ"] {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    order: -1;
+    width: auto;
+  }
+  .data-table.bookings-table td[data-label="สถานะ"]::before { display: none; }
+  .data-table.bookings-table td .status-badge { margin: 0; font-size: 12px; padding: 4px 10px; }
+
+  /* --- Body Sections Labels --- */
+  .data-table.bookings-table td:not([data-label="ID"]):not([data-label="สถานะ"]):not(.col-name-proj)::before {
+    content: attr(data-label);
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+  /* ซ่อน Label ของคอลัมน์พิเศษ เพราะเราใช้ Custom Label ด้านในแล้ว */
+  .data-table.bookings-table td.col-name-proj::before { display: none; }
+
+  /* --- Body Sections Values --- */
+  .data-table.bookings-table td > .val-block,
+  .data-table.bookings-table td > .vberry-dt,
+  .data-table.bookings-table td > .vberry-pairs {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #111827;
+    margin-top: 2px;
+    word-break: break-word;
+  }
+
+  /* --- Custom Mobile Layout Helpers --- */
+  .desktop-only { display: none !important; }
+  .mobile-only { display: flex !important; flex-direction: column; gap: 12px; }
+  
+  .m-section { display: flex; flex-direction: column; gap: 2px; }
+  .m-section-label { 
+    font-size: 12px; 
+    font-weight: 600; 
+    color: #6b7280; 
+    margin-bottom: 2px; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+  }
+  .m-section-val { 
+    font-size: 15px; 
+    font-weight: 600; 
+    color: #111827; 
+    line-height: 1.4; 
+    word-break: break-word; 
+  }
+  .nowrap-ellipsis { 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    display: block; 
+  }
+
+  /* จัดระเบียบเนื้อหาซ้อน (Nested Content) จาก Table ปกติให้อ่านง่ายบนมือถือ */
+  .vberry-dt { align-items: flex-start !important; text-align: left !important; gap: 6px !important; }
+  .vberry-dt > div { flex-direction: row !important; gap: 6px !important; align-items: center; } 
+  .vberry-pair-line { flex-wrap: nowrap !important; align-items: flex-start !important; }
+  
+  /* --- Empty State --- */
+  .data-table.bookings-table td[colspan],
+  .data-table.bookings-table.small td[colspan] { 
+    padding: 3rem 1rem; 
+    display: flex;
+    flex-direction: column;
+    align-items: center; 
+    justify-content: center; 
+    text-align: center; 
+    border: none;
+    background: transparent;
+  }
+  .data-table.bookings-table td[colspan]::before,
+  .data-table.bookings-table.small td[colspan]::before { display: none; }
+}
+
+/* แสดงผลฝั่ง Desktop เสมอเมื่อหน้าจอกว้างกว่า 768px */
+@media (min-width: 769px) {
+  .mobile-only { display: none !important; }
+  .desktop-only { display: block !important; }
+}
+
+/* ==================== [FINAL] MASTER MODAL SYSTEM (BERRY PRODUCTION) ==================== */
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 11000 !important;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  justify-content: center;
+  align-items: center;
+  padding: clamp(10px, 2vw, 20px);
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.modal.active { display: flex !important; }
+
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 500px; 
+  max-height: 95vh;
+  margin: auto;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  position: relative;
+  transform: translateZ(0);
+}
+
+/* 🔒 LOCK: ขนาด Modal Login ให้พอดีข้อความ (Desktop) */
+#admin-login-modal .modal-content { max-width: 400px; }
+.modal-content.modal-lg { max-width: 1000px; }
+
+.modal-header {
+  flex-shrink: 0; z-index: 20; padding: 1.1rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white; display: flex; justify-content: space-between; align-items: center;
+}
+
+.modal-header h2 { font-size: 1.1rem; margin: 0; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+.modal-close { background: rgba(255, 255, 255, 0.1); border: none; color: white; font-size: 1.2rem; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+.modal-body { flex-grow: 1; overflow-y: auto; overflow-x: hidden; padding: 1.5rem; background-color: #ffffff; -webkit-overflow-scrolling: touch; }
+
+.modal-footer {
+  flex-shrink: 0; z-index: 20; padding: 1rem 1.5rem;
+  background: #f8fafc; border-top: 1px solid #e2e8f0;
+  display: flex; justify-content: flex-end; gap: 0.75rem;
+}
+
+.modal-footer .btn {
+  width: auto !important; min-width: 100px;
+  padding: 0.65rem 1.2rem !important; font-size: 0.95rem !important;
+  flex-direction: row !important; gap: 8px !important; border-radius: 10px !important;
+}
+
+/* ==================== 📱 MOBILE RESPONSIVE FIX (768px) ==================== */
+@media (max-width: 768px) {
+  .modal { padding: 12px; }
+  .modal-content { height: auto; max-height: 96vh; border-radius: 20px; max-width: 100% !important; }
+  #admin-login-modal .modal-content { margin: auto; }
+  .modal-body { padding: 1.2rem 1rem; }
+
+  /* 🔒 LOCK: ปรับจูน Footer ให้ปุ่มไม่อนุมัติฟิตพอดี (รูป 51) */
+  .modal-footer {
+    display: grid !important;
+    /* สัดส่วนพิเศษ: ไม่อนุมัติ(กว้าง) | แก้ไข/ปิด | ปิด */
+    grid-template-columns: 1.25fr 1fr 0.75fr !important;
+    padding: 10px 6px !important; gap: 5px !important; background: #f1f5f9 !important;
+  }
+
+  .modal-footer .btn {
+    width: 100% !important; min-width: 0 !important;
+    padding: 6px 1px !important; font-size: 10px !important; 
+    flex-direction: column !important; gap: 1px !important;
+  }
+
+  .modal-footer .btn .icon { font-size: 16px !important; margin: 0 !important; }
+
+  .modal-footer .btn .btn-text {
+    display: block !important; white-space: nowrap !important;
+    text-align: center !important; font-weight: 700;
+    letter-spacing: -0.4px !important; line-height: 1.1 !important;
+  }
+ }
+
+/* ==================== ASSIGNMENT CORE ==================== */
+.assignment-grid {
+  display: grid;
+  grid-template-columns: 0.35fr 0.65fr;
+  gap: 1.5rem;
+  height: auto;
+}
+
+.assignment-left {
+  padding-right: 1.25rem;
+  border-right: 1px dashed #cbd5e1;
+  overflow: visible !important;
+}
+
+.assignment-right { overflow: visible !important; }
+
+.assignment-vehicle-card {
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.75rem;
+  transition: all 0.2s ease;
+  gap: 0.5rem;
+}
+
+.assignment-vehicle-card.selected {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.card-header-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+}
+
+.vc-checkbox {
+  width: 22px;
+  height: 22px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.vc-icon {
+  font-size: 1.8rem;
+  margin: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.vc-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.vc-plate {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.vc-status {
+  font-size: 0.75rem;
+  font-weight: normal;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background-color: #f1f5f9;
+  color: #64748b;
+  white-space: nowrap;
+  margin-left: 5px;
+}
+.vc-status.text-success { background-color: #dcfce7; color: #166534; }
+.vc-status.text-danger { background-color: #fee2e2; color: #991b1b; }
+
+.vc-name {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin-top: 3px;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.vc-driver-select-wrapper {
+  width: 100%;
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.vc-driver-select {
+  width: 100%;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.95rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background-color: white;
+  color: #334155;
+}
+.vc-driver-select:disabled { background-color: #f8fafc; color: #94a3b8; cursor: not-allowed; }
+
+/* ==================== [FINAL] ASSIGNMENT MODAL (NO CLIP DROPDOWN + HORIZONTAL) ==================== */
+#assignment-modal .modal-content,
+#assignment-modal .modal-body { position: relative; }
+
+#assignment-modal .modal-body { overflow-x: visible !important; }
+
+#assignment-modal .assignment-left,
+#assignment-modal .assignment-right,
+#assignment-modal #assignment-vehicle-list {
+  overflow: visible !important;
+}
+
+#assignment-modal .vc-driver-select-wrapper {
+  position: relative;
+  z-index: 10;
+}
+
+#assignment-modal .vc-driver-select {
+  position: relative;
+  z-index: 11;
+  -webkit-appearance: menulist;
+  appearance: menulist;
+}
+
+/* ensure text never ellipsis in assignment */
+#assignment-modal .vc-name,
+#assignment-modal .vc-meta {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+}
+
+#assignment-modal .assignment-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  #assignment-modal .assignment-grid { grid-template-columns: 1fr; }
+}
+
+/* Assignment Card Horizontal Layout */
+#assignment-modal .assignment-vehicle-card {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 15px !important;
+  padding: 10px 15px !important;
+}
+
+#assignment-modal .card-header-row {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#assignment-modal .vc-driver-select-wrapper {
+  flex: 0 0 40% !important;
+  width: auto !important;
+  min-width: 200px;
+  max-width: 320px;
+  margin-top: 0 !important;
+}
+
+#assignment-modal .assignment-right {
+  padding-bottom: 140px !important;
+}
+
+/* ==================== [FINAL] LOGIN MODALS (FIT-CONTENT DESKTOP / FULL-WIDTH MOBILE) ==================== */
+#admin-login-modal .modal-footer,
+#login-modal .modal-footer {
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
+
+#admin-login-modal .modal-footer .btn,
+#login-modal .modal-footer .btn,
+#admin-login-modal button[type="submit"],
+#login-modal button[type="submit"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: fit-content !important;
+  flex: 0 0 auto !important;
+  min-width: 0 !important;
+  max-width: 90vw !important;
+  padding: 0.55rem 1.25rem !important;
+  white-space: nowrap !important;
+}
+
+#admin-login-modal .btn-block,
+#login-modal .btn-block {
+  width: fit-content !important;
+}
+
+@media (max-width: 768px) {
+  #admin-login-modal .modal-footer,
+  #login-modal .modal-footer {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  #admin-login-modal .modal-footer .btn,
+  #login-modal .modal-footer .btn,
+  #admin-login-modal button[type="submit"],
+  #login-modal button[type="submit"] {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* ==================== [FINAL] ACTIVITY DETAIL MODAL (WIDER + 3 COLS) ==================== */
+#activity-modal .modal-content {
+  width: min(960px, 96vw) !important;
+  max-height: 95vh !important;
+}
+
+#activity-modal .modal-body { padding: 15px 20px !important; }
+#activity-modal .detail-container { padding: 0 10px; }
+
+#activity-modal .info-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 8px 25px !important;
+  align-items: start;
+  margin-top: 10px;
+}
+
+#activity-modal .info-item {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0 !important;
+  padding: 4px 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+#activity-modal .info-label {
+  font-size: 0.8rem !important;
+  color: #64748b;
+  margin-bottom: 2px !important;
+}
+
+#activity-modal .info-value {
+  font-size: 0.95rem !important;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important;
+  word-break: break-word;
+}
+
+#activity-modal .info-item-full {
+  grid-column: 1 / -1 !important;
+  border-bottom: none;
+  margin-top: 8px;
+  background: rgba(248, 250, 252, 0.5);
+  padding: 8px;
+  border-radius: 6px;
+}
+
+#activity-modal .status-badge-large {
+  font-size: 1rem !important;
+  padding: 0.3rem 1.2rem !important;
+  margin-bottom: 0.5rem !important;
+  border-radius: 50px;
+  display: inline-block;
+}
+
+@media (max-width: 768px) {
+  #activity-modal .info-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  #activity-modal .modal-content {
+    width: 95% !important;
+    max-height: 85vh !important;
+    margin: 10px auto !important;
+  }
+
+  #assignment-modal .assignment-vehicle-card { flex-wrap: wrap !important; }
+
+  #assignment-modal .vc-driver-select-wrapper {
+    flex: 1 1 100% !important;
+    margin-top: 8px !important;
+  }
+}
+
+/* ==================== LOADING SYSTEM ==================== */
+.loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000 !important;
+  transition: opacity 0.3s ease;
+}
+
+.loading.hidden {
+  display: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e2e8f0;
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 0.8s cubic-bezier(0.55, 0.055, 0.675, 0.19) infinite;
+}
+
+.loading p {
+  margin-top: 1.2rem;
+  color: var(--dark);
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: 0.5px;
+  animation: pulse 1.5s infinite;
+}
+
+.btn.is-loading {
+  color: transparent !important;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.btn.is-loading::after {
+  content: "";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: 50%;
+  left: 50%;
+  margin-top: -10px;
+  margin-left: -10px;
+  border: 2px solid rgba(255,255,255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.skeleton {
+  background: #f1f5f9;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+  border-radius: 6px;
+  color: transparent !important;
+  height: 1em;
+  width: 100%;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+@keyframes skeleton-loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ==================== TOAST ==================== */
+.toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: white;
+  padding: 1rem 1.5rem;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  z-index: 10000;
+  transform: translateX(400px);
+  transition: transform 0.3s ease-out;
+  max-width: 350px;
+}
+
+.toast.show { transform: translateX(0); }
+
+.toast.success { border-left: 4px solid var(--success); }
+.toast.error { border-left: 4px solid var(--danger); }
+.toast.warning { border-left: 4px solid var(--warning); }
+.toast.info { border-left: 4px solid var(--info); }
+
+@media (max-width: 768px) {
+  .toast {
+    top: 10px;
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+}
+
+/* ==================== ALERT ==================== */
+.alert {
+  padding: 1rem;
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+.alert-info {
+  background: #DBEAFE;
+  color: #1E40AF;
+  border: 1px solid #93C5FD;
+}
+
+/* ==================== FOOTER ==================== */
+html, body {
+  min-height: 100vh;
+  position: relative;
+}
+
+body::after {
+  content: '';
+  display: block;
+  height: 80px;
+}
+
+footer.footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dark);
+  color: var(--light);
+  border-top: 1px solid var(--gray-medium);
+  z-index: 100;
+  text-align: center;
+  padding: 12px 16px;
+  box-sizing: border-box;
+}
+
+footer.footer .container {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+footer.footer p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--light);
+}
+
+footer.footer .developer {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--gray);
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  body::after { height: 70px; }
+
+  footer.footer {
+    height: 70px;
+    padding: 10px 12px;
+  }
+
+  footer.footer p { font-size: 13px; }
+  footer.footer .developer { font-size: 11px; }
+}
+
+@media print {
+  body::after { display: none; }
+
+  footer.footer {
+    position: static;
+    height: auto;
+    border-top: none;
+    padding: 16px 0;
+    background: #f8fafc;
+    color: #374151;
+  }
+
+  footer.footer .developer { color: #6b7280; }
+}
+
+/* ==================== DASHBOARD & CHARTS ==================== */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.kpi-icon { font-size: 2.5rem; line-height: 1; }
+
+.kpi-number {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0.5rem 0;
+}
+
+.kpi-card.kpi-success .kpi-number { color: var(--success); }
+
+.kpi-label { font-size: 0.9rem; color: var(--gray-dark); }
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.chart-container {
+  width: 100%;
+  min-height: 300px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: stretch;
+  position: relative;
+}
+.chart-container.is-empty { align-items: center; justify-content: center; }
+
+.bar-chart {
+  display: flex;
+  gap: .75rem;
+  width: 100%;
+  height: 260px;
+  align-items: flex-end;
+  padding: 0 1rem;
+}
+
+.bar-chart.scrollable { overflow-x: auto; padding-bottom: 1rem; }
+
+.bar-wrapper {
+  flex: 0 0 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 220px;
+}
+
+.bar-value {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--dark);
+  margin-bottom: .25rem;
+}
+
+.bar-track {
+  width: 38px;
+  height: 170px;
+  background: rgba(148, 163, 184, .08);
+  border-radius: 9999px 9999px 6px 6px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bar {
+  width: 100%;
+  min-height: 6px;
+  border-radius: 9999px 9999px 6px 6px;
+  transition: .18s ease;
+  cursor: pointer;
+}
+.bar:hover {
+  opacity: .9;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, .16);
+}
+
+.bar-label {
+  font-size: .72rem;
+  color: var(--gray-dark);
+  margin-top: .4rem;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+
+.bar-chart.single { justify-content: center; }
+
+.bar-tooltip {
+  position: fixed;
+  background: var(--dark);
+  color: #fff;
+  padding: .45rem .75rem;
+  border-radius: .5rem;
+  font-size: .75rem;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity .15s, transform .15s;
+  z-index: 10001;
+}
+.bar-tooltip.show { opacity: 1; transform: translateY(0); }
+
+.empty-state {
+  text-align: center;
+  color: #94a3b8;
+  font-size: .85rem;
+}
+.empty-state .icon { font-size: 1.5rem; margin-bottom: .15rem; }
+
+.pdf-download-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+/* ==================== TIMELINE (BERRY OPTIMIZED) ==================== */
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.timeline-title {
+  font-size: 1.25rem;
+  text-align: center;
+  flex-grow: 1;
+}
+
+.timeline-container {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--gray-medium);
+  border-radius: var(--radius);
+  background: var(--light);
+  -webkit-overflow-scrolling: touch;
+  position: relative;
+  /* 🍓 BERRY FIX: ควบคุมความสูงให้ Scroll แนวตั้งได้ในตัว เพื่อให้ Header เหนียวแน่น (Sticky) */
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.timeline-hours {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(100px, 1fr));
+  border-bottom: 1px solid var(--gray-medium);
+  /* 🍓 BERRY FIX: เพิ่ม Blur Effect และดัน Z-index ให้สูงที่สุด (Feature 9) */
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(4px);
+  position: sticky;
+  top: 0;
+  z-index: 30; 
+}
+
+.hour-label {
+  padding: 0.75rem 0.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gray-dark);
+  border-right: 1px dashed var(--gray-medium);
+}
+.hour-label:last-child { border-right: none; }
+
+#timeline-grid { position: relative; padding-bottom: 1rem; }
+
+.timeline-row {
+  display: flex;
+  min-height: 60px;
+  border-bottom: 1px solid var(--gray-medium);
+}
+
+.vehicle-label {
+  width: 150px;
+  min-width: 150px;
+  padding: 1rem 0.75rem;
+  font-weight: 600;
+  background: white;
+  border-right: 1px solid var(--gray-medium);
+  position: sticky;
+  left: 0;
+  /* 🍓 BERRY FIX: Z-index 20 ให้แกนรถอยู่เหนือแท่งงาน (Bar) แต่ต่ำกว่า Header เวลา */
+  z-index: 20; 
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.vehicle-label span:first-child { font-size: 1.2rem; }
+
+.timeline-track {
+  flex: 1 1 auto;
+  position: relative;
+  min-width: 800px;
+  /* 🍓 BERRY FIX: สร้างเส้นไกด์ไลน์จางๆ ในพื้นที่ว่างช่วยให้ผู้ใช้กะเวลาได้ง่ายขึ้น */
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent calc(12.5% - 1px),
+    rgba(226, 232, 240, 0.4) 12.5%
+  ); 
+}
+
+.timeline-slots {
+  flex-grow: 1;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(100px, 1fr));
+  position: relative;
+}
+
+.time-slot {
+  border-right: 1px dashed var(--gray-medium);
+  min-height: 60px;
+}
+.time-slot:last-child { border-right: none; }
+
+/* ===== Booking Card (Event Bar) ===== */
+.timeline-booking {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 64%; /* 🍓 เพิ่มความหนาขึ้นนิดนึงให้ทัชง่ายบนมือถือ */
+  min-width: 10px;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
+
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), filter 0.2s, box-shadow 0.2s;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+  border: 1px solid rgba(0,0,0,0.1);
+  z-index: 10; /* ต่ำกว่า Header และ Label รถ */
+}
+
+/* 🍓 BERRY FIX: Highlight Selected Job (Feature 8) */
+.timeline-booking:hover { 
+  transform: translateY(-50%) scale(1.02); 
+  z-index: 15; 
+  box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+  filter: brightness(1.15);
+}
+
+.timeline-booking.approved { background: linear-gradient(135deg, var(--success), #14532D); }
+.timeline-booking.pending  { background: linear-gradient(135deg, var(--warning), #78350F); }
+.timeline-booking.rejected { background: linear-gradient(135deg, var(--danger),  #7F1D1D); }
+.timeline-booking.cancelled{ background: linear-gradient(135deg, #94A3B8,       #475569); }
+
+/* 🍓 BERRY FIX: Current Time Line (Feature 6) */
+.current-time-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: var(--danger);
+  z-index: 5; /* อยู่ใต้ Event Bar */
+  pointer-events: none;
+}
+.current-time-line::before {
+  content: ''; 
+  position: absolute;
+  top: -4px; 
+  left: -4px;
+  width: 10px; 
+  height: 10px;
+  background-color: var(--danger);
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(220, 38, 38, 0.5);
+}
+
+.timeline-legend {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+/* ===== Mobile-only (Timeline Optimization) ===== */
+@media (max-width: 768px){
+  /* ✅ กันหน้าเว็บเลื่อนแนวนอน */
+  html, body { overflow-x: hidden; }
+
+  /* ✅ ลดช่องซ้ายไม่ให้กินพื้นที่เกินไป */
+  .vehicle-label{
+    width: 110px; 
+    min-width: 110px;
+    padding: 0.75rem 0.5rem;
+  }
+  .vehicle-label span:first-child { font-size: 1rem; }
+
+  /* ✅ ลดความกว้าง track รวม ให้พอดีมือถือขึ้น (ลดภาระการปัดนิ้ว) */
+  .timeline-track{
+    min-width: 600px; 
+  }
+
+  /* ✅ ไม่ให้การ์ดโดนตัดขอบตอนเลื่อน */
+  .timeline-booking{
+    padding: 0.4rem 0.4rem;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    white-space: normal;   /* เปิดให้มีหลายบรรทัดในตัวการ์ด */
+    text-overflow: clip;   
+    max-width: 95%;        /* ป้องกันทะลุขอบขวา */
+  }
+
+  /* ✅ ชื่องานโชว์ได้ 2 บรรทัด */
+  .timeline-booking .booking-title{
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+    word-break: break-word;
+    font-size: 0.75rem;
+  }
+
+  /* ✅ เวลา/ID ยังเป็นบรรทัดเดียว (กันรก) */
+  .timeline-booking .booking-time,
+  .timeline-booking .booking-meta{
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.7rem;
+    opacity: 0.9;
+  }
+}
+
+/* ==================== PRINT STYLES ==================== */
+@media print {
+  body { background: #FFF; }
+
+  .header,
+  .nav-tabs,
+  .btn,
+  .modal,
+  footer.footer { display: none !important; }
+
+  .card {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid var(--gray-medium);
+    padding: 1rem;
+  }
+
+  .charts-grid,
+  .kpi-grid,
+  .form-grid { grid-template-columns: 1fr; }
+
+  .timeline-container {
+    overflow: visible;
+    border: none;
+  }
+}
+
+/* Ensure modal content always accepts input */
+.modal, .modal * {
+  pointer-events: auto;
+}
+
+.type-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+/* ==================== [PATCH] ASSIGNMENT MODAL UI ==================== */
+
+/* 1. จัดระเบียบพื้นที่ฝั่งซ้าย (Booking Summary) */
+.booking-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* เว้นระยะห่างระหว่างกลุ่มข้อมูล */
+  padding-right: 10px;
+}
+
+.booking-summary .info-item {
+  display: flex !important;
+  flex-direction: column !important; /* จัดแบบ Label บน Value ล่าง */
+  align-items: flex-start !important;
+  gap: 2px !important;
+  padding: 8px 0 !important;
+  border-bottom: 1px dashed #e5e7eb !important;
+  margin-bottom: 4px !important;
+}
+
+.booking-summary .info-item:last-child {
+  border-bottom: none !important;
+}
+
+.booking-summary .info-label {
+  font-size: 0.85rem !important;
+  color: var(--gray-dark) !important;
+  font-weight: 700 !important;
+  text-transform: none;
+  margin: 0 !important;
+}
+
+.booking-summary .info-value {
+  font-size: 1rem !important;
+  color: var(--dark) !important;
+  line-height: 1.4 !important;
+  padding-left: 4px !important;
+  word-break: break-word;
+}
+
+/* 2. ปรับแต่ง Badge ในหน้ามอบหมายงานให้เด่นชัด */
+.booking-summary .badge {
+  padding: 6px 12px !important;
+  font-size: 0.9rem !important;
+  border-radius: 8px !important;
+  font-weight: 800 !important;
+  margin-top: 4px;
+}
+
+/* 3. จัดระเบียบการ์ดเลือกรถฝั่งขวา (Assignment Cards) */
+.assignment-vehicle-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: var(--radius) !important;
+  padding: 12px 15px !important;
+  margin-bottom: 12px !important;
+  transition: all 0.2s ease !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02) !important;
+}
+
+.assignment-vehicle-card:hover {
+  border-color: var(--primary) !important;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.12) !important;
+}
+
+.assignment-vehicle-card.selected {
+  background-color: #f5f7ff !important;
+  border-color: var(--primary) !important;
+  border-width: 2px !important;
+}
+
+/* 4. ปรับช่องเลือกคนขับให้นิ่ง ไม่เบียดข้อความรถ */
+.vc-driver-select-wrapper {
+  margin-top: 8px !important;
+  padding-left: 35px !important; /* หลบจาก Checkbox */
+}
+
+.vc-driver-select {
+  height: 38px !important;
+  font-size: 0.9rem !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px !important;
+  background-color: #fff !important;
+}
+
+/* 5. ปรับปรุงปุ่ม Footer ของ Assignment ให้ดูเป็นทางการ */
+.modal-footer-assignment {
+  background: #f8fafc !important;
+  border-top: 1px solid #e2e8f0 !important;
+  padding: 15px 20px !important;
+}
+
+@media (max-width: 768px) {
+  .assignment-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 20px !important;
+  }
+  
+  .assignment-left {
+    padding-right: 0 !important;
+    border-right: none !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+    padding-bottom: 20px !important;
+  }
+}
+
+/* ==================== [PATCH] SELF TEST BUTTON POSITION ==================== */
+#self-test-float-btn {
+  /* สไตล์ตั้งต้นสำหรับ Desktop (คงเดิมไม่เปลี่ยนแปลง) */
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  z-index: 20000 !important; /* มั่นใจว่าลอยเหนือ Modal */
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@media (max-width: 768px) {
+  #self-test-float-btn {
+    /* 🍓 BERRY FIX: ซ่อนปุ่มลอยบนมือถือเด็ดขาด (ย้ายไปอยู่ใน Admin Panel แทน) */
+    display: none !important;
+  }
+}
+
+/* ==================== BERRY MODERN UI (Detail Modal & Mobile Fix) ==================== */
+.bx-modern-view .modal-header {
+    background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%) !important;
+    padding: 1.25rem 1.5rem !important; border-bottom: none !important;
+}
+.bx-modern-view .modal-header h2 {
+    font-size: 1.25rem !important; color: white !important; font-weight: 700 !important;
+    letter-spacing: 0.5px; text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%; display: flex; justify-content: space-between; align-items: center;
+}
+.bx-modern-view .modal-close {
+    background: rgba(255,255,255,0.2) !important; color: white !important;
+    transition: all 0.2s; flex-shrink: 0;
+}
+.bx-modern-view .modal-close:hover { background: rgba(255,255,255,0.4) !important; transform: rotate(90deg); }
+
+.bx-container { font-family: 'Sarabun', sans-serif; color: #1e293b; }
+
+/* Top Section: Profile & Project */
+.bx-top-grid { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+@media (max-width: 768px) { .bx-top-grid { grid-template-columns: 1fr; gap: 1rem; } }
+
+.bx-card {
+    background: white; border-radius: 16px; padding: 1.25rem;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #f1f5f9; height: 100%;
+}
+.bx-user-profile { display: flex; flex-direction: column; gap: 0.5rem; }
+.bx-avatar {
+    width: 64px; height: 64px; background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 2rem; margin-bottom: 0.5rem; box-shadow: 0 4px 10px rgba(99, 102, 241, 0.2); flex-shrink: 0;
+}
+.bx-label { font-size: 0.85rem; color: #64748b; font-weight: 500; }
+.bx-value { font-size: 1rem; color: #0f172a; font-weight: 600; line-height: 1.4; }
+.bx-value-lg { font-size: 1.1rem; font-weight: 700; color: #1e293b; }
+.bx-info-row { margin-bottom: 1rem; }
+.bx-info-row:last-child { margin-bottom: 0; }
+
+/* Middle Grid: Date & Vehicle */
+.bx-detail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+@media (max-width: 600px) { .bx-detail-grid { grid-template-columns: 1fr; } }
+.bx-detail-item { background: #f8fafc; border-radius: 16px; padding: 1rem; display: flex; align-items: center; gap: 1rem; border: 1px solid #e2e8f0; transition: transform 0.2s; }
+.bx-icon-box { width: 48px; height: 48px; background: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; box-shadow: 0 2px 8px rgba(0,0,0,0.05); flex-shrink: 0; }
+.bx-detail-text { display: flex; flex-direction: column; }
+
+/* Assigned Vehicle Section */
+.bx-assigned-section { background: #dcfce7; border: 1px solid #bbf7d0; border-radius: 16px; padding: 1.25rem; }
+.bx-assigned-title { color: #166534; font-weight: 700; font-size: 1rem; margin-bottom: 1rem; }
+.bx-vehicle-card { background: rgba(255,255,255,0.7); backdrop-filter: blur(4px); border-radius: 12px; padding: 1rem; display: flex; align-items: center; gap: 1rem; margin-bottom: 0.75rem; border: 1px solid rgba(255,255,255,0.5); }
+.bx-vehicle-img { width: 60px; height: 40px; background: linear-gradient(to bottom right, #f1f5f9, #e2e8f0); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; flex-shrink: 0; }
+
+/* 🍓 BERRY IMPROVED: Smart Responsive Action Buttons (Center & Balanced) */
+.bx-modern-view .modal-footer {
+    background: #f8fafc !important;
+    border-top: 1px solid #e2e8f0 !important;
+    padding: 1.25rem 1rem !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important; /* จัดปุ่มให้อยู่กึ่งกลางเสมอ */
+    align-items: center !important;
+    gap: 10px !important;
+}
+
+.bx-modern-view .modal-footer .btn {
+    /* บน Desktop: บังคับขนาดให้สมดุลกันทุกปุ่ม */
+    flex: 0 1 160px !important; 
+    min-width: 130px !important;
+    max-width: 180px !important;
+    height: 48px !important;
+    border-radius: 12px !important;
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 0 !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    white-space: nowrap !important;
+}
+
+.bx-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); filter: brightness(1.05); }
+.bx-btn-cancel { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+.bx-btn-close { background: #334155 !important; color: white !important; border: none !important; order: 10; } /* ปุ่มปิดอยู่ท้ายสุดเสมอ */
+
+/* 📱 Mobile Optimized (2x2 Grid) */
+@media (max-width: 600px) {
+    #activity-modal .modal-content {
+        width: 96% !important; max-width: none !important;
+        max-height: 94vh !important; margin: 10px auto !important; border-radius: 20px !important;
+    }
+    #activity-modal .modal-body { padding: 15px 12px !important; }
+    
+    .bx-modern-view .modal-footer .btn {
+        /* บนมือถือ: แบ่งครึ่งแถวละ 2 ปุ่ม */
+        flex: 1 1 calc(50% - 10px) !important;
+        max-width: 100% !important; 
+        font-size: 0.88rem !important;
+    }
+}
+
+/* 📱 Small Mobile (320px) */
+@media (max-width: 350px) {
+    .bx-modern-view .modal-footer { padding: 1rem 0.75rem !important; }
+    .bx-modern-view .modal-footer .btn {
+        flex: 1 1 100% !important; /* จอเล็กมากให้ซ้อนแถวละ 1 เพื่อให้อ่านออก */
+    }
+}
+/* ==================== CYBER ADMIN CONTROL CENTER (BERRY UI) ==================== */
+/* พื้นหลังกระจกของ Modal */
+.cyber-modal-content {
+  background: rgba(245, 248, 255, 0.95) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15), inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  border-radius: 24px !important;
+  overflow: hidden;
+  max-width: 600px !important;
+  margin: auto;
+}
+
+/* Header */
+.cyber-header {
+  padding: 1.2rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(90deg, rgba(238,242,255,0.9), rgba(224,231,255,0.9));
+  border-bottom: 1px solid rgba(255,255,255,0.6);
+}
+.cyber-header h2 {
+  font-size: clamp(1.1rem, 4vw, 1.4rem);
+  font-weight: 800;
+  margin: 0;
+  color: #312e81;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-shadow: 0 2px 4px rgba(255,255,255,0.8);
+}
+.cyber-icon {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.6));
+}
+.cyber-close {
+  background: rgba(255,255,255,0.5);
+  border: 1px solid rgba(255,255,255,0.8);
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  color: #4f46e5;
+  font-weight: bold;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cyber-close:hover { background: #e0e7ff; transform: scale(1.1); }
+
+/* Body & Tabs */
+.cyber-body { padding: 1.2rem; background: transparent; }
+
+.cyber-tabs-container {
+  display: flex;
+  background: rgba(255,255,255,0.5);
+  padding: 6px;
+  border-radius: 16px;
+  gap: 6px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+.cyber-tab {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: transparent;
+  border-radius: 12px;
+  font-size: clamp(0.85rem, 3.5vw, 1rem);
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+.cyber-tab.active {
+  background: linear-gradient(135deg, #e0e7ff, #ede9fe);
+  color: #4338ca;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15), inset 0 0 0 1px rgba(255,255,255,0.8);
+  transform: translateY(-1px);
+}
+
+/* Card Grid */
+.cyber-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+/* Cyber Card */
+.cyber-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.75);
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.9);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.04), inset 0 2px 4px rgba(255,255,255,1);
+  transition: all 0.3s;
+}
+.cyber-card.inactive { opacity: 0.6; filter: grayscale(50%); }
+.cyber-card:hover { transform: translateY(-3px); box-shadow: 0 12px 25px rgba(99, 102, 241, 0.15); border-color: #c7d2fe; }
+
+/* Avatar */
+.cyber-card-left { flex-shrink: 0; }
+.cyber-avatar {
+  width: 54px; height: 54px;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem;
+  background: #fff;
+  border: 2px solid;
+}
+.avatar-blue { border-color: #60a5fa; box-shadow: 0 0 12px rgba(96, 165, 250, 0.3); }
+.avatar-purple { border-color: #c084fc; box-shadow: 0 0 12px rgba(192, 132, 252, 0.3); }
+
+/* Info */
+.cyber-card-right {
+  flex: 1;
+  min-width: 0; 
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.cyber-info { width: 100%; }
+.cyber-name {
+  font-size: clamp(14px, 3.8vw, 16px);
+  font-weight: 800;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.cyber-meta {
+  font-size: clamp(11px, 3vw, 12px);
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status Badge Button */
+.cyber-status-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: clamp(11px, 3vw, 12px);
+  font-weight: 800;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: white;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.glow-green {
+  color: #059669; border-color: #6ee7b7;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+.glow-gray {
+  color: #6b7280; border-color: #d1d5db;
+  box-shadow: 0 0 10px rgba(156, 163, 175, 0.2);
+}
+.glow-orange {
+  color: #d97706; border-color: #fcd34d;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+}
+.cyber-status-badge:hover { filter: brightness(0.95); transform: scale(1.05); }
+
+/* Footer / System Tools (Minimal Row Layout) */
+.cyber-footer {
+  padding: 1rem 1.5rem;
+  background: rgba(248, 250, 252, 0.9);
+  border-top: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 0 0 24px 24px;
+}
+.admin-tools-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.cyber-footer-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #475569;
+  margin: 0;
+}
+.cyber-footer-actions {
+  display: flex;
+  gap: 10px;
+}
+.cyber-btn-gold {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #78350f;
+  border: 1px solid #fde68a;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+  font-weight: 800;
+  border-radius: 10px;
+  padding: 0.4rem 0.8rem;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cyber-btn-gold:hover { box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4); transform: translateY(-2px); }
+
+/* 📱 Responsive (Mobile ≤ 390px) */
+@media (max-width: 390px) {
+  .cyber-modal-content { border-radius: 16px !important; }
+  .cyber-header { padding: 1rem; }
+  .cyber-body { padding: 1rem; }
+  .cyber-tabs-container { padding: 4px; border-radius: 12px; }
+  .cyber-tab { padding: 8px; font-size: 0.8rem; }
+  .cyber-card-grid { grid-template-columns: 1fr; gap: 10px; }
+  .cyber-card { padding: 10px; gap: 10px; border-radius: 14px; }
+  .cyber-avatar { width: 44px; height: 44px; font-size: 1.4rem; border-radius: 10px; }
+  .cyber-footer { padding: 1rem; }
+}
+
+/* Accessibility Focus */
+.cyber-tab:focus-visible, .cyber-status-badge:focus-visible, .cyber-btn-gold:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.8), 0 0 0 5px #6366f1;
+}
+
+/* ==================== [FINAL PATCH] ASSIGNMENT MODAL FOOTER ==================== */
+/* เบอรี่: คุม Layout ของ Footer หน้ามอบหมายงานให้เป๊ะทั้ง Mobile และ Desktop */
+
+/* ------------------------------------------------------------------
+   1. สไตล์ปุ่ม "ปิด" (Global) - ให้สีตรงกันทั้งมือถือและคอมพิวเตอร์
+   ------------------------------------------------------------------ */
+#assignment-modal .bx-btn-close {
+  background-color: #475569 !important; /* สีเทาอมน้ำเงิน (Slate) */
+  color: #ffffff !important;
+  border: none !important;
+  transition: all 0.2s ease !important;
+}
+#assignment-modal .bx-btn-close:hover {
+  background-color: #334155 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+}
+
+/* ------------------------------------------------------------------
+   2. Layout สำหรับมือถือ (Mobile: <= 768px) - รูปแบบ Smart Grid
+   ------------------------------------------------------------------ */
+@media (max-width: 768px) {
+  #assignment-modal .modal-footer {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important; /* แบ่งครึ่ง 50/50 */
+    gap: 8px !important;
+    padding: 12px !important;
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+    width: 100% !important;
+    background: #f8fafc !important;
+  }
+
+  /* ทลายกล่อง div ที่ครอบปุ่มยกเลิก/อนุมัติ เพื่อให้ Grid ทำงาน */
+  #assignment-modal .footer-btn-group {
+    display: contents !important; 
+  }
+
+  /* ปรับปุ่มทุกปุ่มให้เต็มพื้นที่ Grid และสูงพอให้ทัชง่าย */
+  #assignment-modal .modal-footer .btn {
+    width: 100% !important;
+    margin: 0 !important;
+    min-height: 44px !important;
+    padding: 8px !important;
+    border-radius: 10px !important;
+    justify-content: center !important;
+  }
+
+  /* จัดตำแหน่งปุ่ม */
+  #assignment-modal .modal-footer > button#assignment-reject-btn {
+    grid-column: 1 / 2 !important; /* ซ้ายบน */
+    grid-row: 1 !important;
+  }
+
+  #assignment-modal .footer-btn-group .btn:not(#assignment-save-btn) {
+    grid-column: 2 / 3 !important; /* ขวาบน (ปุ่มปิด) */
+    grid-row: 1 !important;
+  }
+
+  #assignment-modal .footer-btn-group #assignment-save-btn {
+    grid-column: 1 / 3 !important; /* แถวล่าง เต็มความกว้าง */
+    grid-row: 2 !important;
+    min-height: 48px !important; 
+    font-size: 15px !important;
+  }
+
+  #assignment-modal .modal-footer .btn .btn-text {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    white-space: nowrap !important;
+  }
+}
+
+/* ------------------------------------------------------------------
+   3. Layout สำหรับคอมพิวเตอร์ (Desktop/Tablet: >= 769px)
+   ------------------------------------------------------------------ */
+@media (min-width: 769px) {
+  #assignment-modal .modal-footer {
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    gap: 16px !important; /* ระยะห่างระหว่างปุ่มซ้าย กับ กลุ่มปุ่มขวา */
+    padding: 16px 24px !important;
+    background: #f8fafc !important;
+    border-top: 1px solid #e2e8f0 !important;
+  }
+
+  /* จัดกลุ่มปุ่ม [ ปิด ] กับ [ อนุมัติ ] ให้อยู่ใกล้กัน */
+  #assignment-modal .footer-btn-group {
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important; 
+  }
+
+  /* ควบคุมขนาดปุ่มให้สมมาตร */
+  #assignment-modal .modal-footer .btn {
+    width: auto !important;          
+    min-width: 110px !important;     /* บังคับขั้นต่ำเพื่อไม่ให้ปุ่มคำว่า "ปิด" หดเล็กเกินไป */
+    height: 44px !important;         
+    padding: 0 20px !important;
+    border-radius: 8px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 14.5px !important;
+    font-weight: 700 !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
+  }
+}
+/* ==================== BOOKING FILTER (UX/UI) ==================== */
+/* เบอรี่: รวมโค้ดจัด Layout ทั้ง Desktop และ Mobile ป้องกันล้นจอสมบูรณ์แบบ */
+
+.bf-container {
+  background: #ffffff;
+  border-radius: var(--radius-lg, 16px);
+  padding: 1.25rem;
+  box-shadow: var(--shadow, 0 4px 6px rgba(0,0,0,0.1));
+  margin-bottom: 1.5rem;
+  border: 1px solid #e5e7eb;
+  /* ป้องกันคอนเทนเนอร์แม่ทะลุขอบจอ */
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* --- Presets (Chips) --- */
+.bf-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.bf-chip {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 36px;
+}
+.bf-chip:hover { background: #e0e7ff; color: #4338ca; border-color: #c7d2fe; }
+
+/* --- Inputs Grid (Desktop Default) --- */
+.bf-inputs-grid {
+  display: flex;
+  align-items: flex-end;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.bf-input-group { 
+  flex: 1; 
+  min-width: 250px; 
+}
+.bf-input-group label { 
+  font-size: 0.85rem; 
+  font-weight: 700; 
+  color: #64748b; 
+  margin-bottom: 4px; 
+  display: block; 
+}
+
+.bf-datetime-row { 
+  display: flex; 
+  gap: 8px; 
+  width: 100%;
+}
+
+.bf-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  min-height: 44px;
+  background: #fff;
+  text-align: center; /* ช่วยให้อ่านวันที่ง่ายขึ้น */
+  box-sizing: border-box;
+}
+
+.bf-input:focus { 
+  border-color: var(--primary); 
+  outline: none; 
+}
+
+/* เพิ่มสีพื้นหลังเมื่อมีค่า (ถูกเลือกแล้ว) */
+.bf-input:not(:placeholder-shown) {
+  background-color: #f8fafc; 
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* --- Actions & Labels --- */
+.bf-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.bf-actions .btn { 
+  min-height: 44px; 
+  padding: 8px 16px; 
+  font-size: 0.9rem; 
+}
+
+.bf-active-label {
+  margin-top: 1rem;
+  padding: 8px 12px;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #166534;
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+/* --- Mobile View & Accordion Toggle --- */
+.bf-toggle-btn {
+  width: 100%;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: 700;
+  color: #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 48px;
+}
+.bf-toggle-btn .caret { transition: transform 0.3s; }
+.bf-toggle-btn.expanded .caret { transform: rotate(180deg); }
+
+/* ==================== RESPONSIVE (MOBILE) ==================== */
+@media (min-width: 769px) {
+  .mobile-only { display: none !important; }
+  .bf-content-wrapper { display: block !important; } /* Desktop โชว์ตลอด */
+}
+
+@media (max-width: 768px) {
+  .bf-container { padding: 1rem; }
+  
+  .bf-content-wrapper { 
+    display: none; /* ซ่อนไว้ก่อนบนมือถือ รอเปิด */
+    padding-top: 1rem; 
+  }
+  .bf-content-wrapper.expanded { 
+    display: block; 
+    animation: fadeIn 0.3s ease; 
+  }
+  
+  /* ให้ Chips เลื่อนซ้ายขวาได้ */
+  .bf-presets {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; 
+  }
+  .bf-presets::-webkit-scrollbar { display: none; }
+  .bf-chip { flex: 0 0 auto; }
+  
+  /* ปลดล็อกความกว้าง Group (แก้ล้นจอ) */
+  .bf-inputs-grid { 
+    flex-direction: column; 
+    align-items: stretch; 
+  }
+  .bf-input-group { 
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 8px;
+  }
+
+  /* อนุญาตให้ช่อง Date/Time หล่นลงบรรทัดใหม่ได้ถ้าจอแคบไป */
+  .bf-datetime-row {
+    flex-wrap: wrap; 
+  }
+
+  .bf-input {
+    flex: 1 1 calc(50% - 8px); /* พยายามแบ่งครึ่ง */
+    min-width: 130px; /* ถ้าไม่ถึง 130px ให้หล่นเป็น 1 คอลัมน์ */
+    max-width: 100%;
+    /* ป้องกันตัวอักษรถ่างกล่อง */
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  /* ปุ่มกด */
+  .bf-actions { 
+    flex-direction: column; 
+    margin-top: 8px; 
+    width: 100%;
+    min-width: 0;
+  }
+  .bf-actions .btn { 
+    width: 100%; 
+    justify-content: center; 
+    margin: 0;
+  }
+}
+
+/* 🍓 BERRY FIX: Reject Modal Centralized & Responsive Layout */
+#reject-booking-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(4px);
+  display: none; /* คุมด้วยคลาส .open ใน JS */
+  align-items: center;
+  justify-content: center;
+  z-index: 12000 !important;
+  padding: 16px;
+  overflow: hidden;
+}
+
+#reject-booking-modal.open {
+  display: flex !important; /* บังคับกึ่งกลางเมื่อเปิด */
+}
+
+.reject-modal-card {
+  width: min(92vw, 560px);
+  max-height: min(90vh, 650px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.3);
+  overflow: hidden;
+  animation: modalPop 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.reject-modal-header {
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-shrink: 0;
+}
+
+.reject-modal-title { font-size: 1.15rem; font-weight: 800; line-height: 1.3; }
+.reject-modal-subtitle { font-size: 0.88rem; opacity: 0.9; margin-top: 4px; }
+
+.reject-modal-close {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  width: 44px; /* Touch target 44px */
+  height: 44px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  transition: background 0.2s;
+}
+.reject-modal-close:hover { background: rgba(255, 255, 255, 0.3); }
+
+.reject-modal-body {
+  padding: 20px;
+  overflow-y: auto; /* ให้ scroll เฉพาะส่วนเนื้อหา */
+  flex: 1;
+}
+
+.reject-modal-info {
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+
+.reject-modal-label { display: block; margin-bottom: 8px; font-weight: 700; color: #334155; }
+
+.reject-modal-textarea {
+  width: 100%;
+  min-height: 120px;
+  border: 2px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 12px;
+  font-family: inherit;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.reject-modal-textarea:focus { border-color: #ef4444; }
+
+.reject-modal-footer {
+  padding: 16px 20px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.reject-modal-footer .btn {
+  min-height: 44px; /* Touch target */
+  padding: 0 20px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+/* Responsive Fix for Small Mobile (320px) */
+@media (max-width: 380px) {
+  .reject-modal-card { width: 96vw; }
+  .reject-modal-body { padding: 14px; }
+  .reject-modal-footer { padding: 12px 14px; gap: 8px; }
+  .reject-modal-footer .btn { flex: 1; padding: 0 10px; font-size: 0.9rem; }
+}
+
+/* 🍓 BERRY FULL SET: QA Vehicle Modal Styling (Complete & Selectable) */
+#qa-vehicle-modal {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(4px);
+  display: none; align-items: center; justify-content: center;
+  z-index: 15000 !important; padding: 16px;
+}
+
+#qa-vehicle-modal.open { display: flex !important; }
+
+/* รายการรถ (ส่วนที่บอสขาดไป) */
+.qa-grid-list {
+  display: flex; flex-direction: column;
+  gap: 10px; margin-top: 5px;
+}
+
+.qa-item {
+  padding: 14px 18px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer; /* บังคับให้เป็นรูปมือ */
+  transition: all 0.2s ease;
+  display: flex; align-items: center; gap: 12px;
+  background: #fff;
+  user-select: none; /* กันคลุมดำตอนกดย้ำๆ */
+}
+
+.qa-item:hover {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  transform: translateY(-1px);
+}
+
+/* สถานะเมื่อถูกเลือก */
+.qa-item.selected {
+  border-color: #8b5cf6 !important;
+  background: #ede9fe !important;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+}
+
+.qa-item-plate {
+  font-weight: 800; font-size: 1.1rem; color: #1e293b;
+}
+
+.qa-item.selected .qa-item-plate { color: #6d28d9; }
+
+/* ส่วน Footer และ ปุ่ม (กึ่งกลางเป๊ะ) */
+#qa-vehicle-modal .modal-footer {
+  display: flex !important; justify-content: center !important; 
+  gap: 12px !important; padding: 1.25rem 1.5rem !important;
+  background: #f8fafc; border-top: 1px solid #e2e8f0;
+}
+
+#qa-vehicle-modal .btn {
+  display: inline-flex !important; align-items: center !important; justify-content: center !important;
+  min-height: 48px !important; min-width: 120px !important;
+  font-weight: 800 !important; border-radius: 12px !important;
+  line-height: 1 !important; text-align: center !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  cursor: pointer;
+}
+
+#qa-loading-status {
+  padding: 12px; background: #f5f3ff; border-radius: 12px;
+  border: 1px dashed #8b5cf6; text-align: center;
+}
+
+@media (max-width: 480px) {
+  #qa-vehicle-modal .btn { flex: 1 !important; min-width: 0 !important; font-size: 0.95rem !important; }
+}
+
+#radar-overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(15,23,42,.28);
+  opacity:0;
+  visibility:hidden;
+  transition:opacity .22s ease, visibility .22s ease;
+  z-index:2998;
+  backdrop-filter:blur(1.5px);
+}
+
+#radar-overlay.open{
+  opacity:1;
+  visibility:visible;
+}
+
+#radar-drawer{
+  position:fixed;
+  top:0;
+  right:0;
+  width:380px;
+  max-width:calc(100vw - 16px);
+  height:100dvh;
+  background:#ffffff;
+  box-shadow:-10px 0 30px rgba(15,23,42,.16);
+  transform:translateX(100%);
+  transition:transform .24s ease;
+  z-index:2999;
+  display:flex;
+  flex-direction:column;
+  border-left:1px solid #e5e7eb;
+  overflow:hidden;
+}
+
+#radar-drawer.open{
+  transform:translateX(0);
+}
+
+.radar-header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  padding:18px 16px 14px;
+  border-bottom:1px solid #e5e7eb;
+  background:#ffffff;
+  flex-shrink:0;
+}
+
+.radar-header h3{
+  margin:0;
+  font-size:1.35rem;
+  line-height:1.25;
+  font-weight:800;
+  color:#111827;
+}
+
+#radar-server-meta{
+  margin-top:6px;
+  font-size:.82rem;
+  line-height:1.45;
+  color:#64748b;
+}
+
+.radar-close{
+  appearance:none;
+  border:none;
+  background:transparent;
+  color:#475569;
+  font-size:28px;
+  line-height:1;
+  min-width:44px;
+  min-height:44px;
+  border-radius:12px;
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+}
+
+.radar-close:hover{
+  background:#f8fafc;
+}
+
+.radar-close:active{
+  transform:scale(.98);
+}
+
+#radar-content{
+  flex:1;
+  overflow-y:auto;
+  overflow-x:hidden;
+  /* 🍓 BERRY FIX: เพิ่ม Padding ล่างเผื่อ Safe Area ของมือถือ ดัน Item สุดท้ายให้พ้นขอบ */
+  padding:14px 14px calc(env(safe-area-inset-bottom, 12px) + 80px);
+  background:#f8fafc;
+  -webkit-overflow-scrolling:touch;
+}
+
+.radar-section-title{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:.98rem;
+  font-weight:800;
+  color:#475569;
+  margin:8px 0 10px;
+}
+
+.radar-list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin-bottom:16px;
+}
+
+.radar-item{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 12px;
+  background:#ffffff;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  box-shadow:0 1px 2px rgba(15,23,42,.04);
+}
+
+.radar-item-left{
+  /* 🍓 BERRY FIX: min-width: 0 บังคับให้ Flex ลูกสามารถถูกบีบ (shrink) จนเกิด ellipsis ได้ */
+  min-width:0; 
+  flex:1;
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+}
+
+.radar-dot{
+  width:11px;
+  height:11px;
+  min-width:11px;
+  min-height:11px;
+  border-radius:999px;
+  margin-top:6px;
+  box-shadow:0 0 0 3px rgba(0,0,0,.04);
+}
+
+.radar-dot.available{ background:#10b981; }
+.radar-dot.busy{ background:#f59e0b; }
+.radar-dot.inactive{ background:#ef4444; }
+
+/* 🍓 BERRY FIX: บังคับข้อความตัด 1 บรรทัดเสมอด้วย Flex & Ellipsis */
+.radar-name{
+  font-size:1rem;
+  line-height:1.35;
+  font-weight:700;
+  color:#111827;
+  width:100%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  display:block;
+}
+
+.radar-subtext{
+  margin-top:2px;
+  font-size:.78rem;
+  line-height:1.35;
+  color:#64748b;
+  width:100%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  display:block;
+}
+
+.radar-meta{
+  flex-shrink:0;
+  /* 🍓 BERRY FIX: ยืดหยุ่นได้สูงสุด แต่ไม่เกิน 100px ป้องกันการดันชื่อหาย */
+  max-width:100px; 
+  text-align:center;
+  font-size:.85rem;
+  line-height:1.2;
+  font-weight:800;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  padding: 4px 10px;
+  border-radius: 8px;
+}
+
+.radar-status-available{ background-color:#dcfce7; color:#166534; }
+.radar-status-busy{ background-color:#fef3c7; color:#b45309; }
+.radar-status-inactive{ background-color:#fee2e2; color:#991b1b; }
+
+#radar-content .text-muted{ color:#94a3b8; font-size:.92rem; }
+
+/* 🍓 BERRY FIX: เคลียร์ Media Queries เก่าที่ Hardcode px ทิ้ง ให้ Flexbox จัดการเองแบบ Fluid */
+@media (max-width:768px){
+  .radar-header{ padding:16px 14px 12px; }
+  .radar-header h3{ font-size:1.2rem; }
+  #radar-content{ padding:12px 12px calc(env(safe-area-inset-bottom, 12px) + 70px); }
+  .radar-item{ padding:11px 11px; gap:10px; }
+  .radar-name{ font-size:.96rem; }
+  .radar-meta{ font-size: .8rem; padding: 3px 8px; }
+}
+
+@media (max-width:390px){
+  #radar-drawer{ width:100vw; max-width:100vw; }
+  .radar-header{ padding:14px 12px 10px; }
+  #radar-content{ padding:10px 10px calc(env(safe-area-inset-bottom, 10px) + 70px); }
+  .radar-name{ font-size:.93rem; }
+  .radar-meta{ font-size:.85rem; }
+  .radar-subtext{ font-size:.75rem; }
+}
+
+@media (max-width:320px){
+  .radar-header h3{ font-size:1.06rem; }
+  .radar-item{ padding:9px; gap:8px; }
+  .radar-item-left{ gap:6px; }
+  .radar-name{ font-size:.88rem; }
+  .radar-meta{ font-size:.78rem; padding:2px 6px; }
+  .radar-subtext{ font-size:.72rem; }
+}
+
+/* ==================== ANCHOR: Dashboard Fuel Level Widget ==================== */
+.fuel-widget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  width: 100%;
+}
+
+.fuel-widget-card {
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 1.1rem;
+  border: 1.5px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-width: 0;
+  overflow: hidden;
+}
+.fuel-widget-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+}
+
+.fuel-widget-plate {
+  font-weight: 800;
+  font-size: 1rem;
+  color: #1e293b;
+  text-align: center;
+  word-break: break-all;
+  line-height: 1.2;
+}
+
+.fuel-widget-gauge {
+  position: relative;
+  width: 72px;
+  height: 40px;
+  border-radius: 0 0 36px 36px;
+  overflow: hidden;
+  background: #e2e8f0;
+  border: 2.5px solid #cbd5e1;
+  border-top: none;
+}
+
+.fuel-widget-gauge-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  border-radius: 0 0 34px 34px;
+  transition: height 0.6s ease;
+}
+
+.fuel-widget-percent {
+  font-size: 1.35rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.fuel-widget-status {
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 999px;
+  line-height: 1.2;
+}
+
+.fuel-widget-time {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Fuel Status Colors */
+.fuel-status-full .fuel-widget-gauge { border-color: #86efac; }
+.fuel-status-full .fuel-widget-gauge-fill { background: linear-gradient(to top, #16a34a, #4ade80); }
+.fuel-status-full .fuel-widget-percent { color: #16a34a; }
+.fuel-status-full .fuel-widget-status { background: #dcfce7; color: #166534; }
+
+.fuel-status-mid .fuel-widget-gauge { border-color: #fde68a; }
+.fuel-status-mid .fuel-widget-gauge-fill { background: linear-gradient(to top, #d97706, #fbbf24); }
+.fuel-status-mid .fuel-widget-percent { color: #d97706; }
+.fuel-status-mid .fuel-widget-status { background: #fef3c7; color: #92400e; }
+
+.fuel-status-low .fuel-widget-gauge { border-color: #fca5a5; }
+.fuel-status-low .fuel-widget-gauge-fill { background: linear-gradient(to top, #dc2626, #f87171); }
+.fuel-status-low .fuel-widget-percent { color: #dc2626; }
+.fuel-status-low .fuel-widget-status { background: #fee2e2; color: #991b1b; }
+
+.fuel-status-unknown .fuel-widget-gauge { border-color: #d1d5db; }
+.fuel-status-unknown .fuel-widget-gauge-fill { background: #9ca3af; }
+.fuel-status-unknown .fuel-widget-percent { color: #6b7280; }
+.fuel-status-unknown .fuel-widget-status { background: #f3f4f6; color: #6b7280; }
+
+/* Loading / Error / Empty States */
+.fuel-widget-loading,
+.fuel-widget-error,
+.fuel-widget-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+  gap: 8px;
+}
+
+.fuel-widget-error { color: #dc2626; }
+.fuel-widget-empty { color: #94a3b8; }
+
+/* Self-test result panel */
+.fuel-selftest-panel {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #f1f5f9;
+  border-radius: 10px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.82rem;
+  max-height: 280px;
+  overflow-y: auto;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Responsive */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .fuel-widget-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .fuel-widget-grid {
+    grid-template-columns: 1fr;
+  }
+  .fuel-widget-card {
+    padding: 0.9rem;
+  }
+}
+
+@media (min-width: 1200px) {
+  .fuel-widget-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+</style>

@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title><?= title || 'รายงานสรุปน้ำมัน' ?></title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <style>
+    @page { size: A4; margin: 15mm 15mm; }
+    html, body { background: #fff; margin: 0; padding: 0; }
+    body {
+      font-family: "Sarabun", Tahoma, Arial, sans-serif;
+      font-size: 12pt; color: #333; line-height: 1.4;
+    }
+
+    /* Header */
+    .header-container { text-align: center; margin-bottom: 20px; }
+    .org-name { font-size: 16pt; font-weight: bold; color: #1e3a8a; margin-bottom: 4px; }
+    .report-title { font-size: 14pt; font-weight: bold; color: #333; }
+    .meta { font-size: 10pt; color: #666; margin-top: 5px; }
+    
+    .rule { height: 2px; background: #f59e0b; margin: 10px 0 20px; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11pt; }
+    th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
+    thead th { background: #f1f5f9; font-weight: bold; color: #333; text-align: center; }
+    
+    .tright { text-align: right; }
+    .tcenter { text-align: center; }
+    .total-row { font-weight: bold; background-color: #f8fafc; }
+
+    /* Section */
+    .section-head { 
+        font-weight: bold; font-size: 12pt; margin-bottom: 8px; 
+        color: #1e3a8a; border-left: 4px solid #f59e0b; padding-left: 10px; 
+    }
+
+    /* Footer */
+    .footer { 
+        margin-top: 30px; font-size: 9pt; color: #888; 
+        text-align: right; border-top: 1px solid #eee; padding-top: 5px; 
+    }
+    
+    tr { page-break-inside: avoid; }
+  </style>
+</head>
+<body>
+
+  <div class="header-container">
+    <div class="org-name">มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง</div>
+    <div class="report-title"><?= title ?></div>
+    <div class="meta">
+      <span>งวดรายงาน: <?= period ?></span> | 
+      <span>พิมพ์เมื่อ: <?= generatedAt ?></span>
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  <!-- 1. SUMMARY TABLE -->
+  <div class="section-head">สรุปค่าใช้จ่ายน้ำมันแยกตามทะเบียนรถ</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:30%">ทะเบียนรถ</th>
+        <th style="width:15%">จำนวนเที่ยว</th>
+        <th style="width:25%">ปริมาณน้ำมัน (ลิตร)</th>
+        <th style="width:30%">ค่าใช้จ่าย (บาท)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? if (summary && summary.length > 0) { ?>
+        <? for (var i = 0; i < summary.length; i++) { var s = summary[i]; ?>
+          <tr>
+            <td><?= s.plate ?></td>
+            <td class="tcenter"><?= s.trips ?></td>
+            <td class="tright"><?= (Number(s.liters)).toLocaleString('th-TH', {minimumFractionDigits: 2}) ?></td>
+            <td class="tright"><?= (Number(s.cost)).toLocaleString('th-TH', {minimumFractionDigits: 2}) ?></td>
+          </tr>
+        <? } ?>
+      <? } else { ?>
+        <tr><td colspan="4" class="tcenter" style="color:#888;">-- ไม่มีข้อมูล --</td></tr>
+      <? } ?>
+    </tbody>
+    <tfoot>
+      <tr class="total-row">
+        <td colspan="3" class="tright">รวมค่าใช้จ่ายสุทธิ</td>
+        <td class="tright"><?= (Number(totalCost)).toLocaleString('th-TH', {minimumFractionDigits: 2}) ?></td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- 2. DETAIL TABLE -->
+  <div class="section-head">รายละเอียดการเดินทางทั้งหมดในงวดรายงาน</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:15%">วันที่</th>
+        <th style="width:20%">ทะเบียนรถ</th>
+        <th style="width:10%">ลิตร</th>
+        <th style="width:15%">บาท</th>
+        <th style="width:20%">ผู้ขับ</th>
+        <th style="width:20%">หมายเหตุ</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? if (detail && detail.length > 0) { ?>
+        <? for (var j = 0; j < detail.length; j++) { 
+             var d = detail[j];
+             // Parse Date Display
+             var dateStr = '-';
+             if (d.dateDisplay) {
+                 dateStr = d.dateDisplay.split(' ')[0]; // เอาแค่วันที่ (ตัดเวลาออกให้ตารางไม่แน่นเกิน)
+             }
+        ?>
+          <tr>
+            <td class="tcenter"><?= dateStr ?></td>
+            <td><?= d.plate ?></td>
+            <td class="tright"><?= (Number(d.liters)).toLocaleString('th-TH', {minimumFractionDigits: 2}) ?></td>
+            <td class="tright"><?= (Number(d.cost)).toLocaleString('th-TH', {minimumFractionDigits: 2}) ?></td>
+            <td><?= d.driver ?></td>
+            <td><?= d.remark ?></td>
+          </tr>
+        <? } ?>
+      <? } else { ?>
+        <tr><td colspan="6" class="tcenter" style="color:#888;">-- ไม่มีข้อมูล --</td></tr>
+      <? } ?>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    จัดทำโดย: <?= systemName ?>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
+    body { font-family: 'Sarabun', sans-serif; padding: 10mm; color: #333; line-height: 1.5; }
+    .header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; }
+    .title { font-size: 20pt; font-weight: bold; color: #1e3a8a; }
+    .period { font-size: 16pt; margin-top: 5px; color: #444; }
+    
+    .stats-container { 
+      background-color: #f8fafc; border: 1px solid #e2e8f0; 
+      padding: 15px; border-radius: 8px; margin-bottom: 20px;
+    }
+    .stats-grid { display: table; width: 100%; font-size: 14pt; }
+    .stats-row { display: table-row; }
+    .stats-cell { display: table-cell; padding: 5px 0; }
+
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
+    th, td { 
+      border: 1px solid #666; padding: 8px; font-size: 12pt; 
+      text-align: center; word-wrap: break-word; vertical-align: top;
+    }
+    th { background-color: #f1f5f9; font-weight: bold; color: #1e3a8a; }
+    .text-left { text-align: left; }
+    .text-right { text-align: right; }
+    
+    /* จำกัดเนื้อหาไม่เกิน 5 บรรทัด */
+    .clamp-text {
+      display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    
+    .footer { margin-top: 30px; text-align: right; font-size: 10pt; color: #666; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">รายงานสรุปการแจ้งซ่อมประจำเดือน</div>
+    <div class="period">ประจำงวด: <?= period ?></div>
+  </div>
+
+  <div class="stats-container">
+    <div class="stats-grid">
+      <div class="stats-row">
+        <div class="stats-cell" style="width:50%"><strong>จำนวนรายการซ่อม:</strong> <?= stats.total ?> ครั้ง</div>
+        <div class="stats-cell"><strong>ค่าใช้จ่ายรวม:</strong> <?= stats.cost ?> บาท</div>
+      </div>
+      <div class="stats-row">
+        <div class="stats-cell"><strong>รถที่เข้าซ่อมบ่อย:</strong> <?= stats.topPlate ?></div>
+        <div class="stats-cell"><strong>ประเภทงานยอดนิยม:</strong> <?= stats.topType ?></div>
+      </div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:12%">ทะเบียน</th>
+        <th style="width:15%">ประเภทงาน</th>
+        <th style="width:13%">วันที่ซ่อม</th>
+        <th style="width:13%">ค่าใช้จ่าย</th>
+        <th style="width:13%">นัดถัดไป</th>
+        <th style="width:34%">รายละเอียด / หมายเหตุ</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? if (list.length === 0) { ?>
+        <tr><td colspan="6" style="padding: 20px;">-- ไม่พบข้อมูลการซ่อมบำรุง --</td></tr>
+      <? } else { 
+          for (var i = 0; i < list.length; i++) { ?>
+        <tr>
+          <td><strong><?= list[i].plate ?></strong></td>
+          <td><?= list[i].type ?></td>
+          <td><?= list[i].date ?></td>
+          <td class="text-right"><?= list[i].cost ?></td>
+          <td><?= list[i].next ?></td>
+          <td class="text-left"><div class="clamp-text"><?= list[i].remark ?></div></td>
+        </tr>
+      <? } } ?>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    พิมพ์โดย: <?= systemName ?><br>
+    วันที่ออกรายงาน: <?= generatedAt ?>
+  </div>
+</body>
+</html>

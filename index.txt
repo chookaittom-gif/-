@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ระบบจองยานพาหนะ - มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง</title>
+
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script type="text/javascript">
+      google.charts.load('current', {'packages':['corechart']});
+    </script>
+
+    <?!= include_('Style'); ?>
+</head>
+<body>
+    <header class="header">
+        <div class="container">
+            <div class="header-title">
+                <img src="https://img2.pic.in.th/pic/Logo-Card4d9d375b4341402.png" alt="Logo SDU" class="header-logo">
+                <small>มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง</small>
+            </div>
+
+            <div class="header-actions">
+                <div id="user-info-display" class="user-info hidden"></div>
+
+                <!-- 🍓 BERRY FIX: จัดโครงสร้างปุ่มใหม่ เพื่อรองรับ Mobile Compact -->
+                <button id="new-booking-btn" class="btn btn-primary" title="แบบฟอร์มจอง">
+                    <span class="btn-icon">🚗</span>
+                    <span class="btn-text">แบบฟอร์มจอง</span>
+                    <span class="btn-text-mobile">จอง</span>
+                </button>
+
+                <button id="cancel-booking-btn" class="btn btn-danger" title="ยกเลิกการจอง">
+                    <span class="btn-icon">❌</span>
+                    <span class="btn-text">ยกเลิกการจอง</span>
+                    <span class="btn-text-mobile">ยกเลิก</span>
+                </button>
+
+                <button id="login-btn" class="btn btn-secondary" title="เข้าสู่ระบบ (Login)">
+                    <span class="btn-icon">🔐</span>
+                    <span class="btn-text">Login</span>
+                    <span class="btn-text-mobile">Login</span>
+                </button>
+
+                <button id="day-off-btn" class="btn btn-outline" style="display:none" title="ระบบจัดการวันลา/ซ่อมบำรุง">
+                    <span class="btn-icon">☕</span>
+                    <span class="btn-text">Day Off</span>
+                    <span class="btn-text-mobile">Day Off</span>
+                </button>
+
+                <button id="logout-btn" class="btn btn-danger" style="display:none" title="ออกจากระบบ">
+                    <span class="btn-icon">↩</span>
+                    <span class="btn-text">ออกจากระบบ</span>
+                    <span class="btn-text-mobile">ออก</span>
+                </button>
+            </div>
+    </header>
+
+    <nav class="nav-tabs" role="tablist">
+      <div class="nav-container">
+        <div class="nav-scroll">
+          <button class="tab-btn active"
+                  role="tab" aria-selected="true"
+                  aria-controls="calendar-tab"
+                  data-tab-target="#calendar-tab">
+            <span class="tab-icon">📅</span><span class="tab-text">ปฏิทิน</span>
+          </button>
+
+          <button class="tab-btn"
+                  role="tab" aria-selected="false"
+                  aria-controls="bookings-tab"
+                  data-tab-target="#bookings-tab">
+            <span class="tab-icon">📋</span><span class="tab-text">รายการจอง</span>
+          </button>
+
+          <button class="tab-btn"
+                  role="tab" aria-selected="false"
+                  aria-controls="timeline-tab"
+                  data-tab-target="#timeline-tab">
+            <span class="tab-icon">🗓️</span><span class="tab-text">ไทม์ไลน์</span>
+          </button>
+
+         <button class="tab-btn" 
+        role="tab" 
+        aria-selected="false" 
+        aria-controls="fuel-tab" 
+        data-tab-target="#fuel-tab"
+        onclick="loadFuelData()"> <span class="tab-icon">⛽</span><span class="tab-text">บันทึกน้ำมัน</span>
+</button>
+
+          <button class="tab-btn"
+                  role="tab" aria-selected="false"
+                  aria-controls="insurance-tab"
+                  data-tab-target="#insurance-tab">
+            <span class="tab-icon">🛡️</span><span class="tab-text">ประกันภัย</span>
+          </button>
+
+          <button class="tab-btn"
+                  role="tab" aria-selected="false"
+                  aria-controls="maintenance-tab"
+                  data-tab-target="#maintenance-tab">
+            <span class="tab-icon">🔧</span><span class="tab-text">ซ่อมบำรุง</span>
+          </button>
+
+          <button class="tab-btn"
+                  role="tab" aria-selected="false"
+                  aria-controls="dashboard-tab"
+                  data-tab-target="#dashboard-tab">
+            <span class="tab-icon">📊</span><span class="tab-text">แดชบอร์ด</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container">
+               <div id="calendar-tab" class="tab-content active">
+            <div class="card">
+                <div class="calendar-header">
+                    <button onclick="changeMonth(-1)" class="btn btn-sm btn-primary">◀</button>
+                    <h2 id="calendar-title" class="calendar-title">Loading...</h2>
+                    <button onclick="changeMonth(1)" class="btn btn-sm btn-primary">▶</button>
+                </div>
+                
+                <!-- 🍓 BERRY FIX: จัดกลุ่ม KPI Bar และปุ่ม Radar ให้อยู่ระดับเดียวกันและ Responsive -->
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 1rem;">
+                    <div id="calendar-kpi-bar" class="calendar-kpi-bar" aria-live="polite" style="margin-bottom: 0; flex: 1 1 auto; min-width: 0;"></div>
+                    <button id="radar-btn-inline" class="btn btn-primary" type="button" onclick="toggleLiveRadar()" title="เรดาร์สถานะรถและคนขับ" style="flex: 0 0 auto; height: 44px; display: flex; align-items: center; gap: 8px; border-radius: 12px; box-shadow: 0 4px 12px rgba(59,130,246,0.3);">
+                        <span style="font-size: 1.2rem;" aria-hidden="true">📡</span>
+                        <span style="font-weight: 700;">Live Radar</span>
+                    </button>
+                </div>
+
+                <div class="calendar-days">
+                    <div class="day-label">อา</div>
+                    <div class="day-label">จ</div>
+                    <div class="day-label">อ</div>
+                    <div class="day-label">พ</div>
+                    <div class="day-label">พฤ</div>
+                    <div class="day-label">ศ</div>
+                    <div class="day-label">ส</div>
+                </div>
+
+                <div id="calendar-grid" class="calendar-grid"></div>
+            </div>
+        </div>
+
+        <div id="bookings-tab" class="tab-content">
+           <!-- ANCHOR: bookings-stats-row -->
+<div class="bookings-stats-row">
+    <div class="stat-card stat-warning" data-status="pending" role="button" tabindex="0">
+        <div class="stat-icon">⏳</div>
+        <div class="stat-number" id="pending-count">0</div>
+        <div class="stat-label">รออนุมัติ</div>
+        <!-- 🍓 BERRY ADD: จุดแสดงตัวเลขย่อย -->
+        <div id="sub-claimed-count" style="font-size:0.75rem; color:#0284c7; margin-top:4px; min-height:16px;"></div>
+    </div>
+    
+    <div class="stat-card stat-success" data-status="approved" role="button" tabindex="0">
+        <div class="stat-icon">✅</div>
+        <div class="stat-number" id="approved-count">0</div>
+        <div class="stat-label">อนุมัติ</div>
+        <!-- 🍓 BERRY ADD: จุดแสดงตัวเลขย่อย -->
+        <div id="sub-special-count" style="font-size:0.75rem; color:#7c3aed; margin-top:4px; min-height:16px;"></div>
+    </div>
+    
+    <div class="stat-card stat-danger" data-status="rejected" role="button" tabindex="0">
+        <div class="stat-icon">❌</div>
+        <div class="stat-number" id="rejected-count">0</div>
+        <div class="stat-label">ไม่อนุมัติ</div>
+    </div>
+    
+    <div class="stat-card stat-secondary" data-status="cancelled" role="button" tabindex="0">
+        <div class="stat-icon">🚫</div>
+        <div class="stat-number" id="canceled-count">0</div>
+        <div class="stat-label">ยกเลิก</div>
+    </div>
+    
+    <div class="stat-card stat-primary filter-active" data-status="all" role="button" tabindex="0" id="filter-all-card">
+        <div class="stat-icon">📦</div>
+        <div class="stat-number" id="total-bookings-badge">0</div>
+        <div class="stat-label">ทั้งหมด</div>
+    </div>
+</div>
+
+            <div class="card" id="daily-summary-card" style="padding-bottom: 1rem;">
+                <!-- 🍓 BERRY FIX: Collapsible Header (Touch Target ≥ 44px) -->
+                <div class="card-header-collapsible" onclick="toggleDailySummary()" role="button" tabindex="0" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; min-height: 44px; margin-bottom: 0;">
+                    <h3 class="card-title" style="margin-bottom: 0; font-size: 1.15rem;">📅 สรุปงานเดินทางประจำวัน</h3>
+                    <div style="background: #f1f5f9; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%;">
+                        <span id="daily-summary-icon" style="transition: transform 0.3s; font-size: 1rem; color: #64748b;">▼</span>
+                    </div>
+                </div>
+
+                <!-- 🍓 BERRY FIX: Wrapper สำหรับซ่อน/แสดง (เริ่มต้น: ปิด) -->
+                <div id="daily-summary-content" style="display: none; margin-top: 1rem; border-top: 1px dashed #e2e8f0; padding-top: 1rem;">
+                    <div class="bookings-table-wrap">
+                        <table class="data-table bookings-table small">
+    <thead>
+        <tr>
+            <th style="width:60px;">ID</th>
+            <th>ผู้จอง / งาน/ โครงการ</th>
+            <th>สถานที่</th>
+            <th style="width:130px;">รถ</th>
+            <th style="width:175px;">วัน/เวลา</th> 
+            <th style="width:100px;">สถานะ</th>
+            
+        </tr>
+    </thead>
+    <tbody id="daily-summary-tbody"></tbody>
+</table>
+                    </div>
+                </div> <!-- ปิด daily-summary-content -->
+            </div> <!-- ปิด card -->
+
+            <!-- Booking Filter Section -->
+<div id="booking-filter-section" class="bf-container">
+  
+  <!-- Mobile Toggle Button -->
+  <button type="button" id="bf-mobile-toggle" class="bf-toggle-btn mobile-only" onclick="toggleBookingFilter()">
+    <span class="icon">📅</span> ตัวกรองวันเวลาเดินทาง <span class="caret">▼</span>
+  </button>
+
+  <!-- Filter Content -->
+  <div id="bf-content" class="bf-content-wrapper">
+    
+    <!-- Presets -->
+    <div class="bf-presets">
+      <button type="button" class="bf-chip" onclick="applyPresetRange('today')">วันนี้</button>
+      <button type="button" class="bf-chip" onclick="applyPresetRange('tomorrow')">พรุ่งนี้</button>
+      <button type="button" class="bf-chip" onclick="applyPresetRange('next7days')">7 วันข้างหน้า</button>
+      <button type="button" class="bf-chip" onclick="applyPresetRange('thisMonth')">เดือนนี้</button>
+      <button type="button" class="bf-chip" onclick="applyPresetRange('lastMonth')">เดือนก่อน</button>
+      <button type="button" class="bf-chip" onclick="applyPresetRange('nextMonth')">เดือนถัดไป</button>
+    </div>
+
+    <!-- DateTime Inputs -->
+    <div class="bf-inputs-grid">
+      <!-- ขาไป -->
+      <div class="bf-input-group">
+        <label>เดินทางไป (Start)</label>
+        <div class="bf-datetime-row">
+          <input type="date" id="bf-start-date" class="bf-input">
+          <input type="time" id="bf-start-time" class="bf-input" value="00:00">
+        </div>
+      </div>
+      
+      <!-- ขากลับ -->
+      <div class="bf-input-group">
+        <label>เดินทางกลับ (End)</label>
+        <div class="bf-datetime-row">
+          <input type="date" id="bf-end-date" class="bf-input">
+          <input type="time" id="bf-end-time" class="bf-input" value="23:59">
+        </div>
+      </div>
+      
+      <!-- Actions -->
+      <div class="bf-actions">
+        <button type="button" class="btn btn-primary bf-btn-apply" onclick="applyBookingFilter()">
+          🔍 ค้นหา
+        </button>
+        <button type="button" class="btn btn-secondary bf-btn-clear" onclick="clearBookingFilter()">
+          ❌ ล้างค่า
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Label -->
+  <div id="bf-active-label" class="bf-active-label hidden">
+    กำลังกรอง: <span id="bf-label-text"></span>
+  </div>
+</div>
+
+            <div class="card" id="bookings-table-card" style="display:none;">
+                <h3 class="card-title">📋 รายการจองทั้งหมด</h3>
+                <div class="bookings-table-wrap">
+                    <table id="bookings-table" class="data-table bookings-table">
+                        <thead>
+                            <tr>
+                                <th style="width:72px;">ID</th>
+                                <th>ผู้จอง / งาน/ โครงการ</th>
+                                <th>สถานที่</th>
+                                <th style="width:120px;">รถ</th>
+                                <th style="width:140px;">วัน/เวลา</th>
+                                <th style="width:108px;">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bookings-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="bookings-footer" class="card" style="padding: 1rem 1.5rem; display: none;">
+                <div class="pagination-controls">
+                    <button id="bookings-prev-btn" type="button" class="btn btn-sm btn-secondary" onclick="changeBookingsPage(-1)">◀ ก่อนหน้า</button>
+                    <span id="bookings-page-info" class="page-info">หน้า 1 / 1</span>
+                    <button id="bookings-next-btn" type="button" class="btn btn-sm btn-secondary" onclick="changeBookingsPage(1)">ถัดไป ▶</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="fuel-tab" class="tab-content">
+            <div class="card">
+                <h3 class="card-title">⛽ บันทึกค่าน้ำมัน</h3>
+                <form id="fuel-form" class="form-grid" onsubmit="return false;">
+                    <div class="form-group">
+                        <select name="plate" id="fuel-plate" required>
+                            <option value="">-- เลือกรถ --</option>
+                        </select>
+                        <label>ทะเบียนรถ *</label>
+                    </div>
+
+                   <div class="form-group">
+                        <select name="workType" id="fuel-workType-select" required>
+                            <option value="">-- เลือกประเภทงาน --</option>
+                            <option value="อบรม">อบรม</option>
+                            <option value="ประชุม">ประชุม</option>
+                            <option value="ทัศนศึกษา">ทัศนศึกษา</option>
+                            <option value="นิเทศนักศึกษา">นิเทศนักศึกษา</option>
+                            <option value="แนะแนว">แนะแนว</option>
+                            <option value="ซื้อของ">ซื้อของ</option>
+                            <option value="ควบคุมงานก่อสร้าง">ควบคุมงานก่อสร้าง</option>
+                            <option value="ส่งเอกสาร/พัสดุ">ส่งเอกสาร/พัสดุ</option>
+                            <option value="อื่นๆ">อื่นๆ</option>
+                        </select>
+                        <label for="fuel-workType-select">ประเภทงาน *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="text" name="project" id="fuel-project" placeholder="พิมพ์สั้นๆ ชัดเจน เช่น เชิงปฏิบัติการ AI" required>
+                        <label for="fuel-project">งาน/โครงการ *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <select name="driver" id="fuel-driver-select" required>
+                            <option value="">-- เลือกผู้บันทึก --</option>
+                        </select>
+                        <label for="fuel-driver-select">ผู้บันทึก *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="number" name="startMileage" required placeholder=" ">
+                        <label>เลขไมล์เริ่มต้น (กม.) *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="number" name="endMileage" required placeholder=" ">
+                        <label>เลขไมล์สิ้นสุด (กม.) *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="number" step="1" name="fuelPercentStart" required placeholder=" ">
+                        <label>ระดับน้ำมันเริ่มต้น (%) *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="number" step="1" name="fuelPercentEnd" required placeholder=" ">
+                        <label>ระดับน้ำมันสิ้นสุด (%) *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="number" name="liters" required placeholder=" " step="0.01">
+                        <label>จำนวนลิตร *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="number" name="cost" required placeholder=" " step="0.01">
+                        <label>ค่าน้ำมัน (บาท) *</label>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <button type="button" class="file-upload-btn btn btn-info" onclick="document.getElementById('fuel-file-upload').click()">
+                            <span class="icon">📄</span>
+                            <span class="btn-text">แนบใบเสร็จ (รูป/PDF)</span>
+                        </button>
+                        <input type="file" id="fuel-file-upload" name="fuelFile" accept="image/*,application/pdf" hidden onchange="handleFileSelect(this, 'fuel-file-chosen', 'fuel-file-upload-name', 'fuel-file-preview-img', 'fuel-file-preview')">
+
+                        <div id="fuel-file-chosen" class="file-chosen-wrapper hidden">
+                            <span id="fuel-file-upload-name">ยังไม่ได้เลือกไฟล์</span>
+                            <button type="button" class="file-clear-btn" onclick="clearFile('fuel-file-upload', 'fuel-file-chosen', 'fuel-file-preview')">ลบ</button>
+                        </div>
+
+                        <div id="fuel-file-preview" class="file-preview hidden">
+                            <img id="fuel-file-preview-img" src="" alt="File preview">
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <textarea name="remark" rows="2" placeholder=" "></textarea>
+                        <label>หมายเหตุ</label>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <button type="submit" class="btn btn-success btn-block">💾 บันทึกข้อมูลน้ำมัน</button>
+                    </div>
+                </form>
+
+                <div style="margin-top: 2rem;">
+                    <h3 class="card-title">⛽ ประวัติการเติมน้ำมันล่าสุด</h3>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:120px;">วันที่</th>
+                                    <th>ทะเบียนรถ</th>
+                                    <th>ผู้บันทึก</th>
+                                    <th class="text-right">จำนวนเงิน</th>
+                                    <th>หลักฐาน</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fuel-table-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="pagination-controls mt-2" id="fuel-pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px;">
+     <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('fuel', -1)">◀</button>
+     
+     <span class="page-info" id="fuel-page-info">1 / 1</span>
+     
+     <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('fuel', 1)">▶</button>
+</div>
+
+</div> </div>     </div>         
+
+       <div id="insurance-tab" class="tab-content">
+            <div class="card">
+                <h3 class="card-title">🛡️ ประกันภัย</h3>
+                <form id="insurance-form" class="form-grid" onsubmit="return false;">
+                    <div class="form-group">
+                        <select name="plate" id="insurance-plate" required>
+                            <option value="">-- เลือกรถ --</option>
+                        </select>
+                        <label for="insurance-plate">ทะเบียนรถ *</label>
+                    </div>
+                    <div class="form-group">
+                        <input type="text" name="company" required placeholder=" ">
+                        <label>บริษัทประกัน *</label>
+                    </div>
+                    <div class="form-group">
+    <input type="text" name="policyNo" required placeholder=" ">
+    <label>เลขที่กรมธรรม์ *</label>
+</div>
+
+<div class="form-group">
+    <select name="driver" id="insurance-driver-select" required>
+        <option value="">-- เลือกผู้บันทึก --</option>
+    </select>
+    <label for="insurance-driver-select">ผู้บันทึก *</label>
+</div>
+
+                    <div class="form-group">
+                        <input type="number" name="cost" placeholder=" " step="0.01" min="0">
+                        <label>ค่าเบี้ยประกัน (บาท)</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="date" id="insStart" name="startDate" required>
+                        <label for="insStart">วันที่เริ่มต้น *</label>
+                    </div>
+                    <div class="form-group">
+                        <input type="date" id="insEnd" name="endDate" required>
+                        <label for="insEnd">วันที่สิ้นสุด *</label>
+                    </div>
+                    <div class="form-group full-width">
+                        <textarea name="note" rows="2" placeholder=" "></textarea>
+                        <label>หมายเหตุ</label>
+                    </div>
+                    <div class="form-group full-width">
+                        <button type="submit" class="btn btn-success btn-block">💾 บันทึกข้อมูล</button>
+                    </div>
+                </form>
+
+                <h3 class="card-title" style="margin-top: 2rem;">🛡️ รายการประกันภัยทั้งหมด</h3>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ทะเบียนรถ</th>
+                                <th>บริษัทประกัน</th>
+                                <th>วันสิ้นสุด</th>
+                                <th class="text-right">ค่าเบี้ย</th>
+                                <th class="text-center">สถานะ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="insurance-list-container"></tbody>
+                    </table>
+                </div>
+                <div class="pagination-controls mt-2" id="insurance-pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px;">
+                     <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('insurance', -1)">◀</button>
+                     <span class="page-info" id="insurance-page-info">1 / 1</span>
+                     <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('insurance', 1)">▶</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="maintenance-tab" class="tab-content">
+            <div class="card">
+                <h3 class="card-title">🔧 ซ่อมบำรุง</h3>
+                <form id="maintenance-form" class="form-grid" onsubmit="return false;">
+                    
+                    <div class="form-group">
+                        <select name="vehicle" id="maintenance-plate" required>
+                            <option value="">-- เลือกรถ --</option>
+                        </select>
+                        <label for="maintenance-plate">ทะเบียนรถ *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="text" id="maintenance-topic" name="service_type" required placeholder=" ">
+                        <label for="maintenance-topic">รายการซ่อม *</label>
+                    </div>
+
+                 <div class="form-group">
+    <input type="text" id="maintenance-location" name="location" required placeholder=" ">
+    <label for="maintenance-location">📍 สถานที่ / อู่ซ่อม *</label>
+</div>
+
+<div class="form-group">
+    <select name="driver" id="maintenance-driver-select" required>
+        <option value="">-- เลือกผู้บันทึก --</option>
+    </select>
+    <label for="maintenance-driver-select">ผู้บันทึก *</label>
+</div>
+
+                    <div class="form-group">
+                        <input type="number" name="cost" required placeholder=" " min="0" step="0.01" inputmode="decimal">
+                        <label>ค่าใช้จ่าย (บาท) *</label>
+                    </div>
+
+                    <div class="form-group">
+    <input type="number" name="odometer" placeholder=" " min="0">
+    <label>เลขไมล์ (กม.)</label>
+</div>
+
+                    <div class="form-group">
+                        <input type="date" id="maintStart" name="service_date" required>
+                        <label for="maintStart">วันที่ซ่อม *</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="date" id="maintDone" name="end_date">
+                        <label for="maintDone">วันที่ซ่อมเสร็จ</label>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="date" id="maintNext" name="next_date">
+                        <label for="maintNext">วันครบกำหนดซ่อมครั้งต่อไป</label>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <textarea name="remark" rows="2" placeholder=" "></textarea>
+                        <label>หมายเหตุ</label>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <button type="button" class="file-upload-btn btn btn-info" onclick="document.getElementById('maint-file-upload').click()">
+                            <span class="icon">📄</span>
+                            <span class="btn-text">แนบหลักฐานซ่อม (รูป/PDF)</span>
+                        </button>
+                        
+                        <input type="file" id="maint-file-upload" name="maintFile" accept="image/*,application/pdf" hidden onchange="handleFileSelect(this, 'maint-file-chosen', 'maint-file-name', 'maint-file-preview-img', 'maint-file-preview')">
+
+                        <div id="maint-file-chosen" class="file-chosen-wrapper hidden">
+                            <span id="maint-file-name">ยังไม่ได้เลือกไฟล์</span>
+                            <button type="button" class="file-clear-btn text-danger" style="margin-left:10px;" onclick="clearFile('maint-file-upload', 'maint-file-chosen', 'maint-file-preview')">❌ ลบ</button>
+                        </div>
+
+                        <div id="maint-file-preview" class="file-preview hidden" style="margin-top:10px;">
+                            <img id="maint-file-preview-img" src="" alt="File preview" style="max-height: 200px; border-radius: 8px; border: 1px solid #ddd;">
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <button type="submit" class="btn btn-success btn-block">💾 บันทึกข้อมูล</button>
+                    </div>
+                </form>
+
+                <div style="margin-top: 2rem; border-top: 1px dashed #ddd; padding-top: 1rem;">
+                    <h3 class="card-title">📜 ประวัติการซ่อมบำรุง</h3>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;">#</th>
+                                    <th>ทะเบียนรถ</th>
+                                    <th style="width: 120px;">วันที่ซ่อม</th>
+                                    <th>รายการซ่อม</th>
+                                    <th>สถานที่/อู่</th>
+                                    <th class="text-right">ค่าใช้จ่าย</th>
+                                    <th>หมายเหตุ</th>
+                                    <th class="text-center" style="width: 100px;">หลักฐาน</th>
+                                </tr>
+                            </thead>
+                            <tbody id="maintenance-list-container">
+                                 </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination-controls mt-2" id="maintenance-pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px;">
+                         <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('maintenance', -1)">◀</button>
+                         <span class="page-info" id="maintenance-page-info">1 / 1</span>
+                         <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('maintenance', 1)">▶</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+      <div id="timeline-tab" class="tab-content">
+    <div class="card">
+        <div class="timeline-header">
+            <button type="button" onclick="changeTimelineDate(-1)" class="btn btn-sm btn-primary">◀ วันก่อนหน้า</button>
+            <h3 id="timeline-date" class="timeline-title">🗓️ ไทม์ไลน์</h3>
+            <button type="button" onclick="changeTimelineDate(1)" class="btn btn-sm btn-primary">วันถัดไป ▶</button>
+        </div>
+
+        <div class="form-section">
+            <div class="form-group">
+                <label for="timeline-plate">🚗 เลือกรถเพื่อดูไทม์ไลน์</label>
+                <select id="timeline-plate" name="plate" class="form-control">
+                    <option value="">-- ดูรถทุกคัน --</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="timeline-container">
+            <div class="timeline-hours">
+                <div class="hour-label">06:00-08:00</div>
+                <div class="hour-label">08:00-10:00</div>
+                <div class="hour-label">10:00-12:00</div>
+                <div class="hour-label">12:00-14:00</div>
+                <div class="hour-label">14:00-16:00</div>
+                <div class="hour-label">16:00-18:00</div>
+                <div class="hour-label">18:00-20:00</div>
+                <div class="hour-label">20:00-22:00</div>
+            </div>
+            <div id="timeline-grid" class="timeline-grid"></div>
+        </div>
+
+        <div class="timeline-legend">
+            <div class="legend-item" title="งานที่ได้รับการอนุมัติแล้ว">
+                <div class="legend-color" style="background: linear-gradient(135deg, var(--success), #14532D);"></div>
+                <span>อนุมัติ</span>
+            </div>
+            <div class="legend-item" title="งานที่รอการอนุมัติ">
+                <div class="legend-color" style="background: linear-gradient(135deg, var(--warning), #78350F);"></div>
+                <span>รออนุมัติ</span>
+            </div>
+            <div class="legend-item" title="งานที่ไม่ได้รับการอนุมัติ">
+                <div class="legend-color" style="background: linear-gradient(135deg, var(--danger), #7F1D1D);"></div>
+                <span>ไม่อนุมัติ</span>
+            </div>
+            <div class="legend-item" title="งานที่ถูกยกเลิก">
+                <div class="legend-color" style="background: linear-gradient(135deg, #94A3B8, #475569);"></div>
+                <span>ยกเลิก</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="dashboard-tab" class="tab-content" role="region">
+    <div id="dashboard-view">
+        <div class="kpi-grid">
+            <div class="kpi-card kpi-primary">
+                <div class="kpi-icon">🚗</div>
+                <h3 class="kpi-number"><span id="dash-total-bookings">0</span></h3>
+                <p class="kpi-label">งานทั้งหมด (เดือนนี้)</p>
+            </div>
+            <div class="kpi-card kpi-success">
+                <div class="kpi-icon">✅</div>
+                <h3 class="kpi-number"><span id="dash-vehicles-ready">0/0</span></h3>
+                <p class="kpi-label">รถพร้อมใช้</p>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="card">
+                <h3 class="card-title">👨‍✈️ พนักงานขับยอดนิยม (เดือนนี้)</h3>
+                <div id="driver-chart" class="chart-container"></div>
+            </div>
+            <div class="card">
+                <h3 class="card-title">🚐 รถที่เดินทางมากที่สุด (เดือนนี้)</h3>
+                <div id="vehicle-chart" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- ANCHOR: Dashboard Fuel Level Widget -->
+        <div class="card" id="fuel-level-widget-card">
+            <h3 class="card-title">⛽ ระดับน้ำมันล่าสุดของรถ</h3>
+            <div id="fuel-level-widget-container">
+                <div class="fuel-widget-loading">
+                    <div class="spinner" style="width:28px;height:28px;margin:0 auto 12px;border-width:3px;"></div>
+                    <span style="color:#64748b;">กำลังโหลดระดับน้ำมันล่าสุด...</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3 class="card-title">📥 ดาวน์โหลดรายงาน</h3>
+            <div class="pdf-download-grid">
+                <button id="btn-fuel-report-daily" class="btn btn-primary">🗓️ รายงานสรุปน้ำมัน (รายวัน)</button>
+                <button id="btn-fuel-report-monthly" class="btn btn-secondary">📄 รายงานสรุปน้ำมัน (เดือนนี้)</button>
+                <button id="btn-insurance-annual-report" class="btn btn-success">🛡️ รายงานประกันภัยประจำปี</button>
+                <button id="btn-maintenance-monthly-report" class="btn btn-warning" style="color:white">🔧 รายงานสรุปการแจ้งซ่อมรายเดือน</button>
+                <button id="btn-dashboard-report" class="btn btn-info">📊 รายงานแดชบอร์ด (PDF)</button>
+                <button class="btn btn-outline" id="refresh-dashboard">🔄 รีเฟรชข้อมูล</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+    <div id="booking-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="booking-modal-title">
+      <div class="modal-content modal-lg">
+
+        <div class="modal-header">
+          <h2 id="booking-modal-title" style="display:flex; align-items:center; gap:8px;">
+            📝 จองยานพาหนะ
+          </h2>
+          <button type="button" onclick="closeBookingForm()" class="modal-close" aria-label="ปิด">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <form id="booking-form">
+          <input type="hidden" name="carType" id="carType"> 
+
+            <div class="form-section">
+              <h3 style="font-size:1rem; color:#667eea; margin-bottom:0.75rem; border-bottom:1px dashed #ddd; padding-bottom:0.5rem;">
+                👤 ข้อมูลผู้เดินทาง
+              </h3>
+
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="booking-name">ชื่อ-นามสกุล *</label>
+                  <input type="text" id="booking-name" name="name" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="booking-phone">เบอร์โทรศัพท์ *</label>
+                  <input type="tel" id="booking-phone" name="phone" required pattern="[0-9]*">
+                </div>
+
+                <div class="form-group">
+                  <label for="booking-position">ตำแหน่ง *</label>
+                  <select id="booking-position" name="position" required>
+                    <option value="">- เลือก -</option>
+                    <option>อาจารย์</option>
+                    <option>เจ้าหน้าที่</option>
+                    <option>นักศึกษา</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="booking-dept">สังกัด *</label>
+                  <select id="booking-dept" name="department" required>
+                    <option value="">- เลือก -</option>
+                    <option>ศูนย์ฯ ลำปาง</option>
+                    <option>โรงเรียนสาธิตฯ</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="booking-passengers">ผู้เดินทาง (คน) *</label>
+                  <input type="number" id="booking-passengers" name="passengers" min="1" value="1" required>
+                </div>
+
+              <div class="form-group">
+                  <label for="booking-vehicle-count">จำนวนรถที่ต้องการ (คัน) *</label>
+                  <input type="number"
+                         id="booking-vehicle-count"
+                         name="vehicleCount"
+                         class="form-control" 
+                         min="1"
+                         max="5"
+                         value="1"
+                         placeholder="กรุณาเลือกวันเวลาเดินทางก่อน..."
+                         required>
+                  <small id="carAvailabilityMsg" class="form-hint" style="display:block; margin-top:5px; font-weight:bold; min-height:24px;">
+                     ⏳ กรุณาระบุวัน-เวลาเดินทาง เพื่อตรวจสอบรถว่าง...
+                  </small>
+                </div>
+
+                <div class="form-group">
+                  <label for="booking-email">อีเมล *</label>
+                   <input type="email" id="booking-email" name="email" required placeholder="name@example.com">
+                  </div>
+              </div>
+            </div>
+
+            <div class="form-section" style="margin-top:1.5rem;">
+              <h3 style="font-size:1rem; color:#667eea; margin-bottom:0.75rem; border-bottom:1px dashed #ddd; padding-bottom:0.5rem;">
+                📍 รายละเอียดการเดินทาง
+              </h3>
+
+              <div class="form-grid">
+<div class="form-group">
+  <label for="form-purpose">ประเภทงาน *</label>
+  <select id="form-purpose" name="workType" required>
+    <option value="">-- เลือกประเภทงาน --</option>
+    <option value="อบรม">อบรม</option>
+    <option value="ประชุม">ประชุม</option>
+    <option value="ทัศนศึกษา">ทัศนศึกษา</option>
+    <option value="นิเทศนักศึกษา">นิเทศนักศึกษา</option>
+    <option value="แนะแนว">แนะแนว</option>
+    <option value="ซื้อของ">ซื้อของ</option>
+    <option value="ควบคุมงานก่อสร้าง">ควบคุมงานก่อสร้าง</option>
+    <option value="ส่งเอกสาร/พัสดุ">ส่งเอกสาร/พัสดุ</option>
+    <option value="อื่นๆ">อื่นๆ</option>
+  </select>
+</div>
+
+<div class="form-group">
+  <label for="booking-project-name">งาน/โครงการ *</label>
+  <input type="text" id="booking-project-name" name="workName" required placeholder="พิมพ์สั้นๆ ชัดเจน (เช่น เชิงปฏิบัติการ AI)">
+</div>
+
+
+                <div class="form-group full-width">
+                  <label for="booking-destination">สถานที่ปลายทาง *</label>
+                  <input type="text" id="booking-destination" name="destination" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="booking-date">วันที่ไป *</label>
+                  <input type="text" id="booking-date" name="startDate" placeholder="dd/mm/yyyy" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                  <label for="booking-start">เวลาไป *</label>
+                  <input type="time" id="booking-start" name="startTime" required>
+                </div>
+
+                <div class="form-group">
+                  <label for="return-date">วันที่กลับ *</label>
+                  <input type="text" id="return-date" name="endDate" placeholder="dd/mm/yyyy" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                  <label for="booking-end">เวลากลับ *</label>
+                  <input type="time" id="booking-end" name="endTime" required>
+                </div>
+
+                <div class="form-group full-width">
+                  <label for="booking-file">เอกสารที่เกี่ยวข้อง</label>
+                  <input type="text" id="booking-file" name="file" placeholder="วางลิงก์ Google Drive / เอกสาร (ถ้ามี)">
+                </div>
+                
+                <div class="form-group full-width">
+                  <label for="booking-reason">หมายเหตุ</label>
+                  <textarea id="booking-reason" name="reason" rows="2"></textarea>
+                </div>
+
+              </div>
+            </div>
+
+            <div class="form-section" style="margin-top:1.5rem;">
+              <h3 style="font-size:1rem; color:#667eea; margin-bottom:0.75rem;">
+                🚐 เลือกยานพาหนะ
+              </h3>
+
+              <div id="vehicle-selection" style="min-height:50px; padding:1rem; background:#f9fafb; border-radius:8px; text-align:center;">
+                <span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;"></span>
+                <span class="text-muted" style="font-size:0.9rem;">กรุณาระบุวัน-เวลาเดินทาง...</span>
+              </div>
+
+              <div id="selected-vehicles" class="hidden" style="margin-top:0.5rem;"></div>
+            </div>
+
+          </form>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" onclick="closeBookingForm()" class="btn btn-secondary">
+            ยกเลิก
+          </button>
+          <button type="submit" form="booking-form" class="btn btn-primary">
+         ยืนยันการจอง
+         </button>
+        </div>
+
+      </div>
+    </div>
+
+  <div id="cancel-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="cancel-modal-title">
+      <div class="modal-content">
+        <div class="modal-header" style="background: linear-gradient(135deg, #ef4444, #b91c1c);">
+          <h2 id="cancel-modal-title" style="display:flex; align-items:center; gap:8px;">
+            ❌ ยกเลิกการจอง
+          </h2>
+          <button type="button" onclick="closeCancelForm()" class="modal-close" aria-label="ปิด">✕</button>
+        </div>
+
+        <form id="cancel-form" onsubmit="submitCancelBooking(event)">
+          <div class="modal-body">
+            <div style="padding: 0.5rem 0;">
+              
+              <div class="form-group">
+                <label for="cancel-phone">เบอร์โทรศัพท์ที่ใช้จอง *</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="tel" id="cancel-phone" name="phone" required pattern="[0-9]*" placeholder="กรอกเบอร์โทรศัพท์" style="flex:1;">
+                  <button type="button" class="btn btn-warning btn-sm" onclick="handleSearchBookingId()" id="btn-search-id">
+                    🔍 ค้นหา
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top:1rem;">
+                <label for="cancel-bookingId">เลือกรายการจอง (Booking ID) *</label>
+                <div id="booking-id-container">
+                    <input type="text" id="cancel-bookingId" name="bookingId" required placeholder="กรุณากดค้นหาจากเบอร์โทร..." readonly style="background-color: #f3f4f6; cursor: not-allowed;">
+                </div>
+              </div>
+
+              <div class="form-group" style="margin-top:1rem;">
+                <label for="cancel-reason">เหตุผลในการยกเลิก *</label>
+                <textarea name="reason" id="cancel-reason" rows="3" required placeholder="เช่น เปลี่ยนแผนการเดินทาง, ยกเลิกโครงการ"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" onclick="closeCancelForm()" class="btn btn-secondary">ปิด</button>
+            <button type="submit" class="btn btn-danger" id="btn-confirm-cancel" disabled>ยืนยันยกเลิก</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="admin-login-modal" class="modal" role="dialog" aria-hidden="true">
+      <div class="modal-content">
+        <div class="modal-header modal-header-primary">
+          <h2>🔐 เข้าสู่ระบบผู้ดูแล (Admin)</h2>
+          <button type="button" onclick="closeAdminLogin()" class="modal-close">✕</button>
+        </div>
+        <form id="admin-login-form" onsubmit="adminLogin(event)" novalidate>
+          <div class="modal-body">
+            <div style="padding: 1rem 0;">
+              <div class="form-group">
+                <input type="text" id="admin-username" name="username" required placeholder=" " autocomplete="username">
+                <label for="admin-username">ชื่อผู้ใช้ (Username)</label>
+              </div>
+              <div class="form-group" style="margin-top: 1rem;">
+                <input type="password" id="admin-password" name="password" required placeholder=" " autocomplete="current-password">
+                <label for="admin-password">รหัสผ่าน (Password)</label>
+              </div>
+              <p class="login-error text-danger text-center mt-2" style="display:none; font-size:0.9rem;"></p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" onclick="closeAdminLogin()" class="btn btn-secondary btn-sm">ยกเลิก</button>
+            <button type="submit" class="btn btn-primary btn-sm" id="admin-login-submit">เข้าสู่ระบบ</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="activity-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="activity-modal-title">
+      <div class="modal-content">
+        <div id="activity-modal-header" class="modal-header">
+          <h2 id="activity-title"></h2>
+          <button type="button" onclick="closeActivityModal()" class="modal-close" aria-label="ปิด">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="activity-details"></div>
+        </div>
+        <div id="activity-modal-footer" class="modal-footer"></div>
+      </div>
+    </div>
+
+    <div id="reject-booking-modal" class="modal-overlay" aria-hidden="true">
+  <div class="modal-card reject-modal-card" role="dialog" aria-modal="true" aria-labelledby="reject-booking-title">
+    <div class="reject-modal-header">
+      <div>
+        <div id="reject-booking-title" class="reject-modal-title">⛔ ไม่อนุมัติรายการจอง</div>
+        <div class="reject-modal-subtitle">กรุณาระบุเหตุผลเพื่อแจ้งกลับผู้จอง</div>
+      </div>
+      <button type="button" class="reject-modal-close" onclick="closeRejectModal()" aria-label="ปิดหน้าต่าง">✕</button>
+    </div>
+
+    <div class="reject-modal-body">
+      <div class="reject-modal-info">
+        <div>Booking ID: <b id="reject-booking-id">-</b></div>
+      </div>
+
+      <label for="reject-reason" class="reject-modal-label">เหตุผลที่ไม่อนุมัติ</label>
+      <textarea id="reject-reason"
+                class="reject-modal-textarea"
+                rows="5"
+                maxlength="500"
+                placeholder="เช่น รถไม่ว่างในช่วงเวลาดังกล่าว / คนขับติดภารกิจ / เอกสารไม่ครบ"></textarea>
+
+      <div id="reject-modal-error" class="reject-modal-error" style="display:none;"></div>
+
+      <div id="reject-modal-loading" class="reject-modal-loading" style="display:none;">
+        <div class="spinner" style="margin:0 auto 10px; border-color:#cbd5e1; border-top-color:#dc2626;"></div>
+        <div>กำลังบันทึกผลการไม่อนุมัติ...</div>
+      </div>
+    </div>
+
+    <div class="reject-modal-footer">
+      <button type="button" id="reject-cancel-btn" class="btn bx-btn bx-btn-close" onclick="closeRejectModal()">ยกเลิก</button>
+      <button type="button" id="reject-submit-btn" class="btn btn-danger bx-btn" onclick="submitRejectBooking()">ยืนยันไม่อนุมัติ</button>
+    </div>
+  </div>
+</div>
+
+    <div id="assignment-modal" class="modal" role="dialog" aria-hidden="true">
+      <div class="modal-content modal-lg">
+        <div class="modal-header modal-header-primary">
+          <h2 style="display:flex;align-items:center;gap:10px;">
+            🧑‍✈️✈️ มอบหมายงาน (Assignment)
+          </h2>
+          <button type="button" class="modal-close" onclick="closeModalA11y('assignment-modal')">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="assignment-grid">
+            <div class="assignment-left">
+              <div id="assignment-booking-summary" class="booking-summary">
+                <p class="text-muted">กำลังโหลดข้อมูล.</p>
+              </div>
+            </div>
+
+            <div class="assignment-right">
+              <h4 style="font-size:1rem; margin-bottom:0.5rem; color:var(--dark);">
+                🚐 เลือกรถที่ต้องการใช้
+              </h4>
+              <div id="assignment-vehicle-list" class="vehicle-select-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 🍓 BERRY FIX: โครงสร้าง Footer พร้อมปุ่มแบบถาวร -->
+        <div class="modal-footer">
+          <button type="button" id="assignment-reject-btn" class="btn btn-danger" onclick="handleAssignmentReject()">
+            <span class="icon">⛔</span><span class="btn-text">ไม่อนุมัติ</span>
+          </button>
+          
+          <div class="footer-btn-group">
+            <button type="button" class="btn bx-btn-close" style="background:#334155; color:white; border-radius:10px;" onclick="closeModalA11y('assignment-modal')">
+             <span class="btn-text">ปิด</span>
+            </button>
+            <button type="button" id="assignment-save-btn" class="btn btn-success" onclick="handleAssignmentSave()">
+              <span class="icon">✅</span><span class="btn-text">อนุมัติและมอบหมาย</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  
+    <div id="admin-panel-modal" class="modal" role="dialog" aria-hidden="true">
+      <div class="modal-content cyber-modal-content">
+        
+        <!-- Header -->
+        <div class="cyber-header">
+          <h2><span class="cyber-icon">☕</span> Day Off Control Center</h2>
+          <button type="button" class="cyber-close" onclick="closeModalA11y('admin-panel-modal')" aria-label="ปิด">✕</button>
+        </div>
+
+        <!-- Body & Tabs -->
+        <div class="cyber-body">
+          <div class="cyber-tabs-container">
+            <button class="cyber-tab active" onclick="switchAdminTab('day-off-drivers')" id="btn-tab-drivers">
+              📅 วันลา
+            </button>
+            <button class="cyber-tab" onclick="switchAdminTab('day-off-vehicles')" id="btn-tab-vehicles">
+              🛠️ รถซ่อมบำรุง
+            </button>
+          </div>
+
+          <div id="day-off-drivers" class="admin-tab-content">
+            <div id="admin-drivers-list" class="cyber-card-grid">
+              <p class="text-center text-muted">กำลังโหลดข้อมูล...</p>
+            </div>
+          </div>
+
+          <div id="day-off-vehicles" class="admin-tab-content hidden">
+            <div id="admin-vehicles-list" class="cyber-card-grid">
+              <p class="text-center text-muted">กำลังโหลดข้อมูล...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer / System Tools -->
+        <div class="cyber-footer">
+          <h4 id="admin-tools-title" class="cyber-footer-title" style="display:none;">เครื่องมือระบบ</h4>
+          <div class="cyber-footer-actions">
+            <!-- 🍓 BERRY FIX: เพิ่ม ID เพื่อควบคุมการเข้าถึงตาม Role -->
+<button type="button" id="self-test-admin-btn" class="btn cyber-btn-gold" onclick="runSelfTest(event)" style="display:none;">
+    <span class="icon">🧪</span> <span class="btn-text">Self Test</span>
+</button>
+          <button type="button" class="btn cyber-btn-light" onclick="closeModalA11y('admin-panel-modal')">
+              ปิดหน้าต่าง
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+       <!-- 🍓 BERRY FIX: Modal สำหรับระบุวันลา/ซ่อมบำรุง -->
+    <div id="suspend-modal" class="modal" role="dialog" aria-hidden="true" style="z-index: 12000 !important;">
+      <div class="modal-content" style="max-width: 400px; border-radius: 16px;">
+        <div class="modal-header" style="background: linear-gradient(135deg, #F59E0B, #B45309); padding: 1.2rem 1.5rem;">
+          <h2 id="suspend-title" style="color: white; font-size: 1.15rem; margin: 0; display: flex; align-items: center; gap: 8px;">⏸ ระงับการใช้งาน</h2>
+          <button type="button" onclick="closeModalA11y('suspend-modal')" class="modal-close" style="color: white; background: rgba(255,255,255,0.2);">✕</button>
+        </div>
+        <form id="suspend-form" onsubmit="submitSuspend(event)">
+          <div class="modal-body" style="padding: 1.5rem;">
+            <input type="hidden" id="suspend-type">
+            <input type="hidden" id="suspend-id">
+            
+            <div class="form-group">
+              <label style="font-size: 0.95rem; color: #475569; font-weight: 700;">เริ่มตั้งแต่วันที่ *</label>
+              <input type="date" id="suspend-start" class="form-control" required style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 100%;">
+            </div>
+            
+            <div class="form-group" style="margin-top: 12px;">
+              <label style="font-size: 0.95rem; color: #475569; font-weight: 700;">ถึงวันที่ *</label>
+              <input type="date" id="suspend-end" class="form-control" required style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 100%;">
+            </div>
+            
+            <div class="form-group" style="margin-top: 12px;">
+              <label style="font-size: 0.95rem; color: #475569; font-weight: 700;">สาเหตุ/หมายเหตุ *</label>
+              <input type="text" id="suspend-reason" class="form-control" placeholder="เช่น ลากิจ, เข้าศูนย์ซ่อม" required style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 100%;">
+            </div>
+          </div>
+          <div class="modal-footer" style="padding: 1rem 1.5rem; background: #f8fafc; display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" onclick="closeModalA11y('suspend-modal')" class="btn btn-secondary" style="border-radius: 8px;">ยกเลิก</button>
+            <button type="submit" class="btn btn-warning" style="border-radius: 8px; color: white;">💾 บันทึกข้อมูล</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+
+
+    <div id="loading" class="loading hidden">
+      <div class="spinner"></div>
+      <p>กำลังโหลด.</p>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+   <footer class="footer">
+      <div class="container">
+        <p>ระบบจองยานพาหนะ © 2026 มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง.</p>
+        <p style="margin-top: 5px; font-size: 0.9em; opacity: 0.8;">พัฒนาโดย: นายชูเกียรติ กุศลสถิตย์</p>
+      </div>
+    </footer>
+
+<!-- 🍓 BERRY ADD: Live Radar UI (Drawer & Overlay Only) -->
+<div id="radar-overlay"
+     class="radar-overlay"
+     onclick="toggleLiveRadar()"
+     aria-hidden="true"></div>
+
+<div id="radar-drawer"
+     class="radar-drawer"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="radar-title">
+  <div class="radar-header">
+    <div style="min-width:0; flex:1;">
+      <h3 id="radar-title" style="margin:0; font-size:1.1rem; display:flex; align-items:center; gap:8px; color:#111827;">
+        <span style="font-size:1.4rem;" aria-hidden="true">📡</span>
+        <span>เรดาร์สถานะ (Live)</span>
+      </h3>
+
+      <div id="radar-server-meta">
+        อัปเดตจาก Server: -
+        <br>
+        Timezone: Asia/Bangkok
+      </div>
+    </div>
+
+    <button type="button"
+            class="radar-close"
+            onclick="toggleLiveRadar()"
+            aria-label="ปิดเรดาร์สถานะ">
+      ✕
+    </button>
+  </div>
+
+  <div id="radar-content" class="radar-body" aria-live="polite">
+    <div style="text-align:center; padding:24px 12px; color:#64748b;">
+      <div class="spinner" style="margin:0 auto 15px; border-color:#cbd5e1; border-top-color:#3b82f6;"></div>
+      <div style="font-weight:700;">กำลังโหลดสถานะคนขับและรถ...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 🍓 BERRY FIX: Modal เลือกรถสำหรับ QA (ต้องมี ID 'qa-list-container') -->
+<div id="qa-vehicle-modal" class="modal-overlay" style="display:none; z-index: 15000; position:fixed; inset:0; background:rgba(0,0,0,0.5); align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+  <div class="modal-card" style="width: min(90vw, 420px); background:#fff; border-radius:16px; overflow:hidden; border-top: 5px solid #8b5cf6;">
+    <div class="modal-header" style="background: #f5f3ff; color: #5b21b6; padding: 1.2rem; display:flex; justify-content:space-between; align-items:center;">
+      <h2 style="font-size: 1.1rem; margin:0;">⚡ เลือกรถสำหรับอนุมัติด่วน</h2>
+      <button type="button" onclick="closeQaModal()" style="background:none; border:none; font-size:1.5rem; color:#5b21b6; cursor:pointer;">✕</button>
+    </div>
+    <div class="modal-body" style="padding: 1.5rem;">
+      <div id="qa-list-container" class="qa-grid-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+      <div id="qa-loading-status" class="text-center mt-3" style="display:none;">
+        <div class="spinner" style="margin:0 auto 8px; border-top-color:#8b5cf6;"></div>
+        <div style="font-size:0.85rem; color:#6d28d9;">กำลังบันทึกข้อมูล...</div>
+      </div>
+    </div>
+    <div class="modal-footer" style="padding: 1rem 1.5rem; background: #f8fafc; border-top: 1px solid #e2e8f0; display:flex; justify-content:flex-end; gap:10px;">
+      <button type="button" class="btn btn-secondary" onclick="closeQaModal()">ยกเลิก</button>
+      <button type="button" id="qa-confirm-btn" class="btn" style="background: #8b5cf6; color:white;" onclick="executeQuickApprove()" disabled>ยืนยัน</button>
+    </div>
+  </div>
+</div>
+        <?!= include_('JavaScript'); ?>
+</body>
+</html>
