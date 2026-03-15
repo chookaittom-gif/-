@@ -1,55 +1,131 @@
-ปรับ Prompt 
-โฟกัสปํญหานี้ 
-1.เสนอไอเดียการออกแบบเพิ่มเติมแทบไทมไลน์ให้คลิกแล้ว Modal เปิดเป็นรายละเอียดการจองดีไหมควรปรับปรุงฟีเจอร์อะไรเพิ่มข้อความคิดเห็น
-ที่ทำให้น่าใช้งานมากขึ้น
-userCodeAppPanel?createOAuthDialog=true:2819 ✅ [V-Berry] Complete UI Wiring System Exported!
-userCodeAppPanel?createOAuthDialog=true:7797 ✅ [V-Berry] All functions exported to Global Scope successfully!
-userCodeAppPanel?createOAuthDialog=true:5266 🚀 Initializing Vehicle Booking System (V-Berry Fix)...
-2166288962-warden_bin_i18n_warden__th.js:149 Net state changed from IDLE to BUSY
-userCodeAppPanel?createOAuthDialog=true:2048 🚀 Application Starting...
-userCodeAppPanel?createOAuthDialog=true:3276 📅 Initializing Calendar View...
-userCodeAppPanel?createOAuthDialog=true:1458 🔌 Wiring Form Submissions (Stable Mode)...
-userCodeAppPanel?createOAuthDialog=true:1486    ✅ Form #insurance-form wired successfully.
-userCodeAppPanel?createOAuthDialog=true:1486    ✅ Form #maintenance-form wired successfully.
-userCodeAppPanel?createOAuthDialog=true:7115 🚗 Populating Vehicle & Driver Selects...
-userCodeAppPanel?createOAuthDialog=true:2036 ✅ [Calendar] Reflow logic executed.
-userCodeAppPanel?createOAuthDialog=true:1853 ✅ [Calendar] Reflow after tab shown PASS
-userCodeAppPanel?createOAuthDialog=true:7223    ✅ Drivers populated.
-userCodeAppPanel?createOAuthDialog=true:450 📇 Reindexed 93 bookings
-userCodeAppPanel?createOAuthDialog=true:4227 ✅ User Chookait logged in as admin
-userCodeAppPanel?createOAuthDialog=true:2507 🧩 initUiComponents(): Starting wiring phases...
-userCodeAppPanel?createOAuthDialog=true:807 ✅ wireDashboardButtons complete
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Dashboard Buttons
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Tab Router
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Header Buttons
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Calendar Month Controls
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Status Filters
-userCodeAppPanel?createOAuthDialog=true:6247 ✅ Footer force show applied (z-index=4000)
-userCodeAppPanel?createOAuthDialog=true:2415 📅 Forcing initial tab to Calendar: #calendar-tab
-userCodeAppPanel?createOAuthDialog=true:2004 🔄 Switched to tab: #calendar-tab
-userCodeAppPanel?createOAuthDialog=true:454 📊 Updating counters...
-userCodeAppPanel?createOAuthDialog=true:466    Counters updated: P=32, A=52, R=0, C=9
-userCodeAppPanel?createOAuthDialog=true:4181 🧪 Self-Test functionality moved to Admin Panel. (Floating disabled)
-userCodeAppPanel?createOAuthDialog=true:4227 ✅ User Chookait logged in as admin
-userCodeAppPanel?createOAuthDialog=true:4276 ✅ Vehicle Count Auto-Clamp Wired!
-userCodeAppPanel?createOAuthDialog=true:5331 ✅ Application initialized successfully!
-userCodeAppPanel?createOAuthDialog=true:1853 ✅ [Calendar] Reflow after tab shown PASS
-userCodeAppPanel?createOAuthDialog=true:2520 🧪 initUiComponents(): Starting deferred wiring...
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Thai Date System
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Submit Logic (With Locking)
-userCodeAppPanel?createOAuthDialog=true:6638 ✅ Wired Availability Listeners (Final + Watchdog + DirtyReset)
-userCodeAppPanel?createOAuthDialog=true:6208 ✅ installVehicleLoaderOnce() installed
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Vehicle Loader
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Availability Listeners
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Vehicle Count Clamp
-userCodeAppPanel?createOAuthDialog=true:4181 🧪 Self-Test functionality moved to Admin Panel. (Floating disabled)
-userCodeAppPanel?createOAuthDialog=true:4227 ✅ User Chookait logged in as admin
-userCodeAppPanel?createOAuthDialog=true:2492 ✅ Self-Test Button
-userCodeAppPanel?createOAuthDialog=true:2529 ✅ initUiComponents(): All phases complete.
-userCodeAppPanel?createOAuthDialog=true:2004 🔄 Switched to tab: #bookings-tab
-userCodeAppPanel?createOAuthDialog=true:5572 🚀 [V-Berry] Loading Bookings View with Date Range Fix...
-2166288962-warden_bin_i18n_warden__th.js:149 Net state changed from BUSY to IDLE
-userCodeAppPanel?createOAuthDialog=true:7177    ✅ Vehicles populated.
-userCodeAppPanel?createOAuthDialog=true:2004 🔄 Switched to tab: #timeline-tab
-2166288962-warden_bin_i18n_warden__th.js:149 Net state changed from IDLE to BUSY
-2166288962-warden_bin_i18n_warden__th.js:149 Net state changed from BUSY to IDLE
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <title>รายงานสรุปแดชบอร์ด</title>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    body { font-family: 'Sarabun', sans-serif; color: #333; line-height: 1.4; font-size: 11pt; }
+    
+    .header-container { text-align: center; margin-bottom: 20px; }
+    .org-name { font-size: 16pt; font-weight: bold; color: #1e3a8a; }
+    .report-title { font-size: 14pt; font-weight: bold; margin-top: 5px; }
+    .meta { font-size: 10pt; color: #666; margin-top: 5px; }
+    
+    .rule { height: 2px; background: #f59e0b; margin: 15px 0 25px; }
+
+    .summary-box { display: flex; justify-content: space-between; margin-bottom: 25px; }
+    .summary-item { 
+        width: 23%; padding: 15px 10px; background: #f8fafc; border-radius: 8px; 
+        text-align: center; border: 1px solid #e2e8f0; 
+    }
+    .summary-value { font-size: 18pt; font-weight: bold; color: #1e3a8a; }
+    .summary-label { font-size: 10pt; color: #64748b; margin-top: 5px; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10pt; }
+    th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+    th { background: #f1f5f9; color: #333; font-weight: bold; }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+
+    h2 { font-size: 12pt; color: #1e3a8a; border-left: 4px solid #f59e0b; padding-left: 10px; margin: 25px 0 10px; }
+    
+    .footer { margin-top: 40px; text-align: right; font-size: 9pt; color: #999; border-top: 1px solid #eee; padding-top: 10px; }
+    .break { page-break-after: always; }
+  </style>
+</head>
+<body>
+
+  <?
+    var mName = (monthNames && monthNames[month - 1]) ? monthNames[month - 1] : '-';
+    var thYear = parseInt(year || 0, 10) + 543;
+    var safeData = data || {};
+  ?>
+
+  <div class="header-container">
+    <div class="org-name">มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง</div>
+    <div class="report-title">รายงานสรุปผลการดำเนินงานยานพาหนะ</div>
+    <div class="meta">
+       ประจำเดือน <?= mName ?> <?= thYear ?> | พิมพ์เมื่อ: <?= generatedAt ?>
+    </div>
+  </div>
+  <div class="rule"></div>
+
+  <!-- KPI BOXES -->
+  <div class="summary-box">
+    <div class="summary-item">
+      <div class="summary-value"><?= (Number(safeData.totalBookings)||0).toLocaleString() ?></div>
+      <div class="summary-label">งานทั้งหมด</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-value"><?= safeData.vehiclesReady || '0/0' ?></div>
+      <div class="summary-label">รถพร้อมใช้</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-value"><?= (Number(safeData.alerts)||0).toLocaleString() ?></div>
+      <div class="summary-label">การแจ้งเตือน</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-value"><?= (Number(safeData.fuel)||0).toLocaleString('th-TH', {minimumFractionDigits: 2}) ?></div>
+      <div class="summary-label">น้ำมันรวม (ลิตร)</div>
+    </div>
+  </div>
+
+  <!-- TOP DRIVERS -->
+  <h2>พนักงานขับยอดนิยม (Top 10)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th width="10%" class="text-center">ลำดับ</th>
+        <th>ชื่อพนักงานขับ</th>
+        <th width="20%" class="text-right">จำนวนงาน</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? 
+      var drivers = safeData.topDrivers || [];
+      if (drivers.length > 0) {
+        for (var i = 0; i < drivers.length; i++) { ?>
+        <tr>
+          <td class="text-center"><?= i + 1 ?></td>
+          <td><?= drivers[i].name ?></td>
+          <td class="text-right"><?= (Number(drivers[i].count)||0).toLocaleString() ?></td>
+        </tr>
+      <? } } else { ?>
+        <tr><td colspan="3" class="text-center" style="color:#999;">-- ไม่มีข้อมูล --</td></tr>
+      <? } ?>
+    </tbody>
+  </table>
+
+  <!-- TOP VEHICLES -->
+  <h2>สถิติการใช้รถ (Top 10)</h2>
+  <table>
+    <thead>
+      <tr>
+        <th width="10%" class="text-center">ลำดับ</th>
+        <th>ทะเบียนรถ</th>
+        <th width="20%" class="text-right">จำนวนเที่ยว</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? 
+      var vehicles = safeData.topVehicles || [];
+      if (vehicles.length > 0) {
+        for (var j = 0; j < vehicles.length; j++) { ?>
+        <tr>
+          <td class="text-center"><?= j + 1 ?></td>
+          <td><?= vehicles[j].plate ?></td>
+          <td class="text-right"><?= (Number(vehicles[j].trips)||0).toLocaleString() ?></td>
+        </tr>
+      <? } } else { ?>
+        <tr><td colspan="3" class="text-center" style="color:#999;">-- ไม่มีข้อมูล --</td></tr>
+      <? } ?>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    จัดทำโดย: <?= systemName ?>
+  </div>
+
+</body>
+</html>
