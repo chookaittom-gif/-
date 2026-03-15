@@ -350,14 +350,12 @@ function getStatusText(status) {
     const s = normalizeClientStatus(status);
     switch (s) {
         case 'pending': return 'รออนุมัติ';
-        case 'approved': return 'อนุมัติ';
+        case 'approved': return 'อนุมัติ'; // 🍓 BERRY FIX: อนุมัติด่วนจะตกมาเข้าเคสนี้โดยอัตโนมัติ
         case 'rejected': return 'ไม่อนุมัติ';
         case 'cancelled':
         case 'ยกเลิก':
         case 'ยกเลิกโดยผู้จอง':
             return 'ยกเลิก';
-        case 'driver_special_approved':
-            return 'อนุมัติเร่งด่วน';
         default:
             return status;
     }
@@ -367,6 +365,8 @@ function normalizeClientStatus(status) {
     const s = String(status || '').toLowerCase().trim();
     if (!s) return 'pending';
     if (s === 'driver_claimed') return 'pending';
+    // 🍓 BERRY FIX: แปลงสถานะอนุมัติด่วนให้เป็น "อนุมัติ" ปกติ เพื่อให้สีและข้อความรวมเป็นสีเขียวทั้งหมด
+    if (s === 'driver_special_approved' || s.includes('เร่งด่วน') || s.includes('กรณีพิเศษ')) return 'approved'; 
     return s;
 }
 
@@ -4553,14 +4553,12 @@ async function showActivityDetails(bookingId, event) {
   let badgeHtml = '';
   let mainTitle = `รายละเอียดการจอง ID: ${id}`;
 
-  if (statusKey === 'approved') {
+  if (statusKey === 'approved' || statusKey === 'driver_special_approved') {
     badgeHtml = '<span style="background:white; color:#16a34a; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">✅ อนุมัติ</span>';
   } else if (statusKey === 'pending') {
     badgeHtml = '<span style="background:white; color:#ca8a04; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">⏳ รออนุมัติ</span>';
   } else if (statusKey === 'rejected') {
     badgeHtml = '<span style="background:white; color:#dc2626; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">❌ ไม่อนุมัติ</span>';
-  } else if (statusKey === 'driver_special_approved') {
-    badgeHtml = '<span style="background:white; color:#8b5cf6; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">⚡ อนุมัติเร่งด่วน</span>';
   } else if (statusKey === 'driver_block') {
     badgeHtml = '<span style="background:white; color:#ea580c; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">⏸ พนักงานลา/พักงาน</span>';
     mainTitle = 'บันทึกการลางาน';
@@ -4874,13 +4872,14 @@ window.openCancelModalFromDetail = function(bookingId, phone) {
     }, 200);
 };
 
-    function statusClassFromKey(s_key) {
-        if (s_key === 'approved' || s_key === 'อนุมัติ' || s_key === 'อนุมัติแล้ว') return 'approved';
-        if (s_key === 'pending' || s_key === 'รออนุมัติ') return 'pending';
-        if (s_key === 'rejected' || s_key === 'ไม่อนุมัติ') return 'rejected';
-        if (s_key === 'cancelled' || s_key === 'ยกเลิก' || s_key === 'ยกเลิกโดยผู้จอง') return 'cancelled';
-        return 'pending';
-    }
+   function statusClassFromKey(s_key) {
+    if (s_key === 'approved' || s_key === 'อนุมัติ' || s_key === 'อนุมัติแล้ว' || s_key === 'driver_special_approved') return 'approved'; // 🍓 BERRY FIX
+    if (s_key === 'pending' || s_key === 'รออนุมัติ') return 'pending';
+    if (s_key === 'rejected' || s_key === 'ไม่อนุมัติ') return 'rejected';
+    if (s_key === 'cancelled' || s_key === 'ยกเลิก' || s_key === 'ยกเลิกโดยผู้จอง') return 'cancelled';
+    return 'pending';
+}
+
 
    function closeActivityModal() {
         closeModalA11y('activity-modal');
@@ -5928,9 +5927,10 @@ function isEmptyPlate(v){
   const low = s.toLowerCase();
   return s === '-' || low === 'none' || low === 'null' || low === 'undefined';
 }
+
 function statusToClass(st){
   const s = toStr(st).toLowerCase();
-  if (s.includes('approved') || s.includes('อนุมัติ')) return 'approved';
+  if (s.includes('approved') || s.includes('อนุมัติ') || s.includes('driver_special_approved')) return 'approved'; // 🍓 BERRY FIX: จัดให้เป็นสีเขียว
   if (s.includes('rejected') || s.includes('ไม่') || s.includes('ไม่อนุมัติ')) return 'rejected';
   if (s.includes('cancelled') || s.includes('ยกเลิก')) return 'cancelled';
   return 'pending';
@@ -6550,8 +6550,10 @@ function renderBookingsTable(bookings, tbodyId, type) {
     return /^(https?:\/\/)[^\s"]+$/i.test(u);
   }
 
-  function safeStatusKey(v) {
-    return String(v || 'pending').toLowerCase().trim();
+   function safeStatusKey(v) {
+    var s = String(v || 'pending').toLowerCase().trim();
+    if (s === 'driver_special_approved') return 'approved'; // 🍓 BERRY FIX: แปลงเป็น approved
+    return s;
   }
 
   function splitList(raw) {
