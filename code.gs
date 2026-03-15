@@ -1156,10 +1156,6 @@ function runNormalize1352() {
   });
 }
 
-/**
- * 🍓 [BERRY FULL IMPROVED] ฟังก์ชันสร้างรายงานสรุปงานเดินรถประจำวัน
- * ปรับปรุง: แก้ไขบั๊กเวลากลับหาย และจัดการรูปแบบเวลาปี 1899 ให้สมบูรณ์
- */
 function getIntegratedDailyReport(targetDate) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1170,13 +1166,20 @@ function getIntegratedDailyReport(targetDate) {
     const d = (targetDate instanceof Date) ? targetDate : new Date();
     const reportDateISO = Utilities.formatDate(d, tz, "yyyy-MM-dd");
 
-    const TH_MONTHS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+    const TH_MONTHS =["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
     const dateHeader = `${Utilities.formatDate(d, tz, "dd")} ${TH_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`;
 
     const data = sh.getDataRange().getValues();
-    if (data.length < 2) return `📋 <b>รายงานประจำวัน</b>\n📅 ${dateHeader}\n\n🍃 วันนี้ไม่มีงานเดินรถค่ะ`;
+    
+    // ดึง Template ของกรณีไม่มีงานมาเป็น Source of Truth
+    const noJobMsg = (typeof getNoJobTemplate_ === 'function') 
+      ? getNoJobTemplate_(dateHeader) 
+      : `📋 รายงานประจำวันระบบจองยานพาหนะ\n📅 ${dateHeader}\n──────────────\n\n🍃 วันนี้ไม่มีภารกิจเดินทางค่ะ`;
 
-    // 1. Mapping Headers (แก้ไข: เพิ่ม endT เพื่อดึงเวลาสิ้นสุด)
+    // เงื่อนไข 1: ไม่มีข้อมูลในตาราง
+    if (data.length < 2) return noJobMsg;
+
+    // 1. Mapping Headers
     const h = data[0].map(x => String(x).trim());
     const idx = {
       id: h.indexOf('Booking ID'),
@@ -1188,10 +1191,10 @@ function getIntegratedDailyReport(targetDate) {
       startD: h.indexOf('วันเริ่มต้น'),
       endD: h.indexOf('วันสิ้นสุด'),
       startT: h.indexOf('เวลาเริ่มต้น'),
-      endT: h.indexOf('เวลาสิ้นสุด') // 👈 เพิ่มจุดนี้เพื่อให้ดึงเวลากลับได้จริง
+      endT: h.indexOf('เวลาสิ้นสุด')
     };
 
-    const groups = { pending: [], approved: [], driver_special_approved: [], rejected: [], cancelled: [] };
+    const groups = { pending: [], approved: [], driver_special_approved: [], rejected: [], cancelled:[] };
     let totalFound = 0;
 
     // 2. Filter & Group Data
@@ -1211,12 +1214,14 @@ function getIntegratedDailyReport(targetDate) {
       totalFound++;
     }
 
-    if (totalFound === 0) return `📋 <b>รายงานประจำวัน</b>\n📅 ${dateHeader}\n──────────────\n\n🍃 วันนี้ไม่มีภารกิจเดินทางค่ะ`;
+    // เงื่อนไข 2: มีข้อมูลในตารางแต่ไม่ตรงกับวันนี้
+    if (totalFound === 0) return noJobMsg;
 
-    // 3. Build Message Content
-    let lines = [`📋 <b>สรุปงานยานพาหนะประจำวัน</b>`, `📅 ${dateHeader}`, '', '📊 <b>สถิติจำนวนงานวันนี้</b>'];
+    // 3. Build Message Content (กรณีมีงาน)
+    // ปรับ Header ให้สอดคล้องกับ Requirement ใหม่
+    let lines =[`📋 <b>รายงานประจำวันระบบจองยานพาหนะ</b>`, `📅 ${dateHeader}`, '', '📊 <b>สถิติจำนวนงานวันนี้</b>'];
 
-    const statusConfig = [
+    const statusConfig =[
       { k: 'pending', label: '⏳ รออนุมัติ' },
       { k: 'approved', label: '✅ อนุมัติ' },
       { k: 'driver_special_approved', label: '⚡ อนุมัติกรณีพิเศษ' },
@@ -1229,16 +1234,15 @@ function getIntegratedDailyReport(targetDate) {
       if (count > 0) lines.push(`${item.label} : ${count}`);
     });
 
-    lines.push('━━━━━━━━━━━━━━');
+    lines.push('──────────────');
 
-    const activeJobs = [].concat(groups.approved, groups.driver_special_approved);
+    const activeJobs =[].concat(groups.approved, groups.driver_special_approved);
 
     if (activeJobs.length > 0) {
       activeJobs.sort((a, b) => String(a[idx.startT] || '').localeCompare(String(b[idx.startT] || '')));
 
       lines.push('📍 <b>รายละเอียดงานวันนี้:</b>');
       
-      // Helper ภายในสำหรับจัดการเวลาให้สะอาด
       const parseT = (val) => {
         if (val instanceof Date) return Utilities.formatDate(val, tz, "HH:mm");
         if (!val || val === '-') return null;
@@ -1253,7 +1257,6 @@ function getIntegratedDailyReport(targetDate) {
         const tGo = parseT(r[idx.startT]) || "--:--";
         const tBack = parseT(r[idx.endT]);
         
-        // รูปแบบเวลา: "09:00 น. - 16:30 น." หรือ "09:00 น."
         const timeRange = tBack ? `${tGo} น. - ${tBack} น.` : `${tGo} น.`;
 
         const place = String(r[idx.place] || '-');
@@ -1275,7 +1278,6 @@ function getIntegratedDailyReport(targetDate) {
 
     lines.push('🤖 รายงานอัตโนมัติ 05:00 น.');
 
-    // 4. Final Cleanup (Berry Regular Expression)
     return lines.join('\n')
       .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/gi, '')
       .replace(/D\s*น\./gi, '')
@@ -1288,16 +1290,14 @@ function getIntegratedDailyReport(targetDate) {
   }
 }
 
+
 function getNoJobTemplate_(dateHeader) {
   return[
     '📋 รายงานประจำวันระบบจองยานพาหนะ',
     '📅 ' + dateHeader,
+    '──────────────',
     '',
-    '━━━━━━━━━━━━━━',
-    '🍃 วันนี้ไม่มีงานที่ต้องใช้รถ',
-    '━━━━━━━━━━━━━━',
-    '',
-    '🤖 รายงานอัตโนมัติ 05:00'
+    '🍃 วันนี้ไม่มีภารกิจเดินทางค่ะ'
   ].join('\n');
 }
 
@@ -7475,26 +7475,20 @@ function runFullTelegramLogTest() {
     Logger.log("----------------------------------------");
   }
 
-  // 1-6. ทดสอบแต่ละสถานะ
+  // 1-6. ทดสอบแต่ละสถานะ (อิงจาก logic จริงใน buildBookingStatusMessage)
   runIndividualCase("1. จองใหม่ (Pending)", "pending");
   runIndividualCase("2. [SPECIAL TEST] อนุมัติกรณีพิเศษ", "driver_special_approved", { "เลขทะเบียนรถ": "นข-9999", "พนักงานขับรถ": "นายสมชาย" });
   runIndividualCase("3. อนุมัติปกติ", "approved", { "เลขทะเบียนรถ": "ฮค-1234", "พนักงานขับรถ": "พี่ยอด" });
-  
-  // 🍓 BERRY FIX: เพิ่มเคสทดสอบเปลี่ยนรถ/คนขับ (Re-Assign) ตรวจจับคำว่า 'อัปเดต'
   runIndividualCase("4. [RE-ASSIGN] เปลี่ยนรถ/คนขับ", "approved", { "เลขทะเบียนรถ": "กท-5555", "พนักงานขับรถ": "นายเอกชัย", "Reason": "อัปเดตการมอบหมายรถ/คนขับใหม่" });
-  
   runIndividualCase("5. ไม่อนุมัติ", "rejected", { "Reason": "รถติดภารกิจ" });
   runIndividualCase("6. ยกเลิกการจอง", "cancelled", { "CancelReason": "ยกเลิกโครงการ" });
 
   // 7. ทดสอบรายงานประจำวัน (Daily Summary: มีงาน)
-  Logger.log("📋 [7. รายงานสรุปประจำวัน (Daily Summary: มีงาน - 05:00 AM)]\n");
+  Logger.log("📋[7. รายงานสรุปประจำวัน (Daily Summary: มีงาน - 05:00 AM)]\n");
 
-  var mockHeaders = ["Booking ID", "สถานะ", "ชื่อ-สกุล", "ประเภทงาน", "งาน/โครงการ", "สถานที่", "เลขทะเบียนรถ", "พนักงานขับรถ", "วันเริ่มต้น", "เวลาเริ่มต้น", "วันสิ้นสุด", "เวลาสิ้นสุด"];
+  var mockHeaders =["Booking ID", "สถานะ", "ชื่อ-สกุล", "ประเภทงาน", "งาน/โครงการ", "สถานที่", "เลขทะเบียนรถ", "พนักงานขับรถ", "วันเริ่มต้น", "เวลาเริ่มต้น", "วันสิ้นสุด", "เวลาสิ้นสุด"];
   var mockDataRowsJobs = [
-    mockHeaders,
-    ["BK-001", "approved", "สมชาย จองจริง", "ประชุม", "งานแผน", "ศูนย์ฯ ลำปาง", "ฮค-4964", "ประเสริฐ", "2026-03-12", "09:00", "2026-03-12", "12:00"],
-    ["BK-002", "pending", "สมหญิง พึ่งพา", "อบรม", "โครงการ A", "กทม.", "", "", "2026-03-12", "07:00", "2026-03-12", "17:00"],
-    ["BK-003", "driver_special_approved", "ผอ.ศูนย์", "รับรอง", "ต้อนรับแขก", "สนามบิน", "นข-1111", "พี่ยอด", "2026-03-12", "14:00", "2026-03-12", "16:00"]
+    mockHeaders,["BK-001", "approved", "สมชาย จองจริง", "ประชุม", "งานแผน", "ศูนย์ฯ ลำปาง", "ฮค-4964", "ประเสริฐ", "2026-03-12", "09:00", "2026-03-12", "12:00"],["BK-002", "pending", "สมหญิง พึ่งพา", "อบรม", "โครงการ A", "กทม.", "", "", "2026-03-12", "07:00", "2026-03-12", "17:00"],["BK-003", "driver_special_approved", "ผอ.ศูนย์", "รับรอง", "ต้อนรับแขก", "สนามบิน", "นข-1111", "พี่ยอด", "2026-03-12", "14:00", "2026-03-12", "16:00"]
   ];
 
   var originalGetActive = SpreadsheetApp.getActiveSpreadsheet;
@@ -7502,13 +7496,14 @@ function runFullTelegramLogTest() {
   SpreadsheetApp.getActiveSpreadsheet = function() {
     return { getSheetByName: function() { return { getDataRange: function() { return { getValues: function() { return mockDataRowsJobs; } }; } }; } };
   };
+  
   var dailyMsgJobs = getIntegratedDailyReport(new Date(2026, 2, 12));
   Logger.log(dailyMsgJobs);
   Logger.log("\n----------------------------------------");
 
   // 8. ทดสอบรายงานประจำวัน (Daily Summary: ไม่มีงาน)
-  Logger.log("📋 [8. รายงานสรุปประจำวัน (Daily Summary: ไม่มีงาน - 05:00 AM)]\n");
-  var mockDataRowsNoJobs = [ mockHeaders ]; // มีแค่ Header ไร้ Data
+  Logger.log("📋[8. รายงานสรุปประจำวัน (Daily Summary: ไม่มีงาน - 05:00 AM)]\n");
+  var mockDataRowsNoJobs = [ mockHeaders ]; 
   
   SpreadsheetApp.getActiveSpreadsheet = function() {
     return { getSheetByName: function() { return { getDataRange: function() { return { getValues: function() { return mockDataRowsNoJobs; } }; } }; } };
