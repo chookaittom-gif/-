@@ -2985,8 +2985,14 @@ const CalendarTooltip = {
   },
   hide() {
     if (this.el) this.el.classList.remove('show');
+  },
+  
+  // 🍓 BERRY FIX: เติมฟังก์ชัน move เข้าไปเพื่อหยุด Warning และลดภาระ CPU ของเบราว์เซอร์
+  move(e) {
+    // ปล่อยว่างไว้ เพื่อให้ Tooltip ลอยนิ่งๆ เกาะติดกับป้าย (Pinned) 
+    // ไม่ต้องเปลืองแรงคำนวณตำแหน่งใหม่ทุกเสี้ยววินาทีที่ขยับเมาส์
   }
-};    
+};
 
 /* ==================== [BERRY FIX] CALENDAR DATE RANGE RENDERER ==================== */
 function buildCalendarData(sourceRows) {
