@@ -928,44 +928,31 @@ window.toggleVehicleStatus = function(btn, plate, currentStatus) {
   }
 }
 
-// ANCHOR: clearFile
-function clearFile(a, b, c) {
+
+    function clearFile(a, b, c) {
   try {
-    // รองรับการเรียกแบบ: clearFile(inputId, chosenWrapperId, previewWrapperId)
+    // รองรับการเรียกแบบ: clearFile(inputId, chosenId, previewId)
     if (b || c) {
       const inputId = a;
       const chosenId = b;
       const previewId = c;
 
-      // 1. เคลียร์ค่าใน Input และ State ที่ซ่อนอยู่
       const input = document.getElementById(inputId);
       if (input) {
         input.value = '';
         input.__fileData = null;
-        input.__fileName = null;
-        input.__fileMime = null;
       }
 
-      // 2. ซ่อนกล่องชื่อไฟล์ และรีเซ็ตข้อความ
-      const chosenWrapper = document.getElementById(chosenId);
-      if (chosenWrapper) {
-        chosenWrapper.classList.add('hidden'); // 🍓 เพิ่มการซ่อนกล่อง
-        const nameSpan = chosenWrapper.querySelector('span'); // หา span ที่เก็บชื่อ
-        if (nameSpan) nameSpan.textContent = 'ยังไม่ได้เลือกไฟล์';
-      }
+      const chosen = chosenId ? document.getElementById(chosenId) : null;
+      if (chosen) chosen.textContent = 'ยังไม่ได้เลือกไฟล์';
 
-      // 3. ซ่อนกล่องรูปภาพพรีวิว (แก้ปัญหากล่องสี่เหลี่ยมค้าง)
-      const previewWrapper = document.getElementById(previewId);
-      if (previewWrapper) {
-        previewWrapper.classList.add('hidden'); // 🍓 เพิ่มการซ่อนกล่อง
-        const img = previewWrapper.querySelector('img');
-        if (img) img.src = '';
-      }
+      const preview = previewId ? document.getElementById(previewId) : null;
+      if (preview) preview.innerHTML = '';
 
       return;
     }
 
-    // --- รองรับการเรียกแบบ Legacy (targetName) ---
+    // รองรับการเรียกแบบเดิม: clearFile(targetName)
     const targetName = a;
     const hidden = document.querySelector('input[type="hidden"][name="' + targetName + '"]');
     const input = document.querySelector(
@@ -979,16 +966,13 @@ function clearFile(a, b, c) {
     if (input) {
       input.value = '';
       input.__fileData = null;
-      input.__fileName = null;
-      input.__fileMime = null;
     }
     if (label) label.textContent = 'ยังไม่ได้เลือกไฟล์';
-    
   } catch (e) {
     console.warn('clearFile error:', e);
   }
 }
-    
+
 
     // ตัวนี้คือฟังก์ชันที่ tab handler เรียกใช้
     function ensureUploadButtonsLive() {
@@ -1066,30 +1050,24 @@ function clearFile(a, b, c) {
     submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></span>กำลังบันทึกข้อมูลน้ำมัน...';
   }
 
- // 📍 ANCHOR: submitFuel 
+  // 📍 ANCHOR: submitFuel 
   try {
     const formData = new FormData(form);
     const payload = Object.fromEntries(formData.entries());
 
-    // 🍓 BERRY FIX: จัดการตัวเลือก "อื่นๆ" ทั้งงบประมาณและประเภทงาน
-    if (payload.budgetType === 'other' || payload.budgetType === 'อื่นๆ (ระบุ)') {
+    // 🍓 BERRY FIX: จัดการตัวเลือก "อื่นๆ" ของ งบประมาณ ก่อนส่งให้ Server
+    if (payload.budgetType === 'other') {
       if (!payload.budgetTypeOther) throw new Error('กรุณาระบุงบประมาณอื่นๆ');
-      payload.budgetType = payload.budgetTypeOther.trim();
+      payload.budgetType = payload.budgetTypeOther.trim(); // ย้ายข้อความไปทับใน budgetType เลย
     }
-    delete payload.budgetTypeOther;
-
-    if (payload.workType === 'other' || payload.workType === 'อื่นๆ (ระบุ)' || payload.workType === 'อื่นๆ') {
-      if (!payload.workTypeOther) throw new Error('กรุณาระบุประเภทงานอื่นๆ');
-      payload.workType = payload.workTypeOther.trim();
-    }
-    delete payload.workTypeOther;
+    delete payload.budgetTypeOther; // ลบทิ้งป้องกันขยะรก Server
 
     // เช็คฟิลด์ป้องกันค่าว่าง
     if (!payload.plate) throw new Error('กรุณาเลือกรถ');
     if (!payload.workType) throw new Error('กรุณาระบุประเภทงาน');
     if (!payload.project) throw new Error('กรุณาระบุงาน/โครงการ');
 
-    // จัดการไฟล์
+    // จัดการไฟล์ (แก้ไขชื่อ Property ตัวท้ายเป็น mimeType ให้ตรงกับ API ฝั่ง Server รับ)
     if (fileData) {
       payload.fileData = fileData;
       payload.fileName = (fileInput && fileInput.__fileName) ? fileInput.__fileName : '';
@@ -2180,8 +2158,7 @@ window.addEventListener('load', function() {
     }
 
     /* ================== FUEL TAB LOADER ================== */
- // ANCHOR: loadFuelTabOptions
-async function loadFuelTabOptions() {
+   async function loadFuelTabOptions() {
   _scheduleTabLoad(async () => {
     if (window.__loaded_fuel_opts) {
       if (typeof loadFuelData === 'function') loadFuelData();
@@ -2209,8 +2186,8 @@ async function loadFuelTabOptions() {
       var res = await run('apiGetFuelFormOptions', {});
       if (!res || !res.ok) throw new Error(res ? res.error : 'No response from server');
 
-      var plates = res.plates || [];
-      var drivers = res.drivers ||[]; // 🍓 BERRY FIX: แก้ไข Syntax Error เติม
+      var plates = res.plates ||[];
+      var drivers = res.drivers ||[];
 
       plateEl.innerHTML = '<option value="">-- เลือกรถ --</option>' +
         plates.map(function(p){ return '<option value="' + p + '">' + p + '</option>'; }).join('');
@@ -2250,6 +2227,7 @@ async function loadFuelTabOptions() {
 
       window.__loaded_fuel_opts = true;
 
+   // 📍 ANCHOR: loadFuelTabOptions (ส่วนท้าย)
     } catch (e) {
       console.warn('Error initializing fuel options:', e);
 
@@ -2279,7 +2257,47 @@ async function loadFuelTabOptions() {
       if (workTypeSel) workTypeSel.value = '';
       if (projectInp) projectInp.value = '';
 
+    // 📍 ANCHOR: loadFuelTabOptions (ส่วนท้าย)
     } finally {
+      // 🍓 BERRY FIX: จัดการ "อื่นๆ" สำหรับงบประมาณ (สลับซ่อน/แสดงช่องกรอกข้อความ)
+      const bdgSel = document.getElementById('fuel-budget-type');
+      const bdgWrap = document.getElementById('fuel-budget-other-wrap');
+      const bdgInp = document.getElementById('fuel-budget-other');
+      const bdgSpacer = document.getElementById('budget-spacer');
+      
+      if (bdgSel && !bdgSel.dataset.wiredBdg) {
+          bdgSel.addEventListener('change', () => {
+              if (bdgSel.value === 'other') {
+                  if (bdgWrap) bdgWrap.classList.remove('hidden');
+                  if (bdgSpacer) bdgSpacer.classList.add('hidden');
+                  if (bdgInp) { bdgInp.required = true; bdgInp.focus(); }
+              } else {
+                  if (bdgWrap) bdgWrap.classList.add('hidden');
+                  if (bdgSpacer) bdgSpacer.classList.remove('hidden');
+                  if (bdgInp) { bdgInp.value = ''; bdgInp.required = false; }
+              }
+          });
+          bdgSel.dataset.wiredBdg = "1";
+      }
+
+      // ระบบคำนวณค่าน้ำมัน (คงของเดิมไว้)
+      const fLiters = document.getElementById('fuel-liters');
+      const fPrice = document.getElementById('fuel-price');
+      const fCost = document.getElementById('fuel-cost');
+      
+      const calcCost = () => {
+          const l = parseFloat(fLiters.value) || 0;
+          const p = parseFloat(fPrice.value) || 0;
+          if (l > 0 && p > 0) fCost.value = (l * p).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          else fCost.value = '';
+      };
+
+      if (fLiters && fPrice && !fLiters.dataset.wiredCalc) {
+          fLiters.addEventListener('input', calcCost);
+          fPrice.addEventListener('input', calcCost);
+          fLiters.dataset.wiredCalc = "1";
+      }
+
       window.__loading_fuel = false;
       if (typeof loadFuelData === 'function') loadFuelData();
     }
@@ -2486,78 +2504,15 @@ function closeModalA11y(id) {
     }, 10);
 }
 
-// ANCHOR: wireFuelFormEvents
-function wireFuelFormEvents() {
-    if (window.vberryFuelEventsWired) return;
-    window.vberryFuelEventsWired = true;
-
-    // 1. จัดการ งบประมาณ (Budget)
-    const bdgSel = document.getElementById('fuel-budget-type');
-    const bdgWrap = document.getElementById('fuel-budget-other-wrap');
-    const bdgInp = document.getElementById('fuel-budget-other');
-    const bdgSpacer = document.getElementById('budget-spacer');
-    
-    if (bdgSel && bdgWrap && bdgInp) {
-        bdgSel.addEventListener('change', () => {
-            if (bdgSel.value === 'other' || bdgSel.value === 'อื่นๆ (ระบุ)') {
-                bdgWrap.classList.remove('hidden');
-                if (bdgSpacer) bdgSpacer.classList.add('hidden');
-                bdgInp.required = true;
-                bdgInp.focus();
-            } else {
-                bdgWrap.classList.add('hidden');
-                if (bdgSpacer) bdgSpacer.classList.remove('hidden');
-                bdgInp.value = '';
-                bdgInp.required = false;
-            }
-        });
-    }
-
-    // 2. จัดการ ประเภทงาน (Work Type)
-    const workSel = document.getElementById('fuel-workType-select');
-    const workWrap = document.getElementById('fuel-workType-other-wrap');
-    const workInp = document.getElementById('fuel-workType-other');
-
-    if (workSel && workWrap && workInp) {
-        workSel.addEventListener('change', () => {
-            if (workSel.value === 'other' || workSel.value === 'อื่นๆ (ระบุ)' || workSel.value === 'อื่นๆ') {
-                workWrap.classList.remove('hidden');
-                workInp.required = true;
-                workInp.focus();
-            } else {
-                workWrap.classList.add('hidden');
-                workInp.value = '';
-                workInp.required = false;
-            }
-        });
-    }
-
-    // 3. ระบบคำนวณค่าน้ำมันอัตโนมัติ
-    const fLiters = document.getElementById('fuel-liters');
-    const fPrice = document.getElementById('fuel-price');
-    const fCost = document.getElementById('fuel-cost');
-    
-    if (fLiters && fPrice && fCost) {
-        const calcCost = () => {
-            const l = parseFloat(fLiters.value) || 0;
-            const p = parseFloat(fPrice.value) || 0;
-            if (l > 0 && p > 0) fCost.value = (l * p).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            else fCost.value = '';
-        };
-        fLiters.addEventListener('input', calcCost);
-        fPrice.addEventListener('input', calcCost);
-    }
-    
-    console.log('✅ Wired Fuel Form Events (Budget, WorkType, Cost Auto-calculate)');
-}
-window.wireFuelFormEvents = wireFuelFormEvents;
-
-// ANCHOR: initUiComponents
+/**
+ * [SECTION 1] Initializer - ตัวควบคุมการเริ่มต้นระบบ (Berry Optimized v2)
+ */
 function initUiComponents() {
+  // ✅ บูรณาการ Guard: ถ้า wired ไปแล้ว ให้เช็คเฉพาะจุด ไม่ต้องเริ่มใหม่หมด
   if (window.vberryUiWired) {
     console.log('⚠️ initUiComponents(): Already wired. Refreshing essential listeners...');
     if (typeof setupDateInputs === 'function') {
-      window.vberryDateSetup = false; 
+      window.vberryDateSetup = false; // ปลดล็อกชั่วคราวเพื่อให้ตั้งค่าใหม่แบบคลีนๆ
       setupDateInputs();
     }
     return;
@@ -2600,21 +2555,17 @@ function initUiComponents() {
     console.log('🧪 initUiComponents(): Starting deferred wiring...');
 
     safeCall('setupDateInputs', 'Thai Date System');
-    safeCall('wireBookingFormSubmit', 'Submit Logic (With Locking)'); 
+    safeCall('wireBookingFormSubmit', 'Submit Logic (With Locking)'); // 👈 ตัวสำคัญกันเด้งซ้ำ
     safeCall('installVehicleLoaderOnce', 'Vehicle Loader');
     safeCall('wireAvailabilityListeners', 'Availability Listeners');
     safeCall('wireVehicleCountClamp', 'Vehicle Count Clamp');
     safeCall('installSelfTestFloatingButton', 'Self-Test Button');
-    
-    // 🍓 BERRY FIX: เพิ่มคำสั่งนี้ เพื่อให้กล่องกรอก "อื่นๆ" พร้อมทำงาน
-    safeCall('wireFuelFormEvents', 'Fuel Form Events'); 
     
     console.log('✅ initUiComponents(): All phases complete.');
   };
 
   setTimeout(deferWiring, 150);
 }
-
 /**
  * [SECTION 2] Header & Navigation Functions
  */
@@ -2933,6 +2884,7 @@ const CalendarTooltip = {
     if (this.el) return;
     this.el = document.createElement('div');
     this.el.className = 'vberry-tooltip';
+    this.el.style.pointerEvents = 'none'; // FIX BUG: Allow clicking elements visually under the tooltip
     document.body.appendChild(this.el);
   },
   show(e, data) {
@@ -2985,14 +2937,8 @@ const CalendarTooltip = {
   },
   hide() {
     if (this.el) this.el.classList.remove('show');
-  },
-  
-  // 🍓 BERRY FIX: เติมฟังก์ชัน move เข้าไปเพื่อหยุด Warning และลดภาระ CPU ของเบราว์เซอร์
-  move(e) {
-    // ปล่อยว่างไว้ เพื่อให้ Tooltip ลอยนิ่งๆ เกาะติดกับป้าย (Pinned) 
-    // ไม่ต้องเปลืองแรงคำนวณตำแหน่งใหม่ทุกเสี้ยววินาทีที่ขยับเมาส์
   }
-};
+};    
 
 /* ==================== [BERRY FIX] CALENDAR DATE RANGE RENDERER ==================== */
 function buildCalendarData(sourceRows) {
@@ -3000,7 +2946,7 @@ function buildCalendarData(sourceRows) {
 
     return src
       .filter(row => {
-                    const st = String(row?.status || 'pending').trim().toLowerCase();
+                    const st = String(typeof normalizeClientStatus === 'function' ? normalizeClientStatus(row?.status || 'pending') : (row?.status || 'pending')).trim().toLowerCase();
                     return st === 'approved' ||
                            st === 'pending' ||
                            st === 'rejected' ||
@@ -3010,10 +2956,30 @@ function buildCalendarData(sourceRows) {
                            st === 'vehicle_block';
                 })
         .map(row => {
-            const sDate = String(row?.startDate || '').trim();
-            const eDate = String(row?.endDate || row?.startDate || '').trim();
+            let sDate = String(row?.startDate || '').trim();
+            let eDate = String(row?.endDate || row?.startDate || '').trim();
             const sTime = String(row?.startTime || '00:00').trim();
             const eTime = String(row?.endTime || '23:59').trim();
+
+            // FIX BUG: Normalize Thai year to AD year (e.g., 2569 -> 2026) for Date calculations
+            const parseToAd = (d) => {
+                let str = String(d).trim().split('T')[0].split(' ')[0]; // Drop time components
+                if (str.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    let y = parseInt(str.substring(0, 4), 10);
+                    if (y > 2500) str = (y - 543) + str.substring(4);
+                } else if (str.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+                    let parts = str.split('/');
+                    if (parts.length === 3) {
+                        let y = parseInt(parts[2], 10);
+                        if (y > 2500) y -= 543;
+                        str = `${y}-${parts[1]}-${parts[0]}`;
+                    }
+                }
+                return str; 
+            };
+
+            sDate = parseToAd(sDate);
+            eDate = parseToAd(eDate);
 
             const s = new Date(`${sDate}T12:00:00`);
             const e = new Date(`${eDate}T12:00:00`);
@@ -3356,8 +3322,20 @@ function renderCalendarKPI(opts = {}) {
 
     if (!rows.length && Array.isArray(window.allBookingsData)) {
         rows = window.allBookingsData.filter(e => {
-            const iso = String(e?.startDate || e?.date || '');
-            return /^\d{4}-\d{2}-\d{2}$/.test(iso) && Number(iso.slice(0, 4)) === y && Number(iso.slice(5, 7)) === m;
+            let iso = String(e?.startDate || e?.date || '').trim();
+            if (iso.match(/^\d{4}-\d{2}-\d{2}/)) {
+                let py = parseInt(iso.substring(0, 4), 10);
+                if (py > 2500) iso = (py - 543) + iso.substring(4);
+            } else if (iso.match(/^\d{2}\/\d{2}\/\d{4}/)) {
+                let parts = iso.split(' ')[0].split('/');
+                if (parts.length === 3) {
+                    let py = parseInt(parts[2], 10);
+                    if (py > 2500) py -= 543;
+                    iso = `${py}-${parts[1]}-${parts[0]}`;
+                }
+            }
+            // Allow matching just the YYYY-MM part even if time is present
+            return iso.startsWith(`${y}-${String(m).padStart(2, '0')}`);
         });
     }
 
