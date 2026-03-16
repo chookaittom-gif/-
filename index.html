@@ -302,94 +302,98 @@
         <div id="fuel-tab" class="tab-content">
             <div class="card">
                 <h3 class="card-title">⛽ บันทึกค่าน้ำมัน</h3>
-                <form id="fuel-form" class="form-grid" onsubmit="return false;">
-                    <div class="form-group">
-                        <select name="plate" id="fuel-plate" required>
-                            <option value="">-- เลือกรถ --</option>
-                        </select>
-                        <label>ทะเบียนรถ *</label>
-                    </div>
+                <form id="fuel-form" class="fuel-form-grid" onsubmit="return false;">
+    <!-- แถว 1 -->
+    <div class="form-group">
+        <select name="plate" id="fuel-plate" required><option value="">-- เลือกรถ --</option></select>
+        <label>ทะเบียนรถ *</label>
+    </div>
+    <div class="form-group">
+        <select name="workType" id="fuel-workType-select" required>
+            <option value="">-- เลือกประเภทงาน --</option>
+            <option value="อบรม">อบรม</option><option value="ประชุม">ประชุม</option>
+            <option value="ทัศนศึกษา">ทัศนศึกษา</option><option value="นิเทศนักศึกษา">นิเทศนักศึกษา</option>
+            <option value="แนะแนว">แนะแนว</option><option value="ซื้อของ">ซื้อของ</option>
+            <option value="ควบคุมงานก่อสร้าง">ควบคุมงานก่อสร้าง</option><option value="ส่งเอกสาร/พัสดุ">ส่งเอกสาร/พัสดุ</option>
+            <option value="other">อื่นๆ (ระบุ)</option>
+        </select>
+        <label for="fuel-workType-select">ประเภทงาน *</label>
+    </div>
+    
+    <!-- 🍓 BERRY FIX: เพิ่มช่องรองรับประเภทงานอื่นๆ ตรงนี้ -->
+    <div class="form-group hidden" id="fuel-workType-other-wrap">
+        <input type="text" id="fuel-workType-other" placeholder=" " name="workTypeOther">
+        <label for="fuel-workType-other">ระบุประเภทงาน *</label>
+    </div>
+    
+    <div class="form-group">
+        <input type="text" name="project" id="fuel-project" placeholder="พิมพ์สั้นๆ ชัดเจน" required>
+        <label for="fuel-project">งาน/โครงการ *</label>
+    </div>
 
-                   <div class="form-group">
-                        <select name="workType" id="fuel-workType-select" required>
-                            <option value="">-- เลือกประเภทงาน --</option>
-                            <option value="อบรม">อบรม</option>
-                            <option value="ประชุม">ประชุม</option>
-                            <option value="ทัศนศึกษา">ทัศนศึกษา</option>
-                            <option value="นิเทศนักศึกษา">นิเทศนักศึกษา</option>
-                            <option value="แนะแนว">แนะแนว</option>
-                            <option value="ซื้อของ">ซื้อของ</option>
-                            <option value="ควบคุมงานก่อสร้าง">ควบคุมงานก่อสร้าง</option>
-                            <option value="ส่งเอกสาร/พัสดุ">ส่งเอกสาร/พัสดุ</option>
-                            <option value="อื่นๆ">อื่นๆ</option>
-                        </select>
-                        <label for="fuel-workType-select">ประเภทงาน *</label>
-                    </div>
+    <!-- แถว 2 -->
+    <div class="form-group">
+        <select name="driver" id="fuel-driver-select" required><option value="">-- เลือกผู้บันทึก --</option></select>
+        <label for="fuel-driver-select">ผู้บันทึก *</label>
+    </div>
+    <div class="form-group">
+        <select name="budgetType" id="fuel-budget-type" required>
+            <option value="">-- เลือกงบประมาณ --</option>
+            <option value="งบศูนย์การศึกษาลำปาง">งบศูนย์การศึกษาลำปาง</option>
+            <option value="งบโครงการพิเศษ">งบโครงการพิเศษ</option>
+            <option value="other">อื่นๆ (ระบุ)</option>
+        </select>
+        <label for="fuel-budget-type">งบประมาณ *</label>
+    </div>
+    <div class="form-group hidden" id="fuel-budget-other-wrap">
+        <input type="text" id="fuel-budget-other" placeholder=" " name="budgetTypeOther">
+        <label for="fuel-budget-other">ระบุงบประมาณ *</label>
+    </div>
+    <div class="form-group desktop-only-empty" id="budget-spacer"></div>
 
-                    <div class="form-group">
-                        <input type="text" name="project" id="fuel-project" placeholder="พิมพ์สั้นๆ ชัดเจน เช่น เชิงปฏิบัติการ AI" required>
-                        <label for="fuel-project">งาน/โครงการ *</label>
-                    </div>
 
-                    <div class="form-group">
-                        <select name="driver" id="fuel-driver-select" required>
-                            <option value="">-- เลือกผู้บันทึก --</option>
-                        </select>
-                        <label for="fuel-driver-select">ผู้บันทึก *</label>
-                    </div>
 
-                    <div class="form-group">
-                        <input type="number" name="startMileage" required placeholder=" ">
-                        <label>เลขไมล์เริ่มต้น (กม.) *</label>
-                    </div>
-
-                    <div class="form-group">
-                        <input type="number" name="endMileage" required placeholder=" ">
-                        <label>เลขไมล์สิ้นสุด (กม.) *</label>
-                    </div>
-
+                    <!-- แถว 3: กลุ่มปริมาณน้ำมัน -->
                     <div class="form-group">
                         <input type="number" step="1" name="fuelPercentStart" required placeholder=" ">
                         <label>ระดับน้ำมันเริ่มต้น (%) *</label>
                     </div>
-
                     <div class="form-group">
                         <input type="number" step="1" name="fuelPercentEnd" required placeholder=" ">
                         <label>ระดับน้ำมันสิ้นสุด (%) *</label>
                     </div>
-
                     <div class="form-group">
-                        <input type="number" name="liters" required placeholder=" " step="0.01">
+                        <input type="number" name="liters" id="fuel-liters" required placeholder=" " step="0.01">
                         <label>จำนวนลิตร *</label>
                     </div>
 
+                    <!-- แถว 4: กลุ่มการเงิน -->
                     <div class="form-group">
-                        <input type="number" name="cost" required placeholder=" " step="0.01">
-                        <label>ค่าน้ำมัน (บาท) *</label>
+                        <input type="number" name="pricePerLiter" id="fuel-price" required placeholder=" " step="0.01">
+                        <label>ราคาต่อลิตร (บาท) *</label>
                     </div>
+                    <div class="form-group">
+                        <input type="text" name="cost" id="fuel-cost" readonly placeholder=" " style="background:#f3f4f6; cursor:not-allowed; font-weight:bold; color:#2563eb;">
+                        <label>ค่าน้ำมันรวม (บาท) *</label>
+                    </div>
+                    <div class="form-group desktop-only-empty"></div>
 
+                    <!-- แถว 5 & 6 -->
                     <div class="form-group full-width">
                         <button type="button" class="file-upload-btn btn btn-info" onclick="document.getElementById('fuel-file-upload').click()">
-                            <span class="icon">📄</span>
-                            <span class="btn-text">แนบใบเสร็จ (รูป/PDF)</span>
+                            <span class="icon">📄</span><span class="btn-text">แนบใบเสร็จ (รูป/PDF)</span>
                         </button>
                         <input type="file" id="fuel-file-upload" name="fuelFile" accept="image/*,application/pdf" hidden onchange="handleFileSelect(this, 'fuel-file-chosen', 'fuel-file-upload-name', 'fuel-file-preview-img', 'fuel-file-preview')">
-
                         <div id="fuel-file-chosen" class="file-chosen-wrapper hidden">
                             <span id="fuel-file-upload-name">ยังไม่ได้เลือกไฟล์</span>
                             <button type="button" class="file-clear-btn" onclick="clearFile('fuel-file-upload', 'fuel-file-chosen', 'fuel-file-preview')">ลบ</button>
                         </div>
-
-                        <div id="fuel-file-preview" class="file-preview hidden">
-                            <img id="fuel-file-preview-img" src="" alt="File preview">
-                        </div>
+                        <div id="fuel-file-preview" class="file-preview hidden"><img id="fuel-file-preview-img" src="" alt="File preview"></div>
                     </div>
-
                     <div class="form-group full-width">
                         <textarea name="remark" rows="2" placeholder=" "></textarea>
                         <label>หมายเหตุ</label>
                     </div>
-
                     <div class="form-group full-width">
                         <button type="submit" class="btn btn-success btn-block">💾 บันทึกข้อมูลน้ำมัน</button>
                     </div>
@@ -401,26 +405,29 @@
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th style="width:120px;">วันที่</th>
-                                    <th>ทะเบียนรถ</th>
-                                    <th>ผู้บันทึก</th>
+                                    <th style="width:100px;">วันที่</th>
+                                    <th style="width:90px;">ทะเบียนรถ</th>
+                                    <th style="width:120px;">ผู้บันทึก</th>
+                                    <th>ประเภทงาน</th>
+                                    <th class="text-right">ลิตร</th>
+                                    <th class="text-right">ราคา/ลิตร</th>
                                     <th class="text-right">จำนวนเงิน</th>
-                                    <th>หลักฐาน</th>
+                                    <th>งบประมาณ</th>
+                                    <th class="text-center">หลักฐาน</th>
                                 </tr>
                             </thead>
                             <tbody id="fuel-table-body"></tbody>
                         </table>
                     </div>
                     <div class="pagination-controls mt-2" id="fuel-pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px;">
-     <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('fuel', -1)">◀</button>
-     
-     <span class="page-info" id="fuel-page-info">1 / 1</span>
-     
-     <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('fuel', 1)">▶</button>
-</div>
-
-</div> </div>     </div>         
-
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('fuel', -1)">◀</button>
+                        <span class="page-info" id="fuel-page-info">1 / 1</span>
+                        <button type="button" class="btn btn-sm btn-secondary" onclick="changePage('fuel', 1)">▶</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
        <div id="insurance-tab" class="tab-content">
             <div class="card">
                 <h3 class="card-title">🛡️ ประกันภัย</h3>

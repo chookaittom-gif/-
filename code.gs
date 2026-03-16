@@ -5942,123 +5942,141 @@ function _saveBase64File_(base64Data, fileName) {
   }
 }
 
-function apiSaveFuel(form) {
-  try {
-    var ss = SpreadsheetApp.getActive();
-    var sh = ss.getSheetByName('Fuel'); // ตรวจสอบชื่อชีต
-    
-    // จัดการไฟล์แนบ (ถ้ามี)
-    var fileUrl = '';
-    if (form.fileData && form.fileName) {
-       try {
-         var folderName = 'Fuel_Receipts';
-         var folder;
-         var folders = DriveApp.getFoldersByName(folderName);
-         if (folders.hasNext()) { folder = folders.next(); } 
-         else { folder = DriveApp.createFolder(folderName); }
-         
-         var blob = Utilities.newBlob(Utilities.base64Decode(form.fileData), form.mimeType, form.fileName);
-         var file = folder.createFile(blob);
-         file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-         fileUrl = file.getUrl();
-       } catch (err) { Logger.log("Fuel Upload Error: " + err); }
+// 🍓 BERRY FIX: จัดการ Header ใหม่ให้ตรง Schema เสมอ
+function syncFuelHeaders_(sh) {
+  Logger.log("STEP1: ตรวจ header sheet Fuel");
+  const schema =['FuelLogID', 'BookingID', 'Plate', 'JobType', 'ProjectName', 'Driver', 'StartFuelLevel', 'EndFuelLevel', 'Liters', 'PricePerLiter', 'Cost', 'BudgetType', 'Remark', 'Timestamp', 'Month', 'ReceiptURL'];
+  let headers =[];
+  if (sh.getLastRow() >= 1) headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(h => String(h).trim());
+  
+  let changed = false;
+  schema.forEach(req => {
+    if (!headers.includes(req)) {
+      headers.push(req);
+      changed = true;
     }
+  });
 
-    // คำนวณค่าต่างๆ
-    var dist = (parseFloat(form.endMileage) || 0) - (parseFloat(form.startMileage) || 0);
-    var used = (parseFloat(form.fuelPercentStart) || 0) - (parseFloat(form.fuelPercentEnd) || 0);
-    var month = Utilities.formatDate(new Date(), "GMT+7", "MM/yyyy");
-    var timestamp = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy, HH:mm:ss");
-    var logId = 'FL-' + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMddHHmmss");
+  if (changed) {
+    Logger.log("STEP2: ตรวจว่าคอลัมน์ที่ขาดถูกสร้างเพิ่มได้จริง");
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sh.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f1f5f9");
+  }
+  
+  Logger.log(`STEP3: ตรวจจำนวนคอลัมน์ใหม่ครบตาม schema (Total: ${headers.length})`);
+  const map = {};
+  headers.forEach((h, i) => map[h] = i);
+  return { map, headers };
+}
 
-    // ✅ เรียงข้อมูลให้ตรงกับชีต Fuel (A-P)
-    // [A:LogID, B:BookingID, C:Plate, D:StartMile, E:EndMile, F:Start%, G:End%, H:Remark, I:Driver, J:Time, K:Dist, L:Used%, M:Month, N:File, O:Liters, P:Cost]
+function apiSaveFuel(form) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    const ss = SpreadsheetApp.getActive();
+    const sh = ss.getSheetByName('Fuel');
+    if (!sh) throw new Error("ไม่พบชีต Fuel");
+
+    const sync = syncFuelHeaders_(sh);
+    const map = sync.map;
+    const headers = sync.headers;
+
+    // File Upload
+    let fileUrl = '';
+    if (form.fileData && form.fileName) {
+       const folder = DriveApp.getFoldersByName('Fuel_Receipts').hasNext() ? DriveApp.getFoldersByName('Fuel_Receipts').next() : DriveApp.createFolder('Fuel_Receipts');
+       const blob = Utilities.newBlob(Utilities.base64Decode(form.fileData), form.mimeType || 'application/octet-stream', form.fileName);
+       const file = folder.createFile(blob);
+       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+       fileUrl = file.getUrl();
+    }
+    Logger.log(`STEP6: ตรวจว่า ReceiptURL ลงคอลัมน์ถูกต้อง (${fileUrl ? 'YES' : 'NO'})`);
+
+    const liters = parseFloat(form.liters) || 0;
+    const price = parseFloat(form.pricePerLiter) || 0;
+    const cost = (liters > 0 && price > 0) ? (liters * price) : 0; 
+    Logger.log(`STEP5: ตรวจว่า Cost = Liters × PricePerLiter (${liters} x ${price} = ${cost})`);
+
+    const logId = 'FL-' + Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyyMMddHHmmss");
+    const ts = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss");
+    const month = Utilities.formatDate(new Date(), "Asia/Bangkok", "MM/yyyy");
+
+    Logger.log(`STEP4: ตรวจ mapping payload -> row ตาม header ใหม่`);
+    Logger.log(`STEP7: ตรวจว่า BudgetType ถูกบันทึกลงคอลัมน์จริง (${form.budgetType})`);
     
-    var rowData = [
-      logId,                       // A: FuelLogID
-      form.project || '',          // B: BookingID (✅ แก้แล้ว: เอาชื่อโครงการมาใส่แทน)
-      form.plate,                  // C: Plate
-      form.startMileage,           // D: StartMileage
-      form.endMileage,             // E: EndMileage
-      form.fuelPercentStart,       // F: StartFuelLevel
-      form.fuelPercentEnd,         // G: EndFuelLevel
-      form.remark,                 // H: Remark
-      form.driver,                 // I: Driver
-      timestamp,                   // J: Timestamp
-      dist,                        // K: Distance
-      used,                        // L: FuelUsedPercent
-      month,                       // M: Month
-      fileUrl,                     // N: Receipt URL
-      form.liters,                 // O: Liters
-      form.cost                    // P: Cost
-    ];
+    const rowData = new Array(headers.length).fill('');
+    const setV = (key, val) => { if (map[key] !== undefined) rowData[map[key]] = val; };
+
+    setV('FuelLogID', logId);
+    setV('BookingID', form.project || ''); 
+    setV('Plate', form.plate);
+    setV('JobType', form.workType);
+    setV('ProjectName', form.project);
+    setV('Driver', form.driver);
+    setV('StartFuelLevel', form.fuelPercentStart);
+    setV('EndFuelLevel', form.fuelPercentEnd);
+    setV('Liters', liters > 0 ? liters : '');
+    setV('PricePerLiter', price > 0 ? price : '');
+    setV('Cost', cost > 0 ? cost : '');
+    setV('BudgetType', form.budgetType);
+    setV('Remark', form.remark);
+    setV('Timestamp', ts);
+    setV('Month', month);
+    setV('ReceiptURL', fileUrl);
 
     sh.appendRow(rowData);
     return { ok: true, message: 'บันทึกข้อมูลเรียบร้อย', fileUrl: fileUrl };
 
   } catch (e) {
-    return { ok: false, message: e.toString(), error: e.toString() };
+    Logger.log(`FAIL: apiSaveFuel Error - ${e.message}\nStack: ${e.stack}`);
+    return { ok: false, error: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
-/* [ANCHOR: API Get Fuel History (Real Data + Thai Date)] */
 function apiGetFuelHistory() {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sh = ss.getSheetByName('Fuel'); // ✅ ใช้ชื่อ 'Fuel' โดยตรง
-    if (!sh) return { ok: true, data: [] };
+    Logger.log("STEP8: ทดสอบ list/read ตารางย้อนหลังจาก schema ใหม่");
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Fuel');
+    if (!sh || sh.getLastRow() < 2) return { ok: true, data:[] };
 
-    var lastRow = sh.getLastRow();
-    if (lastRow < 2) return { ok: true, data: [] };
+    const sync = syncFuelHeaders_(sh);
+    const map = sync.map;
+    const headers = sync.headers;
 
-    // อ่านข้อมูล A ถึง P (16 คอลัมน์)
-    var vals = sh.getRange(2, 1, lastRow - 1, 16).getValues();
-    
-    var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+    const vals = sh.getRange(2, 1, sh.getLastRow() - 1, headers.length).getValues();
+    const tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
 
-    var data = vals.filter(function(r) {
-      // ต้องมี ID (Col A) และ ทะเบียนรถ (Col C)
-      return String(r[0]).trim() && String(r[2]).trim(); 
-    }).map(function(r) {
-      // จัดการวันที่ (Col J = Index 9)
-      var rawDate = r[9];
-      var dateObj = null;
-      var dateStr = '-';
-      
-      if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
-        dateObj = rawDate;
-      } else if (rawDate) {
-        var parsed = new Date(rawDate);
-        if (!isNaN(parsed.getTime())) dateObj = parsed;
-      }
+    const data = vals.filter(r => String(r[map['FuelLogID']] || '').trim() && String(r[map['Plate']] || '').trim()).map(r => {
+      const rawDate = r[map['Timestamp']];
+      let dateObj = null, dateStr = '-';
+      if (rawDate instanceof Date && !isNaN(rawDate.getTime())) dateObj = rawDate;
+      else if (rawDate && !isNaN(new Date(rawDate).getTime())) dateObj = new Date(rawDate);
 
-      // แปลงเป็น พ.ศ.
       if (dateObj) {
-        var y = parseInt(Utilities.formatDate(dateObj, tz, 'yyyy'));
-        var thYear = (y < 2400) ? y + 543 : y;
-        dateStr = Utilities.formatDate(dateObj, tz, 'dd/MM/') + thYear + ' ' + Utilities.formatDate(dateObj, tz, 'HH:mm') + ' น.';
+        const y = parseInt(Utilities.formatDate(dateObj, tz, 'yyyy'));
+        dateStr = Utilities.formatDate(dateObj, tz, 'dd/MM/') + ((y < 2400) ? y + 543 : y) + ' ' + Utilities.formatDate(dateObj, tz, 'HH:mm') + ' น.';
       }
 
       return {
-        id: String(r[0]),
-        bookingId: String(r[1]),
-        plate: String(r[2]),
-        driver: String(r[8]),        // Col I
-        timestamp: dateObj ? dateObj.getTime() : 0, 
-        dateDisplay: dateStr,        // ✅ วันที่แบบไทยพร้อมโชว์
-        liters: Number(r[14] || 0),  // Col O
-        cost: Number(r[15] || 0),    // Col P
-        fileUrl: String(r[13] || '') // Col N
+        id: String(r[map['FuelLogID']] || ''),
+        plate: String(r[map['Plate']] || ''),
+        driver: String(r[map['Driver']] || ''),
+        jobType: String(r[map['JobType']] || ''),
+        budgetType: String(r[map['BudgetType']] || ''),
+        liters: Number(r[map['Liters']] || 0),
+        pricePerLiter: Number(r[map['PricePerLiter']] || 0),
+        cost: Number(r[map['Cost']] || 0),
+        fileUrl: String(r[map['ReceiptURL']] || ''),
+        timestamp: dateObj ? dateObj.getTime() : 0,
+        dateDisplay: dateStr
       };
-    });
+    }).sort((a, b) => b.timestamp - a.timestamp);
 
-    // เรียงจากใหม่ไปเก่า
-    data.sort(function(a, b) { return b.timestamp - a.timestamp; });
-
-    return { ok: true, data: data }; // ✅ ส่งกลับรูปแบบ Object
-
+    return { ok: true, data: data };
   } catch (e) {
-    Logger.log('apiGetFuelHistory Error: ' + e.message);
+    Logger.log(`FAIL: apiGetFuelHistory Error - ${e.message}\nStack: ${e.stack}`);
     return { ok: false, error: e.message };
   }
 }

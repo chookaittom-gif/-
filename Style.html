@@ -4087,4 +4087,22 @@ footer.footer .developer {
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   }
 }
+
+/* ==================== FUEL FORM GRID ==================== */
+.fuel-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem 1.25rem;
+  align-items: start;
+}
+.fuel-form-grid .full-width { grid-column: 1 / -1; }
+.desktop-only-empty { display: block; }
+
+@media (max-width: 1024px) {
+  .fuel-form-grid { grid-template-columns: repeat(2, 1fr); }
+  .desktop-only-empty { display: none; }
+}
+@media (max-width: 768px) {
+  .fuel-form-grid { grid-template-columns: 1fr; gap: 0.9rem; }
+}
 </style>

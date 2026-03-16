@@ -928,31 +928,44 @@ window.toggleVehicleStatus = function(btn, plate, currentStatus) {
   }
 }
 
-
-    function clearFile(a, b, c) {
+// ANCHOR: clearFile
+function clearFile(a, b, c) {
   try {
-    // รองรับการเรียกแบบ: clearFile(inputId, chosenId, previewId)
+    // รองรับการเรียกแบบ: clearFile(inputId, chosenWrapperId, previewWrapperId)
     if (b || c) {
       const inputId = a;
       const chosenId = b;
       const previewId = c;
 
+      // 1. เคลียร์ค่าใน Input และ State ที่ซ่อนอยู่
       const input = document.getElementById(inputId);
       if (input) {
         input.value = '';
         input.__fileData = null;
+        input.__fileName = null;
+        input.__fileMime = null;
       }
 
-      const chosen = chosenId ? document.getElementById(chosenId) : null;
-      if (chosen) chosen.textContent = 'ยังไม่ได้เลือกไฟล์';
+      // 2. ซ่อนกล่องชื่อไฟล์ และรีเซ็ตข้อความ
+      const chosenWrapper = document.getElementById(chosenId);
+      if (chosenWrapper) {
+        chosenWrapper.classList.add('hidden'); // 🍓 เพิ่มการซ่อนกล่อง
+        const nameSpan = chosenWrapper.querySelector('span'); // หา span ที่เก็บชื่อ
+        if (nameSpan) nameSpan.textContent = 'ยังไม่ได้เลือกไฟล์';
+      }
 
-      const preview = previewId ? document.getElementById(previewId) : null;
-      if (preview) preview.innerHTML = '';
+      // 3. ซ่อนกล่องรูปภาพพรีวิว (แก้ปัญหากล่องสี่เหลี่ยมค้าง)
+      const previewWrapper = document.getElementById(previewId);
+      if (previewWrapper) {
+        previewWrapper.classList.add('hidden'); // 🍓 เพิ่มการซ่อนกล่อง
+        const img = previewWrapper.querySelector('img');
+        if (img) img.src = '';
+      }
 
       return;
     }
 
-    // รองรับการเรียกแบบเดิม: clearFile(targetName)
+    // --- รองรับการเรียกแบบ Legacy (targetName) ---
     const targetName = a;
     const hidden = document.querySelector('input[type="hidden"][name="' + targetName + '"]');
     const input = document.querySelector(
@@ -966,13 +979,16 @@ window.toggleVehicleStatus = function(btn, plate, currentStatus) {
     if (input) {
       input.value = '';
       input.__fileData = null;
+      input.__fileName = null;
+      input.__fileMime = null;
     }
     if (label) label.textContent = 'ยังไม่ได้เลือกไฟล์';
+    
   } catch (e) {
     console.warn('clearFile error:', e);
   }
 }
-
+    
 
     // ตัวนี้คือฟังก์ชันที่ tab handler เรียกใช้
     function ensureUploadButtonsLive() {
@@ -1050,17 +1066,30 @@ window.toggleVehicleStatus = function(btn, plate, currentStatus) {
     submitBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;display:inline-block;vertical-align:middle;margin-right:8px;"></span>กำลังบันทึกข้อมูลน้ำมัน...';
   }
 
+ // 📍 ANCHOR: submitFuel 
   try {
     const formData = new FormData(form);
     const payload = Object.fromEntries(formData.entries());
+
+    // 🍓 BERRY FIX: จัดการตัวเลือก "อื่นๆ" ทั้งงบประมาณและประเภทงาน
+    if (payload.budgetType === 'other' || payload.budgetType === 'อื่นๆ (ระบุ)') {
+      if (!payload.budgetTypeOther) throw new Error('กรุณาระบุงบประมาณอื่นๆ');
+      payload.budgetType = payload.budgetTypeOther.trim();
+    }
+    delete payload.budgetTypeOther;
+
+    if (payload.workType === 'other' || payload.workType === 'อื่นๆ (ระบุ)' || payload.workType === 'อื่นๆ') {
+      if (!payload.workTypeOther) throw new Error('กรุณาระบุประเภทงานอื่นๆ');
+      payload.workType = payload.workTypeOther.trim();
+    }
+    delete payload.workTypeOther;
 
     // เช็คฟิลด์ป้องกันค่าว่าง
     if (!payload.plate) throw new Error('กรุณาเลือกรถ');
     if (!payload.workType) throw new Error('กรุณาระบุประเภทงาน');
     if (!payload.project) throw new Error('กรุณาระบุงาน/โครงการ');
-    if (!payload.driver) throw new Error('กรุณาเลือกผู้บันทึก');
 
-    // จัดการไฟล์ (แก้ไขชื่อ Property ตัวท้ายเป็น mimeType ให้ตรงกับ API ฝั่ง Server รับ)
+    // จัดการไฟล์
     if (fileData) {
       payload.fileData = fileData;
       payload.fileName = (fileInput && fileInput.__fileName) ? fileInput.__fileName : '';
@@ -2151,7 +2180,8 @@ window.addEventListener('load', function() {
     }
 
     /* ================== FUEL TAB LOADER ================== */
-   async function loadFuelTabOptions() {
+ // ANCHOR: loadFuelTabOptions
+async function loadFuelTabOptions() {
   _scheduleTabLoad(async () => {
     if (window.__loaded_fuel_opts) {
       if (typeof loadFuelData === 'function') loadFuelData();
@@ -2179,8 +2209,8 @@ window.addEventListener('load', function() {
       var res = await run('apiGetFuelFormOptions', {});
       if (!res || !res.ok) throw new Error(res ? res.error : 'No response from server');
 
-      var plates = res.plates ||[];
-      var drivers = res.drivers ||[];
+      var plates = res.plates || [];
+      var drivers = res.drivers ||[]; // 🍓 BERRY FIX: แก้ไข Syntax Error เติม
 
       plateEl.innerHTML = '<option value="">-- เลือกรถ --</option>' +
         plates.map(function(p){ return '<option value="' + p + '">' + p + '</option>'; }).join('');
@@ -2456,15 +2486,78 @@ function closeModalA11y(id) {
     }, 10);
 }
 
-/**
- * [SECTION 1] Initializer - ตัวควบคุมการเริ่มต้นระบบ (Berry Optimized v2)
- */
+// ANCHOR: wireFuelFormEvents
+function wireFuelFormEvents() {
+    if (window.vberryFuelEventsWired) return;
+    window.vberryFuelEventsWired = true;
+
+    // 1. จัดการ งบประมาณ (Budget)
+    const bdgSel = document.getElementById('fuel-budget-type');
+    const bdgWrap = document.getElementById('fuel-budget-other-wrap');
+    const bdgInp = document.getElementById('fuel-budget-other');
+    const bdgSpacer = document.getElementById('budget-spacer');
+    
+    if (bdgSel && bdgWrap && bdgInp) {
+        bdgSel.addEventListener('change', () => {
+            if (bdgSel.value === 'other' || bdgSel.value === 'อื่นๆ (ระบุ)') {
+                bdgWrap.classList.remove('hidden');
+                if (bdgSpacer) bdgSpacer.classList.add('hidden');
+                bdgInp.required = true;
+                bdgInp.focus();
+            } else {
+                bdgWrap.classList.add('hidden');
+                if (bdgSpacer) bdgSpacer.classList.remove('hidden');
+                bdgInp.value = '';
+                bdgInp.required = false;
+            }
+        });
+    }
+
+    // 2. จัดการ ประเภทงาน (Work Type)
+    const workSel = document.getElementById('fuel-workType-select');
+    const workWrap = document.getElementById('fuel-workType-other-wrap');
+    const workInp = document.getElementById('fuel-workType-other');
+
+    if (workSel && workWrap && workInp) {
+        workSel.addEventListener('change', () => {
+            if (workSel.value === 'other' || workSel.value === 'อื่นๆ (ระบุ)' || workSel.value === 'อื่นๆ') {
+                workWrap.classList.remove('hidden');
+                workInp.required = true;
+                workInp.focus();
+            } else {
+                workWrap.classList.add('hidden');
+                workInp.value = '';
+                workInp.required = false;
+            }
+        });
+    }
+
+    // 3. ระบบคำนวณค่าน้ำมันอัตโนมัติ
+    const fLiters = document.getElementById('fuel-liters');
+    const fPrice = document.getElementById('fuel-price');
+    const fCost = document.getElementById('fuel-cost');
+    
+    if (fLiters && fPrice && fCost) {
+        const calcCost = () => {
+            const l = parseFloat(fLiters.value) || 0;
+            const p = parseFloat(fPrice.value) || 0;
+            if (l > 0 && p > 0) fCost.value = (l * p).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            else fCost.value = '';
+        };
+        fLiters.addEventListener('input', calcCost);
+        fPrice.addEventListener('input', calcCost);
+    }
+    
+    console.log('✅ Wired Fuel Form Events (Budget, WorkType, Cost Auto-calculate)');
+}
+window.wireFuelFormEvents = wireFuelFormEvents;
+
+// ANCHOR: initUiComponents
 function initUiComponents() {
-  // ✅ บูรณาการ Guard: ถ้า wired ไปแล้ว ให้เช็คเฉพาะจุด ไม่ต้องเริ่มใหม่หมด
   if (window.vberryUiWired) {
     console.log('⚠️ initUiComponents(): Already wired. Refreshing essential listeners...');
     if (typeof setupDateInputs === 'function') {
-      window.vberryDateSetup = false; // ปลดล็อกชั่วคราวเพื่อให้ตั้งค่าใหม่แบบคลีนๆ
+      window.vberryDateSetup = false; 
       setupDateInputs();
     }
     return;
@@ -2507,17 +2600,21 @@ function initUiComponents() {
     console.log('🧪 initUiComponents(): Starting deferred wiring...');
 
     safeCall('setupDateInputs', 'Thai Date System');
-    safeCall('wireBookingFormSubmit', 'Submit Logic (With Locking)'); // 👈 ตัวสำคัญกันเด้งซ้ำ
+    safeCall('wireBookingFormSubmit', 'Submit Logic (With Locking)'); 
     safeCall('installVehicleLoaderOnce', 'Vehicle Loader');
     safeCall('wireAvailabilityListeners', 'Availability Listeners');
     safeCall('wireVehicleCountClamp', 'Vehicle Count Clamp');
     safeCall('installSelfTestFloatingButton', 'Self-Test Button');
+    
+    // 🍓 BERRY FIX: เพิ่มคำสั่งนี้ เพื่อให้กล่องกรอก "อื่นๆ" พร้อมทำงาน
+    safeCall('wireFuelFormEvents', 'Fuel Form Events'); 
     
     console.log('✅ initUiComponents(): All phases complete.');
   };
 
   setTimeout(deferWiring, 150);
 }
+
 /**
  * [SECTION 2] Header & Navigation Functions
  */
@@ -8266,6 +8363,7 @@ function safeParseFloat(str) {
 }
 
 /* [ANCHOR: renderTablePage] */
+// 📍 ANCHOR: renderTablePage
 function renderTablePage(type, containerId) {
     const state = PAGINATION_STATE[type];
     const container = document.getElementById(containerId);
@@ -8284,6 +8382,8 @@ function renderTablePage(type, containerId) {
     if (pageData.length === 0) {
         let colSpan = 5;
         if (type === 'maintenance') colSpan = 8; // ซ่อมบำรุงมี 8 คอลัมน์
+        else if (type === 'fuel') colSpan = 9;   // 🍓 BERRY FIX: อัปเดตตารางน้ำมันเป็น 9 คอลัมน์
+        
         html = `<tr><td colspan="${colSpan}" class="text-center text-muted" style="padding: 20px;">- ไม่พบข้อมูล -</td></tr>`;
     } else {
         // 3. วนลูปสร้างแถวตาราง
@@ -8292,20 +8392,26 @@ function renderTablePage(type, containerId) {
 
             // ------------------------------------------
             // CASE A: ตารางน้ำมัน (Fuel)
-            // ------------------------------------------
+            // ------------------------------------------  <-- 🍓 BERRY FIX: ตรงนี้บอสลืมใส่ // ไปค่ะ
             if (type === 'fuel') {
                 let fileLink = '<span class="text-muted">-</span>';
                 if (item.fileUrl && item.fileUrl.includes('http')) {
-                    fileLink = `<a href="${item.fileUrl}" target="_blank" style="text-decoration:none;">📄 ใบเสร็จ</a>`;
+                    fileLink = `<a href="${item.fileUrl}" target="_blank" style="text-decoration:none;" title="ดูใบเสร็จ">📄</a>`;
                 }
                 let dateShow = item.dateDisplay || formatThaiDate(item.timestamp);
+                let litersVal = safeParseFloat(item.liters);
+                let priceVal = safeParseFloat(item.pricePerLiter);
                 let costVal = safeParseFloat(item.cost); 
                 html += `
                     <tr>
                         <td>${dateShow}</td> 
-                        <td>${item.plate}</td>
+                        <td><span style="font-weight:600;">${item.plate || '-'}</span></td>
                         <td>${item.driver || '-'}</td>
-                        <td class="text-right">${costVal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                        <td>${item.jobType || '-'}</td>
+                        <td class="text-right">${litersVal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td class="text-right">${priceVal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td class="text-right" style="color:#2563eb; font-weight:bold;">${costVal.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td>${item.budgetType || '-'}</td>
                         <td class="text-center">${fileLink}</td>
                     </tr>
                 `;
@@ -8341,7 +8447,7 @@ function renderTablePage(type, containerId) {
                 `;
 
             // ------------------------------------------
-            // CASE C: ตารางซ่อมบำรุง (Maintenance) 🍓 BERRY FIX: เติมส่วนที่หายไป
+            // CASE C: ตารางซ่อมบำรุง (Maintenance)
             // ------------------------------------------
             } else if (type === 'maintenance') {
                 let fileBtn = '<span class="text-muted">-</span>';
@@ -8379,7 +8485,6 @@ function renderTablePage(type, containerId) {
         pageInfoEl.textContent = `${state.page} / ${totalPages}`;
     }
 }
-
 
 // =========================================
 // 3. UPDATED LOADERS (เชื่อมต่อกับ Pagination)
