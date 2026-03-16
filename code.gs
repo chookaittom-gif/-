@@ -1158,27 +1158,34 @@ function runNormalize1352() {
 
 function getIntegratedDailyReport(targetDate) {
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sh = ss.getSheetByName('Data');
-    if (!sh) return "❌ ไม่พบชีต Data";
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sh = ss.getSheetByName('Data');
+    if (!sh) return '❌ ไม่พบชีต Data';
 
-    const tz = Session.getScriptTimeZone() || "Asia/Bangkok";
-    const d = (targetDate instanceof Date) ? targetDate : new Date();
-    const reportDateISO = Utilities.formatDate(d, tz, "yyyy-MM-dd");
+    var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+    var d = (targetDate instanceof Date) ? targetDate : new Date();
+    var reportDateISO = Utilities.formatDate(d, tz, 'yyyy-MM-dd');
 
-    const TH_MONTHS =["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-    const dateHeader = `${Utilities.formatDate(d, tz, "dd")} ${TH_MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`;
+    var TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    var dateHeader = Utilities.formatDate(d, tz, 'dd') + ' ' + TH_MONTHS[d.getMonth()] + ' ' + (d.getFullYear() + 543);
 
-    const data = sh.getDataRange().getValues();
-    
-    const noJobMsg = (typeof getNoJobTemplate_ === 'function') 
-      ? getNoJobTemplate_(dateHeader) 
-      : `📋 รายงานประจำวันระบบจองยานพาหนะ\n📅 ${dateHeader}\n──────────────\n\n🍃 วันนี้ไม่มีภารกิจเดินทางค่ะ`;
+    var data = sh.getDataRange().getValues();
+    var noJobMsg = (typeof getNoJobTemplate_ === 'function')
+      ? getNoJobTemplate_(dateHeader)
+      : [
+          '📋 <b>รายงานประจำวันระบบจองยานพาหนะ</b>',
+          '📅 ' + dateHeader,
+          '──────────────',
+          '',
+          '🍃 วันนี้ไม่มีภารกิจเดินทางค่ะ',
+          '',
+          '🤖 รายงานอัตโนมัติ 05:00 น.'
+        ].join('\n');
 
     if (data.length < 2) return noJobMsg;
 
-    const h = data[0].map(x => String(x).trim());
-    const idx = {
+    var h = data[0].map(function(x) { return String(x).trim(); });
+    var idx = {
       id: h.indexOf('Booking ID'),
       status: h.indexOf('สถานะ'),
       name: h.indexOf('ชื่อ-สกุล'),
@@ -1191,18 +1198,57 @@ function getIntegratedDailyReport(targetDate) {
       endT: h.indexOf('เวลาสิ้นสุด')
     };
 
-    const groups = { pending:[], approved: [], driver_special_approved: [], rejected: [], cancelled:[] };
-    let totalFound = 0;
+    var groups = {
+      pending: [],
+      approved: [],
+      driver_special_approved: [],
+      rejected: [],
+      cancelled: []
+    };
 
-    for (let i = 1; i < data.length; i++) {
-      const r = data[i];
-      const sIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.startD]) : "";
-      const eIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.endD]) : sIso || "";
-      
-      const finalEndIso = eIso || sIso;
+    var totalFound = 0;
+
+    function splitMultiValue_(v) {
+      var s = String(v == null ? '' : v).trim();
+      if (!s || s === '-') return [];
+      return s
+        .split(/[,\n|\/]+/)
+        .map(function(x) { return String(x || '').trim(); })
+        .filter(function(x) { return x && x !== '-'; });
+    }
+
+    function buildAssignmentLines_(plateRaw, driverRaw) {
+      var plates = splitMultiValue_(plateRaw);
+      var drivers = splitMultiValue_(driverRaw);
+      var maxLen = Math.max(plates.length, drivers.length);
+      var out = [];
+
+      if (maxLen === 0) return out;
+
+      if (maxLen === 1) {
+        var oneCar = plates[0] || 'รอยืนยันรถ';
+        var oneDrv = drivers[0] || 'รอยืนยันคนขับ';
+        out.push('   🚐 ' + oneCar + ' (' + oneDrv + ')');
+        return out;
+      }
+
+      for (var i = 0; i < maxLen; i++) {
+        var car = plates[i] || 'รอยืนยันรถ';
+        var drv = drivers[i] || 'รอยืนยันคนขับ';
+        out.push('   ' + (i + 1) + ') 🚐 ' + car + ' (' + drv + ')');
+      }
+      return out;
+    }
+
+    for (var i = 1; i < data.length; i++) {
+      var r = data[i];
+      var sIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.startD]) : '';
+      var eIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.endD]) : (sIso || '');
+      var finalEndIso = eIso || sIso;
+
       if (!sIso || reportDateISO < sIso || reportDateISO > finalEndIso) continue;
 
-      let key = (typeof getStatusKeySafe_ === 'function') ? getStatusKeySafe_(r[idx.status]) : 'pending';
+      var key = (typeof getStatusKeySafe_ === 'function') ? getStatusKeySafe_(r[idx.status]) : 'pending';
       if (key === 'driver_claimed') key = 'pending';
       if (!groups[key]) key = 'pending';
 
@@ -1212,9 +1258,14 @@ function getIntegratedDailyReport(targetDate) {
 
     if (totalFound === 0) return noJobMsg;
 
-    let lines =[`📋 <b>รายงานประจำวันระบบจองยานพาหนะ</b>`, `📅 ${dateHeader}`, '', '📊 <b>สถิติจำนวนงานวันนี้</b>'];
+    var lines = [
+      '📋 <b>รายงานประจำวันระบบจองยานพาหนะ</b>',
+      '📅 ' + dateHeader,
+      '',
+      '📊 <b>สถิติจำนวนงานวันนี้</b>'
+    ];
 
-    const statusConfig =[
+    var statusConfig = [
       { k: 'pending', label: '⏳ รออนุมัติ' },
       { k: 'approved', label: '✅ อนุมัติ' },
       { k: 'driver_special_approved', label: '⚡ อนุมัติกรณีพิเศษ' },
@@ -1222,61 +1273,62 @@ function getIntegratedDailyReport(targetDate) {
       { k: 'cancelled', label: '🚫 ยกเลิก' }
     ];
 
-    statusConfig.forEach(item => {
-      const count = groups[item.k].length;
-      if (count > 0) lines.push(`${item.label} : ${count}`);
+    statusConfig.forEach(function(item) {
+      var count = groups[item.k].length;
+      if (count > 0) lines.push(item.label + ' : ' + count);
     });
 
     lines.push('──────────────');
 
-    const activeJobs =[].concat(groups.approved, groups.driver_special_approved);
+    var activeJobs = [].concat(groups.approved, groups.driver_special_approved);
 
     if (activeJobs.length > 0) {
-      activeJobs.sort((a, b) => String(a[idx.startT] || '').localeCompare(String(b[idx.startT] || '')));
-
       lines.push('📍 <b>รายละเอียดงานวันนี้:</b>');
-      
-      const parseT = (val) => {
-        if (val instanceof Date) return Utilities.formatDate(val, tz, "HH:mm");
+
+      activeJobs.sort(function(a, b) {
+        return String(a[idx.startT] || '').localeCompare(String(b[idx.startT] || ''));
+      });
+
+      var parseT = function(val) {
+        if (val instanceof Date) return Utilities.formatDate(val, tz, 'HH:mm');
         if (!val || val === '-') return null;
-        const m = String(val).match(/(\d{1,2})[:.](\d{2})/);
-        return m ? `${m[1].padStart(2, '0')}:${m[2]}` : null;
+        var m = String(val).match(/(\d{1,2})[:.](\d{2})/);
+        return m ? (String(m[1]).padStart(2, '0') + ':' + m[2]) : null;
       };
 
-      activeJobs.forEach(r => {
-        const st = (typeof getStatusKeySafe_ === 'function') ? getStatusKeySafe_(r[idx.status]) : 'approved';
-        const icon = (st === 'driver_special_approved') ? '⚡' : '🔹';
+      activeJobs.forEach(function(r) {
+        var st = (typeof getStatusKeySafe_ === 'function') ? getStatusKeySafe_(r[idx.status]) : 'approved';
+        var icon = (st === 'driver_special_approved') ? '⚡' : '🔹';
 
-        const tGo = parseT(r[idx.startT]) || "--:--";
-        const tBack = parseT(r[idx.endT]);
-        
-        const sIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.startD]) : "";
-        const eIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.endD]) : sIso;
-        
-        let timeRange = '';
+        var tGo = parseT(r[idx.startT]) || '--:--';
+        var tBack = parseT(r[idx.endT]);
+        var sIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.startD]) : '';
+        var eIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.endD]) : sIso;
+
+        var timeRange = '';
         if (!sIso || sIso === eIso) {
-            timeRange = tBack ? `${tGo} น. - ${tBack} น.` : `${tGo} น.`;
+          timeRange = tBack ? (tGo + ' - ' + tBack + ' น.') : (tGo + ' น.');
         } else {
-            const sDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(r[idx.startD]) : sIso;
-            const eDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(r[idx.endD]) : eIso;
-            const sDShort = sDateTH !== '-' ? sDateTH.substring(0, 5) : '-';
-            const eDShort = eDateTH !== '-' ? eDateTH.substring(0, 5) : '-';
-            timeRange = `ข้ามวัน (${sDShort} ${tGo} → ${eDShort} ${tBack || ''})`;
+          var sDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(r[idx.startD]) : sIso;
+          var eDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(r[idx.endD]) : eIso;
+          var sDShort = sDateTH !== '-' ? sDateTH.substring(0, 5) : '-';
+          var eDShort = eDateTH !== '-' ? eDateTH.substring(0, 5) : '-';
+          timeRange = 'ข้ามวัน (' + sDShort + ' ' + tGo + ' → ' + eDShort + ' ' + (tBack || '--:--') + ')';
         }
 
-        const place = String(r[idx.place] || '-');
-        const name = String(r[idx.name] || '-');
-        const plate = String(r[idx.vehicle] || '').trim();
-        const driver = String(r[idx.driver] || '').trim();
+        var place = String(r[idx.place] || '-').trim() || '-';
+        var name = String(r[idx.name] || '-').trim() || '-';
+        var plateRaw = r[idx.vehicle];
+        var driverRaw = r[idx.driver];
 
-        lines.push(`${icon} ${timeRange} : ${place}`);
-        lines.push(`   👤 ${name}`);
+        lines.push(icon + ' ' + timeRange + ' : ' + place);
+        lines.push('   👤 ' + name);
 
-        if ((plate && plate !== '-') || (driver && driver !== '-')) {
-          const car = (plate && plate !== '-') ? plate : 'รอยืนยันรถ';
-          const drv = (driver && driver !== '-') ? driver : 'รอยืนยันคนขับ';
-          lines.push(`   🚐 ${car} (${drv})`);
+        var assignmentLines = buildAssignmentLines_(plateRaw, driverRaw);
+        if (assignmentLines.length > 0) {
+          lines = lines.concat(assignmentLines);
         }
+
         lines.push('');
       });
     }
@@ -1287,23 +1339,24 @@ function getIntegratedDailyReport(targetDate) {
       .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/gi, '')
       .replace(/D\s*น\./gi, '')
       .replace(/[ \t]{2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
       .trim();
 
   } catch (e) {
-    console.error(`ERROR: ${e.message}`);
-    return "❌ เกิดข้อผิดพลาดในการสร้างรายงาน: " + e.message;
+    console.error('ERROR: ' + e.message);
+    return '❌ เกิดข้อผิดพลาดในการสร้างรายงาน: ' + e.message;
   }
 }
 
-
-
 function getNoJobTemplate_(dateHeader) {
-  return[
-    '📋 รายงานประจำวันระบบจองยานพาหนะ',
+  return [
+    '📋 <b>รายงานประจำวันระบบจองยานพาหนะ</b>',
     '📅 ' + dateHeader,
     '──────────────',
     '',
-    '🍃 วันนี้ไม่มีภารกิจเดินทางค่ะ'
+    '🍃 วันนี้ไม่มีภารกิจเดินทางค่ะ',
+    '',
+    '🤖 รายงานอัตโนมัติ 05:00 น.'
   ].join('\n');
 }
 
@@ -1536,10 +1589,12 @@ function buildTimeBlock_(dStart, dEnd, tStart, tEnd, reportDateISO) {
 
 function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   rowObj = rowObj || {};
+
   var st = getStatusKeySafe_(statusKey || rowObj.status || rowObj['สถานะ'] || 'pending');
   if (st === 'driver_claimed') st = 'pending';
 
-  var isUpdate = reasonFromPayload && (reasonFromPayload.indexOf('อัปเดต') > -1 || reasonFromPayload.indexOf('เปลี่ยน') > -1);
+  var rawNote = String(reasonFromPayload || '').trim();
+  var isUpdate = rawNote && (rawNote.indexOf('อัปเดต') > -1 || rawNote.indexOf('เปลี่ยน') > -1);
 
   var headMap = {
     pending: '🚌 ระบบจองรถ: แจ้งเตือนการจองใหม่',
@@ -1560,47 +1615,98 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   function getV(keys) {
     for (var i = 0; i < keys.length; i++) {
       var val = rowObj[keys[i]];
-      if (val != null && String(val).trim() !== '' && String(val) !== '-') return val;
+      if (val != null && String(val).trim() !== '' && String(val).trim() !== '-') return val;
     }
     return '';
   }
 
-  var id = getV(['Booking ID', 'id', 'bookingId']);
-  var name = getV(['ชื่อ-สกุล', 'name', 'ผู้จอง']);
-  var position = getV(['ตำแหน่ง', 'position']);
-  var phone = getV(['เบอร์โทร', 'เบอร์โทรศัพท์', 'phone']);
-  var workType = getV(['ประเภทงาน', 'workType', 'jobType']);
-  var workName = getV(['งาน/โครงการ', 'ชื่อโครงการ/งาน', 'workName', 'projectName', 'project']);
-  var place = getV(['สถานที่', 'destination', 'place']);
-  
-  var sDateRaw = getV(['วันเริ่มต้น', 'startDate']);
-  var eDateRaw = getV(['วันสิ้นสุด', 'endDate']);
-  var sDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(sDateRaw) : String(sDateRaw||'-');
-  var eDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(eDateRaw) : String(eDateRaw||sDateTH);
-  
-  var sTimeRaw = getV(['เวลาเริ่มต้น', 'startTime']);
-  var eTimeRaw = getV(['เวลาสิ้นสุด', 'endTime']);
-  var sTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(sTimeRaw) : String(sTimeRaw||'00:00').replace('น.','').trim();
-  var eTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(eTimeRaw) : String(eTimeRaw||'00:00').replace('น.','').trim();
+  function cleanText(v, fallback) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s || s === '-') return fallback || '';
+    return s;
+  }
 
-  var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+  function splitMultiValue_(v) {
+    var s = String(v == null ? '' : v).trim();
+    if (!s || s === '-') return [];
+    return s
+      .split(/[,\n|\/]+/)
+      .map(function(x) { return String(x || '').trim(); })
+      .filter(function(x) { return x && x !== '-'; });
+  }
+
+  function getAssignedCount_(plateRaw, driverRaw) {
+    var plates = splitMultiValue_(plateRaw);
+    var drivers = splitMultiValue_(driverRaw);
+    return Math.max(plates.length, drivers.length);
+  }
+
+  function buildAssignments_(plateRaw, driverRaw) {
+    var plates = splitMultiValue_(plateRaw);
+    var drivers = splitMultiValue_(driverRaw);
+    var maxLen = Math.max(plates.length, drivers.length);
+
+    if (maxLen === 0) {
+      return [
+        '✅ <b>มอบหมายยานพาหนะ</b>',
+        '🚚 จำนวนที่จัดให้: 0 คัน',
+        '1) 🚐 รอระบุทะเบียน | 🧑‍✈️ รอระบุชื่อ'
+      ];
+    }
+
+    var out = [
+      '✅ <b>มอบหมายยานพาหนะ</b>',
+      '🚚 จำนวนที่จัดให้: ' + maxLen + ' คัน'
+    ];
+
+    for (var i = 0; i < maxLen; i++) {
+      var car = plates[i] || 'รอระบุทะเบียน';
+      var drv = drivers[i] || 'รอระบุชื่อ';
+      out.push((i + 1) + ') 🚐 ' + car + ' | 🧑‍✈️ ' + drv);
+    }
+    return out;
+  }
+
   function toDateObj(v) {
     if (!v) return null;
     if (v instanceof Date && !isNaN(v.getTime())) return v;
+
     var s = String(v).trim();
     if (!s) return null;
+
     var mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (mIso) return new Date(Number(mIso[1]), Number(mIso[2])-1, Number(mIso[3]));
+    if (mIso) return new Date(Number(mIso[1]), Number(mIso[2]) - 1, Number(mIso[3]));
+
     var mDm = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
     if (mDm) {
-      let yy = Number(mDm[3]);
+      var yy = Number(mDm[3]);
       if (yy > 2400) yy -= 543;
-      return new Date(yy, Number(mDm[2])-1, Number(mDm[1]));
+      return new Date(yy, Number(mDm[2]) - 1, Number(mDm[1]));
     }
+
     var dt = new Date(s);
     return isNaN(dt.getTime()) ? null : dt;
   }
 
+  var id = cleanText(getV(['Booking ID', 'id', 'bookingId']), '-');
+  var name = cleanText(getV(['ชื่อ-สกุล', 'name', 'ผู้จอง']), '-');
+  var position = cleanText(getV(['ตำแหน่ง', 'position']), '');
+  var phone = cleanText(getV(['เบอร์โทร', 'เบอร์โทรศัพท์', 'phone']), '');
+  var workType = cleanText(getV(['ประเภทงาน', 'workType', 'jobType']), '');
+  var workName = cleanText(getV(['งาน/โครงการ', 'ชื่อโครงการ/งาน', 'workName', 'projectName', 'project']), '-');
+  var place = cleanText(getV(['สถานที่', 'destination', 'place']), '-');
+
+  var sDateRaw = getV(['วันเริ่มต้น', 'startDate']);
+  var eDateRaw = getV(['วันสิ้นสุด', 'endDate']);
+  var sDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(sDateRaw) : cleanText(sDateRaw, '-');
+  var eDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(eDateRaw) : cleanText(eDateRaw || sDateTH, '-');
+
+  var sTimeRaw = getV(['เวลาเริ่มต้น', 'startTime']);
+  var eTimeRaw = getV(['เวลาสิ้นสุด', 'endTime']);
+  var sTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(sTimeRaw) : String(sTimeRaw || '00:00').replace('น.', '').trim();
+  var eTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(eTimeRaw) : String(eTimeRaw || '00:00').replace('น.', '').trim();
+
+  var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
   var sDateObj = toDateObj(sDateRaw);
   var eDateObj = toDateObj(eDateRaw) || sDateObj;
   var isoStart = sDateObj ? Utilities.formatDate(sDateObj, tz, 'yyyy-MM-dd') : '';
@@ -1609,40 +1715,39 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   var sDateShort = sDateTH !== '-' ? sDateTH.substring(0, 5) : '-';
   var eDateShort = eDateTH !== '-' ? eDateTH.substring(0, 5) : '-';
 
-  var timeBlock =[];
+  var timeBlock = [];
   if (!isoStart || isoStart === isoEnd) {
     timeBlock.push('📅 วันที่: ' + sDateTH);
     timeBlock.push('🕒 เวลา: ' + (sTime || '--:--') + ' - ' + (eTime || '--:--') + ' น.');
   } else {
-    timeBlock.push('');
     timeBlock.push('🕒 งานข้ามวัน');
     timeBlock.push('ไป: ' + sDateTH + ' ' + (sTime || '--:--') + ' น.');
     timeBlock.push('กลับ: ' + eDateTH + ' ' + (eTime || '--:--') + ' น.');
     timeBlock.push('ช่วงงาน: ' + sDateShort + ' ' + (sTime || '--:--') + ' → ' + eDateShort + ' ' + (eTime || '--:--'));
     timeBlock.push('🌙 ค้างคืน');
-    timeBlock.push('');
   }
 
   var plate = getV(['เลขทะเบียนรถ', 'vehicle', 'plate']);
   var driver = getV(['พนักงานขับรถ', 'driver']);
-  var pax = getV(['จำนวนผู้ร่วมเดินทาง', 'passengers']) || '-';
-  var carType = getV(['ประเภทรถ', 'carType', 'vehicleType']) || 'รถยนต์';
-  var vCount = getV(['จำนวนรถที่ต้องการ', 'vehicleCount', 'carCount']) || '1';
+  var pax = cleanText(getV(['จำนวนผู้ร่วมเดินทาง', 'passengers']), '-');
+  var carType = cleanText(getV(['ประเภทรถ', 'carType', 'vehicleType']), 'รถยนต์');
+  var vCount = cleanText(getV(['จำนวนรถที่ต้องการ', 'vehicleCount', 'carCount']), '1');
+  var assignedCount = getAssignedCount_(plate, driver);
 
   var userDisplay = name;
-  if (position && position !== '-') userDisplay += ' (' + position + ')';
+  if (position) userDisplay += ' (' + position + ')';
 
   var lines = [];
   lines.push('<b>' + (headMap[st] || headMap.pending) + '</b>');
-  lines.push('🆔 Booking ID: ' + (id || '-'));
+  lines.push('🆔 Booking ID: ' + id);
   lines.push('──────────────');
   lines.push('👤 ผู้จอง: ' + userDisplay);
-  if (phone && phone !== '-') lines.push('📞 ' + phone);
-  
-  if (workType && workType !== '-') lines.push('🎯 ประเภทงาน: ' + workType);
-  lines.push('📝 งาน/โครงการ: ' + (workName || '-'));
+
+  if (phone) lines.push('📞 ' + phone);
+  if (workType) lines.push('🎯 ประเภทงาน: ' + workType);
+
+  lines.push('📝 งาน/โครงการ: ' + workName);
   lines.push('📍 สถานที่: ' + place);
-  
   lines = lines.concat(timeBlock);
 
   lines.push('👥 ผู้ร่วมเดินทาง: ' + pax + ' คน');
@@ -1651,17 +1756,21 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
 
   if (st === 'approved' || st === 'driver_special_approved') {
     lines.push('──────────────');
-    lines.push('✅ <b>มอบหมายยานพาหนะ</b>');
-    lines.push('🚐 ทะเบียน: ' + (plate || 'รอระบุทะเบียน'));
-    lines.push('🧑‍✈️ พนักงาน: ' + (driver || 'รอระบุชื่อ'));
+    lines = lines.concat(buildAssignments_(plate, driver));
+
+    if (assignedCount > 0 && String(vCount) !== String(assignedCount)) {
+      lines.push('ℹ️ สรุป: ขอ ' + vCount + ' คัน | จัดให้ ' + assignedCount + ' คัน');
+    }
   }
 
   lines.push('──────────────');
   lines.push('🔖 สถานะ: <b>' + (statusLabelMap[st] || statusLabelMap.pending) + '</b>');
 
-  var note = reasonFromPayload || (st === 'cancelled' ? getV(['CancelReason', 'cancelReason']) : getV(['Reason', 'reason']));
-  if (note && note !== '-') {
-    lines.push('💬 ' + (st === 'rejected' || st === 'cancelled' ? 'เหตุผล: ' : 'หมายเหตุ: ') + note);
+  var note = rawNote || (st === 'cancelled' ? getV(['CancelReason', 'cancelReason']) : getV(['Reason', 'reason']));
+  note = cleanText(note, '');
+
+  if (note) {
+    lines.push('💬 ' + ((st === 'rejected' || st === 'cancelled') ? 'เหตุผล: ' : 'หมายเหตุ: ') + note);
   }
 
   return lines.join('\n')
@@ -7513,92 +7622,210 @@ function appendTgLog_(key, response, text) {
 }
 
 function runFullTelegramLogTest() {
-  Logger.log("🚀 === เริ่มต้นการทดสอบระบบ V-Berry Diagnostics (Log Only) ===\n");
+  Logger.log('🚀 === เริ่มต้นการทดสอบระบบ V-Berry Diagnostics (Log Only) ===\n');
 
   var mockPayload = {
-    "Booking ID": "TEST-1391",
-    "ชื่อ-สกุล": "คุณปรีชา ทดสอบระบบ",
-    "ตำแหน่ง": "อาจารย์",
-    "เบอร์โทร": "0812345678",
-    "ประเภทงาน": "ประชุม",
-    "งาน/โครงการ": "วางแผนยุทธศาสตร์ AI 2026",
-    "สถานที่": "มหาวิทยาลัยสวนดุสิต (กรุงเทพฯ)",
-    "ประเภทรถ": "รถตู้",
-    "จำนวนรถที่ต้องการ": "2",
-    "จำนวนผู้ร่วมเดินทาง": "12",
-    "วันเริ่มต้น": "2026-03-12",
-    "เวลาเริ่มต้น": "08:30",
-    "วันสิ้นสุด": "2026-03-12",
-    "เวลาสิ้นสุด": "16:30",
-    "เลขทะเบียนรถ": "",
-    "พนักงานขับรถ": "",
-    "Reason": "",
-    "CancelReason": ""
+    'Booking ID': 'TEST-1391',
+    'ชื่อ-สกุล': 'คุณปรีชา ทดสอบระบบ',
+    'ตำแหน่ง': 'อาจารย์',
+    'เบอร์โทร': '0812345678',
+    'ประเภทงาน': 'ประชุม',
+    'งาน/โครงการ': 'วางแผนยุทธศาสตร์ AI 2026',
+    'สถานที่': 'มหาวิทยาลัยสวนดุสิต (กรุงเทพฯ)',
+    'ประเภทรถ': 'รถตู้',
+    'จำนวนรถที่ต้องการ': '2',
+    'จำนวนผู้ร่วมเดินทาง': '12',
+    'วันเริ่มต้น': '2026-03-12',
+    'เวลาเริ่มต้น': '08:30',
+    'วันสิ้นสุด': '2026-03-12',
+    'เวลาสิ้นสุด': '16:30',
+    'เลขทะเบียนรถ': '',
+    'พนักงานขับรถ': '',
+    'Reason': '',
+    'CancelReason': ''
   };
 
-  function runIndividualCase(caseTitle, status, extraData) {
-    Logger.log("💬 [" + caseTitle + "]");
-    var payload = Object.assign({}, mockPayload, extraData || {});
-    payload.status = status;
-    var res = sendTelegramNotify(payload, true); // true = test mode (log only)
-    if (res && res.ok) Logger.log("\n" + res.log + "\n");
-    Logger.log("----------------------------------------");
+  function logDivider() {
+    Logger.log('----------------------------------------');
   }
 
-  // 1. ทดสอบจองใหม่ (ปรับให้เป็น Mock งานข้ามวัน ตาม Requirement ของผู้ใช้)
-  runIndividualCase("1. จองใหม่ (Pending) - งานข้ามวัน", "pending", {
-    "Booking ID": "1383",
-    "ชื่อ-สกุล": "ผศ.ดร.นพพร แพทย์รัตน์",
-    "ตำแหน่ง": "อาจารย์",
-    "เบอร์โทร": "0992361553",
-    "ประเภทงาน": "", 
-    "งาน/โครงการ": "อบรม",
-    "สถานที่": "มหาวิทยาลัยสวนดุสิต กรุงเทพมหานคร",
-    "วันเริ่มต้น": "2026-03-08",
-    "เวลาเริ่มต้น": "09:00",
-    "วันสิ้นสุด": "2026-03-10",
-    "เวลาสิ้นสุด": "17:00",
-    "จำนวนผู้ร่วมเดินทาง": "3",
-    "จำนวนรถที่ต้องการ": "1"
-  });
+  function runIndividualCase(caseTitle, status, extraData) {
+    Logger.log('💬 [' + caseTitle + ']');
 
-  // 2-6. ทดสอบแต่ละสถานะ
-  runIndividualCase("2. [SPECIAL TEST] อนุมัติกรณีพิเศษ", "driver_special_approved", { "เลขทะเบียนรถ": "นข-9999", "พนักงานขับรถ": "นายสมชาย" });
-  runIndividualCase("3. อนุมัติปกติ", "approved", { "เลขทะเบียนรถ": "ฮค-1234", "พนักงานขับรถ": "พี่ยอด" });
-  runIndividualCase("4. [RE-ASSIGN] เปลี่ยนรถ/คนขับ", "approved", { "เลขทะเบียนรถ": "กท-5555", "พนักงานขับรถ": "นายเอกชัย", "Reason": "อัปเดตการมอบหมายรถ/คนขับใหม่" });
-  runIndividualCase("5. ไม่อนุมัติ", "rejected", { "Reason": "รถติดภารกิจ" });
-  runIndividualCase("6. ยกเลิกการจอง", "cancelled", { "CancelReason": "ยกเลิกโครงการ" });
+    var payload = Object.assign({}, mockPayload, extraData || {});
+    payload.status = status;
 
-  // 7. ทดสอบรายงานประจำวัน (Daily Summary: มีงาน)
-  Logger.log("📋[7. รายงานสรุปประจำวัน (Daily Summary: มีงาน - 05:00 AM)]\n");
+    var res = sendTelegramNotify(payload, true);
+    if (res && res.ok) {
+      Logger.log('\n' + res.log + '\n');
+    } else {
+      Logger.log('❌ Test case failed: ' + caseTitle);
+      if (res) Logger.log(JSON.stringify(res));
+    }
 
-  var mockHeaders =["Booking ID", "สถานะ", "ชื่อ-สกุล", "ประเภทงาน", "งาน/โครงการ", "สถานที่", "เลขทะเบียนรถ", "พนักงานขับรถ", "วันเริ่มต้น", "เวลาเริ่มต้น", "วันสิ้นสุด", "เวลาสิ้นสุด"];
-  var mockDataRowsJobs = [
-    mockHeaders,["BK-001", "approved", "สมชาย จองจริง", "ประชุม", "งานแผน", "ศูนย์ฯ ลำปาง", "ฮค-4964", "ประเสริฐ", "2026-03-12", "09:00", "2026-03-12", "12:00"],["BK-002", "pending", "สมหญิง พึ่งพา", "อบรม", "โครงการ A", "กทม.", "", "", "2026-03-12", "07:00", "2026-03-14", "17:00"], // จำลองงานข้ามวันใน Daily Report["BK-003", "driver_special_approved", "ผอ.ศูนย์", "รับรอง", "ต้อนรับแขก", "สนามบิน", "นข-1111", "พี่ยอด", "2026-03-12", "14:00", "2026-03-12", "16:00"]
-  ];
+    logDivider();
+  }
 
-  var originalGetActive = SpreadsheetApp.getActiveSpreadsheet;
-  
-  SpreadsheetApp.getActiveSpreadsheet = function() {
-    return { getSheetByName: function() { return { getDataRange: function() { return { getValues: function() { return mockDataRowsJobs; } }; } }; } };
-  };
-  var dailyMsgJobs = getIntegratedDailyReport(new Date(2026, 2, 12));
-  Logger.log(dailyMsgJobs);
-  Logger.log("\n----------------------------------------");
+  function mockSpreadsheetWithRows(rows) {
+    return function() {
+      return {
+        getSheetByName: function(name) {
+          if (name !== 'Data') return null;
+          return {
+            getDataRange: function() {
+              return {
+                getValues: function() {
+                  return rows;
+                }
+              };
+            }
+          };
+        }
+      };
+    };
+  }
 
-  // 8. ทดสอบรายงานประจำวัน (Daily Summary: ไม่มีงาน)
-  Logger.log("📋[8. รายงานสรุปประจำวัน (Daily Summary: ไม่มีงาน - 05:00 AM)]\n");
-  var mockDataRowsNoJobs = [ mockHeaders ]; 
-  
-  SpreadsheetApp.getActiveSpreadsheet = function() {
-    return { getSheetByName: function() { return { getDataRange: function() { return { getValues: function() { return mockDataRowsNoJobs; } }; } }; } };
-  };
-  var dailyMsgNoJobs = getIntegratedDailyReport(new Date(2026, 2, 12));
-  Logger.log(dailyMsgNoJobs);
+  function runDailyCase(caseTitle, rows, targetDate) {
+    Logger.log('📋[' + caseTitle + ']');
 
-  // Restore original
-  SpreadsheetApp.getActiveSpreadsheet = originalGetActive;
-  Logger.log("\n🏁 === สิ้นสุดการทดสอบระบบ V-Berry Diagnostics ===");
+    var originalGetActive = SpreadsheetApp.getActiveSpreadsheet;
+    try {
+      SpreadsheetApp.getActiveSpreadsheet = mockSpreadsheetWithRows(rows);
+      var msg = getIntegratedDailyReport(targetDate || new Date(2026, 2, 12));
+      Logger.log(msg);
+    } catch (e) {
+      Logger.log('❌ Daily case failed: ' + caseTitle + ' | ' + e.message);
+    } finally {
+      SpreadsheetApp.getActiveSpreadsheet = originalGetActive;
+    }
+
+    Logger.log('\n----------------------------------------');
+  }
+
+  try {
+    runIndividualCase('1. จองใหม่ (Pending) - งานข้ามวัน', 'pending', {
+      'Booking ID': '1383',
+      'ชื่อ-สกุล': 'ผศ.ดร.นพพร แพทย์รัตน์',
+      'ตำแหน่ง': 'อาจารย์',
+      'เบอร์โทร': '0992361553',
+      'ประเภทงาน': '',
+      'งาน/โครงการ': 'อบรม',
+      'สถานที่': 'มหาวิทยาลัยสวนดุสิต กรุงเทพมหานคร',
+      'วันเริ่มต้น': '2026-03-08',
+      'เวลาเริ่มต้น': '09:00',
+      'วันสิ้นสุด': '2026-03-10',
+      'เวลาสิ้นสุด': '17:00',
+      'จำนวนผู้ร่วมเดินทาง': '3',
+      'จำนวนรถที่ต้องการ': '1',
+      'เลขทะเบียนรถ': '',
+      'พนักงานขับรถ': ''
+    });
+
+    runIndividualCase('2. [SPECIAL TEST] อนุมัติกรณีพิเศษ - ได้ครบ 2 คัน', 'driver_special_approved', {
+      'เลขทะเบียนรถ': 'นข-9999|ฮค-8888',
+      'พนักงานขับรถ': 'นายสมชาย|นายวิทยา'
+    });
+
+    runIndividualCase('3. อนุมัติปกติ - ได้ครบ 2 คัน', 'approved', {
+      'เลขทะเบียนรถ': 'ฮค-1234|กท-4567',
+      'พนักงานขับรถ': 'พี่ยอด|พี่เอก'
+    });
+
+    runIndividualCase('4. อนุมัติปกติ - ขอ 3 ได้ 2', 'approved', {
+      'Booking ID': 'TEST-2001',
+      'ชื่อ-สกุล': 'ดร.ทดสอบ ขอสามได้สอง',
+      'ตำแหน่ง': 'อาจารย์',
+      'เบอร์โทร': '0890000001',
+      'ประเภทงาน': 'สัมมนา',
+      'งาน/โครงการ': 'โครงการทดสอบหลายคัน',
+      'สถานที่': 'ศูนย์การประชุมฯ',
+      'จำนวนรถที่ต้องการ': '3',
+      'จำนวนผู้ร่วมเดินทาง': '18',
+      'เลขทะเบียนรถ': 'ฮค-2222|กท-3333',
+      'พนักงานขับรถ': 'พี่ต้น|พี่หนึ่ง'
+    });
+
+    runIndividualCase('5. [RE-ASSIGN] เปลี่ยนรถ/คนขับ', 'approved', {
+      'เลขทะเบียนรถ': 'กท-5555|นข-7777',
+      'พนักงานขับรถ': 'นายเอกชัย|นายธนา',
+      'Reason': 'อัปเดตการมอบหมายรถ/คนขับใหม่'
+    });
+
+    runIndividualCase('6. ไม่อนุมัติ', 'rejected', {
+      'Reason': 'รถติดภารกิจ'
+    });
+
+    runIndividualCase('7. ยกเลิกการจอง', 'cancelled', {
+      'CancelReason': 'ยกเลิกโครงการ'
+    });
+
+    var mockHeaders = [
+      'Booking ID',
+      'สถานะ',
+      'ชื่อ-สกุล',
+      'ประเภทงาน',
+      'งาน/โครงการ',
+      'สถานที่',
+      'เลขทะเบียนรถ',
+      'พนักงานขับรถ',
+      'วันเริ่มต้น',
+      'เวลาเริ่มต้น',
+      'วันสิ้นสุด',
+      'เวลาสิ้นสุด'
+    ];
+
+    runDailyCase(
+      '8. รายงานสรุปประจำวัน (Daily Summary: มีงาน 1 คัน - 05:00 AM)',
+      [
+        mockHeaders,
+        ['BK-001', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-4964', 'ประเสริฐ', '2026-03-12', '09:00', '2026-03-12', '12:00'],
+        ['BK-002', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00']
+      ],
+      new Date(2026, 2, 12)
+    );
+
+    runDailyCase(
+      '9. รายงานสรุปประจำวัน (Daily Summary: หลายคันใน 1 งาน - 05:00 AM)',
+      [
+        mockHeaders,
+        ['BK-010', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-1234|กท-4567', 'พี่ยอด|พี่เอก', '2026-03-12', '09:00', '2026-03-12', '12:00'],
+        ['BK-011', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับแขก', 'สนามบิน', 'นข-1111|ฮค-7777', 'พี่ยอด|นายสมชาย', '2026-03-12', '14:00', '2026-03-12', '16:00'],
+        ['BK-012', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00']
+      ],
+      new Date(2026, 2, 12)
+    );
+
+    runDailyCase(
+      '10. รายงานสรุปประจำวัน (Daily Summary: ขอ 3 ได้ 2 - 05:00 AM)',
+      [
+        mockHeaders,
+        ['BK-020', 'approved', 'ดร.ทดสอบ ขอสามได้สอง', 'สัมมนา', 'โครงการทดสอบหลายคัน', 'ศูนย์การประชุมฯ', 'ฮค-2222|กท-3333', 'พี่ต้น|พี่หนึ่ง', '2026-03-12', '08:30', '2026-03-12', '16:30']
+      ],
+      new Date(2026, 2, 12)
+    );
+
+    runDailyCase(
+      '11. รายงานสรุปประจำวัน (Daily Summary: งานข้ามวัน - 05:00 AM)',
+      [
+        mockHeaders,
+        ['BK-030', 'approved', 'ผศ.ดร.นพพร แพทย์รัตน์', 'อบรม', 'อบรมเชิงปฏิบัติการ', 'มหาวิทยาลัยสวนดุสิต กรุงเทพมหานคร', 'นข-5000', 'นายสมชาย', '2026-03-08', '09:00', '2026-03-10', '17:00'],
+        ['BK-031', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับคณะดูงาน', 'สนามบินดอนเมือง', 'ฮค-9000|กท-1111', 'พี่ยอด|พี่เอก', '2026-03-10', '06:00', '2026-03-12', '20:00']
+      ],
+      new Date(2026, 2, 10)
+    );
+
+    runDailyCase(
+      '12. รายงานสรุปประจำวัน (Daily Summary: ไม่มีงาน - 05:00 AM)',
+      [mockHeaders],
+      new Date(2026, 2, 12)
+    );
+
+  } catch (e) {
+    Logger.log('❌ runFullTelegramLogTest() FAILED: ' + e.message);
+    Logger.log(e.stack || '');
+  }
+
+  Logger.log('\n🏁 === สิ้นสุดการทดสอบระบบ V-Berry Diagnostics ===');
 }
 
 
