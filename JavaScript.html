@@ -2935,6 +2935,9 @@ const CalendarTooltip = {
     this.el.style.left = `${left}px`;
     this.el.classList.add('show');
   },
+  move(e) {
+    // Tooltip จะถูกวางตำแหน่งใน show() โดยอิงจาก e.target อยู่แล้ว ไม่จำเป็นต้องอัปเดตตำแหน่งตามเมาส์ตลอดเวลา
+  },
   hide() {
     if (this.el) this.el.classList.remove('show');
   }
