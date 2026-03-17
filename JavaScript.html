@@ -675,46 +675,81 @@ window.openSuspendModal = function(type, id, btn) {
     document.getElementById('suspend-title').innerHTML = type === 'driver' ? `🙋‍♂️ ระบุวันลา: ${escapeHtml(id)}` : `🛠 ส่งรถซ่อม: ${escapeHtml(id)}`;
     document.getElementById('suspend-form').reset();
     
-    // ตั้งค่า Default วันที่เริ่มและสิ้นสุดเป็น "วันนี้"
     const tzOffset = (new Date()).getTimezoneOffset() * 60000;
     const today = (new Date(Date.now() - tzOffset)).toISOString().split('T')[0];
     
     const sEl = document.getElementById('suspend-start');
     const eEl = document.getElementById('suspend-end');
-    
-    // 🍓 BERRY FIX: ยัด ISO เข้า dataset ทันที
     if (sEl) { sEl.value = today; sEl.dataset.iso = today; }
     if (eEl) { eEl.value = today; eEl.dataset.iso = today; }
     
-    // 🍓 สั่งให้ UI โชว์เป็น พ.ศ. สวยๆ
-    if (typeof syncAllThaiDateInputs === 'function') syncAllThaiDateInputs();
+    // 🍓 BERRY FIX: Reset Time & Quick Buttons
+    const stEl = document.getElementById('suspend-start-time');
+    const etEl = document.getElementById('suspend-end-time');
+    if (stEl) stEl.value = '';
+    if (etEl) etEl.value = '';
+    
+    const wrapper = document.getElementById('suspend-quick-time-wrapper');
+    if (wrapper) {
+        wrapper.querySelectorAll('.btn-quick-time').forEach(b => b.classList.remove('active'));
+        const allDayBtn = wrapper.querySelector('[data-type="allday"]');
+        if (allDayBtn) allDayBtn.classList.add('active');
+    }
 
+    if (typeof syncAllThaiDateInputs === 'function') syncAllThaiDateInputs();
     activeSuspendBtn = btn;
     openModalA11y('suspend-modal');
 };
 
+/* ANCHOR: availability submit validation */
 window.submitSuspend = async function(e) {
     e.preventDefault();
     const type = document.getElementById('suspend-type').value;
     const id = document.getElementById('suspend-id').value;
     
-    // 🍓 BERRY FIX: ดึงค่า ISO ไปส่งให้ Server ป้องกันบั๊กปี 2569 (AD)
     const sEl = document.getElementById('suspend-start');
     const eEl = document.getElementById('suspend-end');
     const start = sEl ? (sEl.dataset.iso || sEl.value) : '';
     const end = eEl ? (eEl.dataset.iso || eEl.value) : '';
-    
     const reason = document.getElementById('suspend-reason').value;
+
+    const stEl = document.getElementById('suspend-start-time');
+    const etEl = document.getElementById('suspend-end-time');
+    let startTime = stEl ? stEl.value : '';
+    let endTime = etEl ? etEl.value : '';
+
+    if ((startTime && !endTime) || (!startTime && endTime)) {
+        const target = !startTime ? stEl : etEl;
+        if (target) {
+            target.classList.add('shake');
+            target.style.borderColor = '#dc2626';
+            setTimeout(() => { target.classList.remove('shake'); target.style.borderColor = '#cbd5e1'; }, 500);
+        }
+        if (typeof showToast === 'function') showToast('กรุณาระบุเวลาให้ครบทั้งเวลาเริ่มและเวลาสิ้นสุดค่ะ', 'error');
+        return;
+    }
+    
+    if (!startTime && !endTime) {
+        startTime = '00:00';
+        endTime = '23:59';
+    }
 
     const submitBtn = e.target.querySelector('button[type="submit"]');
     setBtnLoading(submitBtn, true);
 
+    // 🍓 BERRY FIX: ดึงชื่อผู้บันทึกให้ครอบคลุมทุกกรณี (ป้องกันค่าว่าง)
+    let adminName = 'Admin';
+    if (window.currentUser) {
+        adminName = window.currentUser.displayName || window.currentUser.name || window.currentUser.username || 'Admin';
+    }
+
     try {
         const blockRes = await googleScriptRun('createAvailabilityBlock', {
             resourceType: type, resourceId: id,
-            startDate: start, startTime: '00:00',
-            endDate: end, endTime: '23:59',
-            reason: reason, createdBy: window.currentUser ? window.currentUser.name : 'Admin'
+            startDate: start, startTime: startTime,
+            endDate: end, endTime: endTime,
+            reason: reason, 
+            createdBy: adminName // 🍓 BERRY FIX: ใช้ตัวแปรที่หามาได้
         });
         
         if (!blockRes || !blockRes.ok) throw new Error(blockRes ? blockRes.error : 'Failed to create block');
@@ -722,7 +757,7 @@ window.submitSuspend = async function(e) {
         await executeToggle(type, id, false, activeSuspendBtn);
 
         closeModalA11y('suspend-modal');
-        showToast('บันทึกข้อมูลการพักงานลงปฏิทินเรียบร้อยแล้วค่ะ 🗓️', 'success');
+        showToast('บันทึกข้อมูลการระงับใช้งานเรียบร้อยแล้วค่ะ 🗓️', 'success');
         
         await googleScriptRun('apiRefreshDashboard'); 
         if (typeof loadCalendarView === 'function' && window.calendarState) {
@@ -734,6 +769,44 @@ window.submitSuspend = async function(e) {
         setBtnLoading(submitBtn, false);
     }
 };
+
+/* ANCHOR: wireSuspendQuickTimeButtonsOnce */
+function wireSuspendQuickTimeButtonsOnce() {
+  if (window.vberrySuspendQuickTimeWired) return;
+  window.vberrySuspendQuickTimeWired = true;
+
+  const wrapper = document.getElementById('suspend-quick-time-wrapper');
+  const stEl = document.getElementById('suspend-start-time');
+  const etEl = document.getElementById('suspend-end-time');
+  if (!wrapper || !stEl || !etEl) return;
+
+  const btns = wrapper.querySelectorAll('.btn-quick-time');
+  const clearActive = () => btns.forEach(b => b.classList.remove('active'));
+
+  btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      clearActive();
+      btn.classList.add('active');
+      const type = btn.dataset.type;
+
+      if (type === 'allday') {
+        stEl.value = ''; etEl.value = '';
+      } else if (type === 'morning') {
+        stEl.value = '08:30'; etEl.value = '12:00';
+      } else if (type === 'afternoon') {
+        stEl.value = '13:00'; etEl.value = '16:30';
+      }
+    });
+  });
+
+  const handleManualInput = () => clearActive();
+  stEl.addEventListener('input', handleManualInput);
+  etEl.addEventListener('input', handleManualInput);
+}
+// 🍓 BERRY FIX: Export ลง Global Scope ให้ safeCall หาเจอ
+window.wireSuspendQuickTimeButtonsOnce = wireSuspendQuickTimeButtonsOnce;
+
+
 
 window.executeToggle = async function(type, id, isActive, btn) {
     const originalContent = btn.innerHTML;
@@ -2580,6 +2653,7 @@ function initUiComponents() {
     safeCall('wireAvailabilityListeners', 'Availability Listeners');
     safeCall('wireVehicleCountClamp', 'Vehicle Count Clamp');
     safeCall('installSelfTestFloatingButton', 'Self-Test Button');
+    safeCall('wireSuspendQuickTimeButtonsOnce', 'Suspend Quick Time Buttons');
     
     console.log('✅ initUiComponents(): All phases complete.');
   };
@@ -2777,6 +2851,19 @@ function wireBookingFormSubmit() {
     }
 
     if (!form.checkValidity()) { form.reportValidity(); return; }
+
+    // 🍓 BERRY FIX: Time Validation (ป้องกันเวลาขัดแย้งกันในวันเดียวกัน)
+    const startDateVal = document.getElementById('booking-date')?.dataset?.iso || document.getElementById('booking-date')?.value || "";
+    const endDateVal   = document.getElementById('return-date')?.dataset?.iso || document.getElementById('return-date')?.value || "";
+    const startTimeVal = document.getElementById('booking-start')?.value || "";
+    const endTimeVal   = document.getElementById('booking-end')?.value || "";
+
+    if (startDateVal && endDateVal && startDateVal === endDateVal && startTimeVal && endTimeVal) {
+      if (endTimeVal <= startTimeVal) {
+        if (typeof showToast === 'function') showToast('เวลา "กลับ" ต้องมากกว่าเวลา "ไป" (สำหรับการเดินทางวันเดียวกัน)', 'error');
+        return;
+      }
+    }
 
     const submitBtn = document.querySelector('button[form="booking-form"]') || form.querySelector('button[type="submit"]');
     

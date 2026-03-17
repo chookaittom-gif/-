@@ -4105,4 +4105,37 @@ footer.footer .developer {
 @media (max-width: 768px) {
   .fuel-form-grid { grid-template-columns: 1fr; gap: 0.9rem; }
 }
+
+/* ANCHOR: CSS quick time buttons */
+.quick-time-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.btn-quick-time {
+  flex: 1 1 calc(33.333% - 8px);
+  min-width: 80px;
+  min-height: 44px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  border-radius: 8px;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-quick-time:active { transform: scale(0.96); }
+.btn-quick-time.active {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #93c5fd;
+  box-shadow: 0 4px 10px rgba(37, 99, 235, 0.15);
+}
 </style>

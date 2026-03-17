@@ -1114,16 +1114,35 @@
             <input type="hidden" id="suspend-type">
             <input type="hidden" id="suspend-id">
             
+          <!-- ANCHOR: HTML quick time buttons suspend -->
             <div class="form-group">
-              <label style="font-size: 0.95rem; color: #475569; font-weight: 700;">เริ่มตั้งแต่วันที่ *</label>
-              <input type="date" id="suspend-start" class="form-control" required style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 100%;">
+              <label style="font-size: 0.95rem; color: #475569; font-weight: 700;">เริ่มตั้งแต่ (วันที่ - เวลา) *</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="date" id="suspend-start" class="form-control" required style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 60%;">
+                <input type="time" id="suspend-start-time" class="form-control" style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 40%;">
+              </div>
             </div>
             
             <div class="form-group" style="margin-top: 12px;">
-              <label style="font-size: 0.95rem; color: #475569; font-weight: 700;">ถึงวันที่ *</label>
-              <input type="date" id="suspend-end" class="form-control" required style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 100%;">
+              <label style="font-size: 0.95rem; color: #475569; font-weight: 700;">ถึง (วันที่ - เวลา) *</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="date" id="suspend-end" class="form-control" required style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 60%;">
+                <input type="time" id="suspend-end-time" class="form-control" style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 40%;">
+              </div>
             </div>
-            
+
+            <!-- ปุ่มเลือกเวลาด่วน -->
+            <div class="form-group" id="suspend-quick-time-wrapper" style="margin-top: 12px;">
+              <div class="quick-time-grid">
+                <button type="button" class="btn-quick-time active" data-type="allday">ทั้งวัน</button>
+                <button type="button" class="btn-quick-time" data-type="morning">ครึ่งเช้า</button>
+                <button type="button" class="btn-quick-time" data-type="afternoon">ครึ่งบ่าย</button>
+              </div>
+              <small style="color:#8b5cf6; margin-top: 6px; display:block; font-size: 0.8rem;">
+                * ถ้าไม่ระบุเวลา ระบบจะนับเป็นทั้งวัน (00:00 - 23:59 น.)
+              </small>
+            </div>
+
             <div class="form-group" style="margin-top: 12px;">
               <label style="font-size: 0.95rem; color: #475569; font-weight: 700;">สาเหตุ/หมายเหตุ *</label>
               <input type="text" id="suspend-reason" class="form-control" placeholder="เช่น ลากิจ, เข้าศูนย์ซ่อม" required style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 100%;">

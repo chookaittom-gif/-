@@ -7378,22 +7378,53 @@ function isNowBetween_(now, startAt, endAt) {
   return now.getTime() >= startAt.getTime() && now.getTime() <= endAt.getTime();
 }
 
+/* ANCHOR: buildRadarContext_ */
 function buildRadarContext_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
   var now = getServerNowBangkok_();
+
+  // STEP1: log server now Bangkok
+  Logger.log('[Radar] STEP1 serverNow(BKK): ' + Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss'));
 
   function getRadarDateTime_(dISO, tStr, defaultTime) {
     if (!dISO) return null;
     var cleanISO = parseDateToISO_(dISO);
     if (!cleanISO) return null;
 
-    var cleanTime = parseTimeSafe_(tStr) || defaultTime || '00:00';
+    // 🍓 BERRY FIX v3: จัดการ Date object และทศนิยมบอกเวลา (Serial Time) จาก Google Sheets
+    var cleanTime = defaultTime || '00:00';
+    if (tStr != null && tStr !== '') {
+      if (tStr instanceof Date && !isNaN(tStr.getTime())) {
+        // Google Sheets ส่งเวลาเป็น Date object → extract HH:mm ตรงๆ
+        cleanTime = Utilities.formatDate(tStr, tz, 'HH:mm');
+      } else if (typeof tStr === 'number' && isFinite(tStr)) {
+        var num = tStr % 1;
+        var tm = Math.round(num * 24 * 60);
+        if (tm >= 1440) tm = 1439;
+        if (tm < 0) tm = 0;
+        var hh = Math.floor(tm / 60);
+        var mi = tm % 60;
+        cleanTime = (hh < 10 ? '0' : '') + hh + ':' + (mi < 10 ? '0' : '') + mi;
+      } else {
+        var rawTime = String(tStr).trim();
+        if (rawTime) {
+          cleanTime = parseTimeSafe_(rawTime);
+          // Guard: ถ้า parseTimeSafe คืน '00:00' จาก input ที่ไม่ใช่เวลา 00:xx จริง
+          if (cleanTime === '00:00' && !/^0(?:$|\.)|^:0|^00/.test(rawTime) && rawTime !== '0') {
+            cleanTime = defaultTime || '00:00';
+          }
+        }
+      }
+    }
+
     var fullStr = cleanISO + ' ' + cleanTime + ':00';
-    return Utilities.parseDate(fullStr, tz, 'yyyy-MM-dd HH:mm:ss');
+    var parsedReturn = Utilities.parseDate(fullStr, tz, 'yyyy-MM-dd HH:mm:ss');
+    Logger.log('[Radar] getRadarDateTime_ parsed: dISO=' + String(dISO) + ' tStr=' + String(tStr) + ' -> ' + Utilities.formatDate(parsedReturn, tz, 'yyyy-MM-dd HH:mm:ss'));
+    return parsedReturn;
   }
 
-  var availBlocks = [];
+  var availBlocks =[];
   var shAvail = ss.getSheetByName('Availability');
   if (shAvail && shAvail.getLastRow() > 1) {
     var avVals = shAvail.getRange(2, 1, shAvail.getLastRow() - 1, shAvail.getLastColumn()).getValues();
@@ -7408,6 +7439,12 @@ function buildRadarContext_() {
 
       if (!resourceType || !resourceId || !startAt || !endAt) continue;
 
+      // STEP5: log active repair/leave block
+      Logger.log('[Radar] STEP5 availBlock: type=' + resourceType + ' id=' + resourceId +
+        ' start=' + Utilities.formatDate(startAt, tz, 'yyyy-MM-dd HH:mm') +
+        ' end=' + Utilities.formatDate(endAt, tz, 'yyyy-MM-dd HH:mm') +
+        ' reason=' + String(row[6] || ''));
+
       availBlocks.push({
         resourceType: resourceType,
         resourceId: resourceId,
@@ -7418,7 +7455,7 @@ function buildRadarContext_() {
     }
   }
 
-  var approvedBookings = [];
+  var approvedBookings =[];
   var shData = ss.getSheetByName('Data');
   if (shData && shData.getLastRow() > 1) {
     var headers = shData.getRange(1, 1, 1, shData.getLastColumn()).getValues()[0].map(function(h) {
@@ -7436,6 +7473,17 @@ function buildRadarContext_() {
       var endAt2 = getRadarDateTime_(row2[idx.endDate] || row2[idx.startDate], row2[idx.endTime], '23:59');
       if (!startAt2 || !endAt2) continue;
 
+      // STEP2/STEP3: log approved bookings with parsed startAt/endAt
+      Logger.log('[Radar] STEP2 booking: id=' + String(row2[idx.bookingId] || '') +
+        ' status=' + statusKey +
+        ' driver=' + String(row2[idx.driver] || '') +
+        ' vehicle=' + String(row2[idx.vehicle] || ''));
+      Logger.log('[Radar] STEP3 booking parsed: startAt=' + Utilities.formatDate(startAt2, tz, 'yyyy-MM-dd HH:mm') +
+        ' endAt=' + Utilities.formatDate(endAt2, tz, 'yyyy-MM-dd HH:mm') +
+        ' rawEndTime=' + String(row2[idx.endTime]) +
+        ' rawEndTimeType=' + typeof row2[idx.endTime] +
+        ' isDate=' + (row2[idx.endTime] instanceof Date));
+
       approvedBookings.push({
         bookingId: String(row2[idx.bookingId] || '').trim(),
         status: statusKey,
@@ -7448,6 +7496,10 @@ function buildRadarContext_() {
       });
     }
   }
+
+  // STEP2: log total loaded
+  Logger.log('[Radar] STEP2 loaded: availBlocks=' + availBlocks.length + ' approvedBookings=' + approvedBookings.length);
+  Logger.log('[Radar] DEBUG Server Context: currentTime = ' + Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss'));
 
   return {
     now: now,
@@ -7498,6 +7550,7 @@ function isBookingToday(start, end, now) {
   return isSameDay(s, n) || isSameDay(e, n) || (n.getTime() >= s.getTime() && n.getTime() <= e.getTime());
 }
 
+/* ANCHOR: calculateVehicleStatus */
 function calculateVehicleStatus(plate, ctx) {
   var normPlate = normalizeRadarPlate_(plate);
   var now = (ctx && ctx.now instanceof Date) ? ctx.now : new Date();
@@ -7517,10 +7570,6 @@ function calculateVehicleStatus(plate, ctx) {
 
     if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
 
-    if (e.getTime() < s.getTime()) {
-      e.setDate(e.getDate() + 1);
-    }
-
     return { start: s, end: e };
   }
 
@@ -7529,30 +7578,20 @@ function calculateVehicleStatus(plate, ctx) {
     if (!range) return false;
 
     var nowMs = now.getTime();
-    return nowMs >= range.start.getTime() && nowMs <= range.end.getTime();
+    var isOverlap = nowMs >= range.start.getTime() && nowMs <= range.end.getTime();
+    
+    Logger.log('[Radar] DEBUG isTargetActiveRightNow: now=' + Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss') + 
+               ' rangeStart=' + Utilities.formatDate(range.start, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss') + 
+               ' rangeEnd=' + Utilities.formatDate(range.end, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss') + 
+               ' --> overlap: ' + isOverlap);
+               
+    return isOverlap;
   }
 
   function isBookingBusyForRadarToday(startAt, endAt) {
-    var range = normalizeRange(startAt, endAt);
-    if (!range) return false;
-
-    var s = range.start;
-    var e = range.end;
-    var nowMs = now.getTime();
-
-    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
-    var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
-
-    var startMs = s.getTime();
-    var endMs = e.getTime();
-
-    if (startMs > todayEnd || endMs < todayStart) return false;
-
-    if (startMs > nowMs && startMs <= todayEnd) return true;
-    if (nowMs >= startMs && nowMs <= endMs) return true;
-    if (startMs < todayStart && endMs >= nowMs) return true;
-
-    return false;
+    // 🍓 BERRY FIX: เปลี่ยนให้เช็คตามเวลาจริง (Real-time overlap)
+    // แทนการเหมาทั้งวัน ป้องกันสถานะ "ติดภารกิจ" ค้างหลังหมดเวลาจอง
+    return isTargetActiveRightNow(startAt, endAt);
   }
 
   function buildRadarStatus(status, label, color, job, fallbackJob) {
@@ -7565,7 +7604,7 @@ function calculateVehicleStatus(plate, ctx) {
   }
 
   // 1) ส่งซ่อม: ตรวจตามเวลาจริง
-  var activeRepair = (ctx.availBlocks || []).find(function(b) {
+  var activeRepair = (ctx.availBlocks ||[]).find(function(b) {
     return b.resourceType === 'vehicle' &&
       normalizeRadarPlate_(b.resourceId) === normPlate &&
       isTargetActiveRightNow(b.startAt, b.endAt);
@@ -7581,12 +7620,15 @@ function calculateVehicleStatus(plate, ctx) {
     );
   }
 
-  // 2) ติดภารกิจ: ก่อนเริ่มงานวันนี้ / ระหว่างงาน
-  var busyBooking = (ctx.approvedBookings || []).find(function(b) {
-    if (!isBookingBusyForRadarToday(b.startAt, b.endAt)) return false;
-
+  // 2) ติดภารกิจ: เฉพาะช่วงเวลาจริงที่ overlap กับ now เท่านั้น (real-time)
+  var busyBooking = (ctx.approvedBookings ||[]).find(function(b) {
     var plates = splitPlateValues(b.vehicleRaw || b.vehicle || b.plate || '');
-    return plates.indexOf(normPlate) > -1;
+    if (plates.indexOf(normPlate) === -1) return false;
+
+    var isOverlap = isBookingBusyForRadarToday(b.startAt, b.endAt);
+    // STEP4: Overlap result by booking
+    Logger.log('[Radar] STEP4 Overlap Result Vehicle: plate=' + normPlate + ' booking=' + b.bookingId + ' overlap=' + isOverlap + ' (start=' + Utilities.formatDate(b.startAt, "Asia/Bangkok", "HH:mm") + ' end=' + Utilities.formatDate(b.endAt, "Asia/Bangkok", "HH:mm") + ')');
+    return isOverlap;
   });
 
   if (busyBooking) {
@@ -7595,7 +7637,7 @@ function calculateVehicleStatus(plate, ctx) {
       'ติดภารกิจ',
       'yellow',
       busyBooking.destination || busyBooking.workName,
-      'มีภารกิจวันนี้'
+      'มีภารกิจตอนนี้'
     );
   }
 
@@ -7628,10 +7670,6 @@ function calculateDriverStatus(driverName, ctx) {
 
     if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
 
-    if (e.getTime() < s.getTime()) {
-      e.setDate(e.getDate() + 1);
-    }
-
     return { start: s, end: e };
   }
 
@@ -7644,26 +7682,8 @@ function calculateDriverStatus(driverName, ctx) {
   }
 
   function isBookingBusyForRadarToday(startAt, endAt) {
-    var range = normalizeRange(startAt, endAt);
-    if (!range) return false;
-
-    var s = range.start;
-    var e = range.end;
-    var nowMs = now.getTime();
-
-    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
-    var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
-
-    var startMs = s.getTime();
-    var endMs = e.getTime();
-
-    if (startMs > todayEnd || endMs < todayStart) return false;
-
-    if (startMs > nowMs && startMs <= todayEnd) return true;
-    if (nowMs >= startMs && nowMs <= endMs) return true;
-    if (startMs < todayStart && endMs >= nowMs) return true;
-
-    return false;
+    // เช็คตามเวลาจริงเท่านั้น
+    return isTargetActiveRightNow(startAt, endAt);
   }
 
   function buildRadarStatus(status, label, color, job, fallbackJob) {
@@ -7692,12 +7712,15 @@ function calculateDriverStatus(driverName, ctx) {
     );
   }
 
-  // 2) ติดภารกิจ: ก่อนเริ่มงานวันนี้ / ระหว่างงาน
+  // 2) ติดภารกิจ: เฉพาะงานที่กำลัง overlap ตอนนี้
   var busyBooking = (ctx.approvedBookings || []).find(function(b) {
-    if (!isBookingBusyForRadarToday(b.startAt, b.endAt)) return false;
-
     var drivers = splitDriverNames(b.driverRaw || b.driver || b.driverName || '');
-    return drivers.indexOf(name) > -1;
+    if (drivers.indexOf(name) === -1) return false;
+
+    var isOverlap = isBookingBusyForRadarToday(b.startAt, b.endAt);
+    // STEP4: Overlap result by booking
+    Logger.log('[Radar] STEP4 Overlap Result Driver: name=' + name + ' booking=' + b.bookingId + ' overlap=' + isOverlap + ' (start=' + Utilities.formatDate(b.startAt, "Asia/Bangkok", "HH:mm") + ' end=' + Utilities.formatDate(b.endAt, "Asia/Bangkok", "HH:mm") + ')');
+    return isOverlap;
   });
 
   if (busyBooking) {
@@ -7706,7 +7729,7 @@ function calculateDriverStatus(driverName, ctx) {
       'ติดภารกิจ',
       'yellow',
       busyBooking.destination || busyBooking.workName,
-      'มีภารกิจวันนี้'
+      'มีภารกิจตอนนี้'
     );
   }
 
@@ -7726,6 +7749,8 @@ function buildRadarData() {
 
   var drivers = VB_RADAR_DRIVER_MASTER.map(function(name) {
     var st = calculateDriverStatus(name, ctx);
+    // STEP6: log final driver status
+    Logger.log('[Radar] STEP6 driver: ' + name + ' → status=' + st.status + ' label=' + st.label + ' job=' + st.job);
     return {
       name: name,
       active: true,
@@ -7738,6 +7763,8 @@ function buildRadarData() {
 
   var vehicles = VB_RADAR_VEHICLE_MASTER.map(function(plate) {
     var st = calculateVehicleStatus(plate, ctx);
+    // STEP6: log final vehicle status
+    Logger.log('[Radar] STEP6 vehicle: ' + plate + ' → status=' + st.status + ' label=' + st.label + ' job=' + st.job);
     return {
       plate: plate,
       active: true,
@@ -7760,7 +7787,9 @@ function buildRadarData() {
 
 function apiGetLiveStatus() {
   try {
-    return buildRadarData();
+    var data = buildRadarData();
+    Logger.log('apiGetLiveStatus Success: ' + JSON.stringify(data));
+    return data;
   } catch (e) {
     Logger.log('apiGetLiveStatus Error: ' + (e && e.stack ? e.stack : e));
     return { ok: false, error: e.message };
@@ -8049,6 +8078,90 @@ function runFullTelegramLogTest() {
   Logger.log('\n🏁 === สิ้นสุดการทดสอบระบบ V-Berry Diagnostics ===');
 }
 
+function selfTestApiGetLiveStatus() {
+  Logger.log('🚀 === START: selfTestApiGetLiveStatus ===');
+  var res = apiGetLiveStatus();
+  Logger.log('RESULT: ' + JSON.stringify(res, null, 2));
+  Logger.log('🏁 === END: selfTestApiGetLiveStatus ===');
+}
+
+function selfTestRadarRealtimeStatus_() {
+  Logger.log('🚀 === START: selfTestRadarRealtimeStatus_ ===');
+  
+  var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+  var now = new Date(2026, 2, 17, 18, 49, 0); // 17 Mar 2026 18:49
+  
+  // จำลอง data ที่มาจาก Sheet เพื่อทดสอบ getRadarDateTime_ ภายใน calculate
+  function getRadarDateTime_(dISO, tStr, defaultTime) {
+    if (!dISO) return null;
+    var cleanISO = parseDateToISO_(dISO);
+    
+    var cleanTime = defaultTime || '00:00';
+    if (tStr != null && tStr !== '') {
+      if (tStr instanceof Date && !isNaN(tStr.getTime())) {
+        cleanTime = Utilities.formatDate(tStr, tz, 'HH:mm');
+      } else if (typeof tStr === 'number' && isFinite(tStr)) {
+        var num = tStr % 1;
+        var tm = Math.round(num * 24 * 60);
+        if (tm >= 1440) tm = 1439;
+        if (tm < 0) tm = 0;
+        var hh = Math.floor(tm / 60);
+        var mi = tm % 60;
+        cleanTime = (hh < 10 ? '0' : '') + hh + ':' + (mi < 10 ? '0' : '') + mi;
+      } else {
+        var rawTime = String(tStr).trim();
+        if (rawTime) {
+          cleanTime = parseTimeSafe_(rawTime);
+          if (cleanTime === '00:00' && !/^0(?:$|\.)|^:0|^00/.test(rawTime) && rawTime !== '0') {
+            cleanTime = defaultTime || '00:00';
+          }
+        }
+      }
+    }
+    var fullStr = cleanISO + ' ' + cleanTime + ':00';
+    return Utilities.parseDate(fullStr, tz, 'yyyy-MM-dd HH:mm:ss');
+  }
+
+  // ทดสอบเคสที่เวลาสิ้นสุดเป็นทศนิยม (เช่น 16:30 คือ 0.6875)
+  // วันที่ 17 มีนาคม 2026
+  var sDateRaw = new Date(2026, 2, 17);
+  var sTimeRaw = 0.33333333; // ~08:00
+  var eTimeRaw = 0.6875;     // 16:30
+
+  var startAt = getRadarDateTime_(sDateRaw, sTimeRaw, '00:00');
+  var endAt = getRadarDateTime_(sDateRaw, eTimeRaw, '23:59');
+
+  Logger.log('[TEST] parsed startAt: ' + Utilities.formatDate(startAt, tz, 'yyyy-MM-dd HH:mm:ss'));
+  Logger.log('[TEST] parsed endAt: ' + Utilities.formatDate(endAt, tz, 'yyyy-MM-dd HH:mm:ss'));
+
+  var mockCtx = {
+    now: now,
+    tz: tz,
+    availBlocks: [],
+    approvedBookings: [{
+      bookingId: 'MOCK-1',
+      status: 'approved',
+      driverRaw: 'ปริญญา ก้อนสัมฤทธิ์',
+      vehicleRaw: 'ฮล-466',
+      startAt: startAt,
+      endAt: endAt
+    }]
+  };
+
+  var vStatus = calculateVehicleStatus('ฮล-466', mockCtx);
+  var dStatus = calculateDriverStatus('ปริญญา ก้อนสัมฤทธิ์', mockCtx);
+
+  // ตอน 18:49 ต้องพ้นเวลาจอง 16:30 ไปแล้ว จะต้องขึ้น "พร้อม"
+  if (vStatus.status === 'ready' && dStatus.status === 'ready') {
+    Logger.log('✅ PASS | Vehicle and Driver returned to Ready after job ended (Real-time overlap).');
+  } else {
+    Logger.log('❌ FAIL | Expected Ready, but got Vehicle:' + vStatus.status + ' Driver:' + dStatus.status);
+    throw new Error('Real-time overlap logic failed (Timezone / Decimal Time parsing bug).');
+  }
+  
+  Logger.log('🏁 === END: selfTestRadarRealtimeStatus_ ===');
+}
+
 function selfTestRadarStatusFlow() {
   Logger.log('🚀 === SELF TEST: RADAR STATUS FLOW START ===');
 
@@ -8096,16 +8209,17 @@ function selfTestRadarStatusFlow() {
   var vehicleBefore = calculateVehicleStatus(testVehicle, ctxBefore);
   var driverBefore = calculateDriverStatus(testDriver, ctxBefore);
 
+  // 🍓 BERRY FIX v2: ก่อนเริ่มงานต้อง ready ไม่ใช่ busy (real-time overlap)
   assertEqual(
     'STEP 1 Vehicle Before Start',
     vehicleBefore.status,
-    'busy',
+    'ready',
     JSON.stringify(vehicleBefore)
   );
   assertEqual(
     'STEP 2 Driver Before Start',
     driverBefore.status,
-    'busy',
+    'ready',
     JSON.stringify(driverBefore)
   );
 
