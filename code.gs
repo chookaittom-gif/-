@@ -8,8 +8,7 @@ const SHEET_INSURANCE   = 'Insurance';
 const SHEET_MAINTENANCE = 'Maintenance';
 const SHEET_LOG         = 'Log';
 const SHEET_VEHICLES    = 'Vehicles'; 
-const SHEET_AVAILABILITY = 'Availability'; // 🍓 [BERRY ADD] เพิ่มแค่ชื่อชีตก็พอค่ะ
-
+const SHEET_AVAILABILITY = 'Availability'; 
 const HEADER_ROW        = 1;
 const MAX_COLS          = 22;
 const CACHE_SEC         = 120;
@@ -3204,10 +3203,12 @@ function checkResourcesConflict_(sh, idx, sDate, sTime, eDate, eTime, excludeId,
         const row = data[r];
         const rowId = String(row[idx.bookingId] || '').trim();
         
+       // ANCHOR
         // ข้ามตัวเอง และ ข้ามรายการที่ยังไม่ Approved
         if (rowId === String(excludeId)) continue;
         const status = getStatusKeySafe_(row[idx.status]);
-        if (status !== 'approved') continue;
+        // 🍓 BERRY FIX: เพิ่มสถานะอนุมัติด่วน เพื่อล็อกไม่ให้คิวชนกัน
+        if (status !== 'approved' && status !== 'driver_special_approved') continue;
 
         // เช็คเวลาชนกัน
         const rStartISO = parseDateToISO_(row[idx.startDate]);
@@ -3802,9 +3803,10 @@ function getUsageCountsThisMonth_() {
       if (!(dt instanceof Date) || isNaN(dt.getTime())) continue;
       if (dt < start || dt >= end) continue;
 
+      // ANCHOR
       var s = (ixStatus !== undefined) ? String(row[ixStatus] || '').trim().toUpperCase() : '';
-      // นับเฉพาะงานที่อนุมัติ/ใช้งานจริง
-      if (s && s !== 'A' && s !== 'APPROVED' && s !== 'อนุมัติ') continue;
+      // 🍓 BERRY FIX: นับรวมงานที่อนุมัติกรณีพิเศษเข้าสถิติด้วย
+      if (s && s !== 'A' && s !== 'APPROVED' && s !== 'อนุมัติ' && s !== 'DRIVER_SPECIAL_APPROVED' && s.indexOf('พิเศษ') === -1) continue;
 
       counts[plate] = (counts[plate] || 0) + 1;
     }
@@ -3849,12 +3851,18 @@ function apiGetDashboardData() {
       cancelled: 0
     };
 
+   // ANCHOR
     for (var r = 1; r < vs.length; r++) {
       var row = vs[r];
       if (!row) continue;
 
       var rawStatus = row[ixStatus];
       var norm = normalizeStatus_(rawStatus);  // ใช้ mapping เดิมในระบบ
+
+      // 🍓 BERRY FIX: รวบกรณีพิเศษให้กลายเป็น approved ใน Dashboard เพื่อสถิติที่ตรงกัน
+      if (norm === 'driver_special_approved') {
+          norm = 'approved';
+      }
 
       if (counts.hasOwnProperty(norm)) {
         counts[norm] = (counts[norm] || 0) + 1;
@@ -5258,12 +5266,14 @@ function getAvailableVehicles(payload) {
     const busyPlatesMap = {}; 
     const busyDriversMap = {}; 
 
+// ANCHOR
     for (const row of values) {
       const rowId = clean(row[idx.bookingId]);
       if (excludeId && rowId === excludeId) continue; 
 
       const status = getStatusKeySafe_(row[idx.status]);
-      if (status === 'approved' || status === 'pending') {
+      // 🍓 BERRY FIX: เพิ่มเช็ค driver_special_approved จะได้ตัดรถคันนี้ออกจากรายการรถว่าง
+      if (status === 'approved' || status === 'pending' || status === 'driver_special_approved') {
         const rStartISO = parseDateToISO_(row[idx.startDate]);
         const bStart = parseDateTime_(rStartISO, parseTimeSafe_(row[idx.startTime]));
         const bEnd = parseDateTime_(parseDateToISO_(row[idx.endDate]) || rStartISO, parseTimeSafe_(row[idx.endTime]));
@@ -6435,15 +6445,17 @@ function getRealTimeAvailableCount(arg1, arg2, arg3) {
       const idx = headerIndex_(headers);
       const lastRow = sh.getLastRow();
       
+    // ANCHOR
       if (lastRow > 1) {
-        // อ่านข้อมูลเฉพาะคอลัมน์ที่จำเป็นเพื่อความเร็ว (Load ทั้งหมดอาจช้าถ้าข้อมูลเยอะ)
+        // อ่านข้อมูลเฉพาะคอลัมน์ที่จำเป็นเพื่อความเร็ว
         const data = sh.getRange(2, 1, lastRow - 1, headers.length).getValues();
         
         for (let i = 0; i < data.length; i++) {
           const row = data[i];
           const status = getStatusKeySafe_(row[idx.status]);
           
-          if (status !== 'approved') continue;
+          // 🍓 BERRY FIX: เพิ่มเช็ค driver_special_approved
+          if (status !== 'approved' && status !== 'driver_special_approved') continue;
 
           const plateStr = String(row[idx.vehicle] || '').trim();
           if (!plateStr) continue;
@@ -7136,6 +7148,7 @@ function claimBooking(payload) {
   };
 }
 
+// ANCHOR
 function specialApproveBooking(payload) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) {
@@ -7154,14 +7167,16 @@ function specialApproveBooking(payload) {
     if (!data || data.length < 2) throw new Error('ไม่พบข้อมูลการจอง');
 
     var h = data[0].map(function(x) { return String(x || '').trim(); });
+    // 🍓 BERRY FIX: ใช้ระบบ Map หัวคอลัมน์อัจฉริยะ ป้องกันบั๊กหาคอลัมน์ไม่เจอ
+    var idxMap = headerIndex_(h);
     var idx = {
-      bid: h.indexOf('Booking ID'),
-      st: h.indexOf('สถานะ'),
-      v: h.indexOf('เลขทะเบียนรถ'),
-      d: h.indexOf('พนักงานขับรถ')
+      bid: idxMap.bookingId,
+      st: idxMap.status,
+      v: idxMap.vehicle,
+      d: idxMap.driver
     };
 
-    if (idx.bid < 0 || idx.st < 0 || idx.v < 0 || idx.d < 0) {
+    if (idx.bid === undefined || idx.st === undefined || idx.v === undefined || idx.d === undefined) {
       throw new Error('โครงสร้างชีต Data ไม่ครบคอลัมน์สำคัญ');
     }
 
@@ -7299,7 +7314,7 @@ function checkVehicleAvailability(plate, sd, st, ed, et) {
   return _checkAvailabilityOverlap('vehicle', plate, rs, re);
 }
 
-const VB_RADAR_DRIVER_MASTER = [
+var VB_RADAR_DRIVER_MASTER = [
   'ชัชวาลย์ วงศ์มั่น',
   'ประเสริฐ หน่อแก้ว',
   'ปรีชา ถวิลเวช',
@@ -7307,7 +7322,7 @@ const VB_RADAR_DRIVER_MASTER = [
   'อภิรัฐวุฒิ คณารักษ์'
 ];
 
-const VB_RADAR_VEHICLE_MASTER = [
+var VB_RADAR_VEHICLE_MASTER = [
   'ฮล-466',
   'ฮค-4964',
   '1นช-6112',
@@ -7363,32 +7378,31 @@ function isNowBetween_(now, startAt, endAt) {
   return now.getTime() >= startAt.getTime() && now.getTime() <= endAt.getTime();
 }
 
-// ANCHOR: buildRadarContext_
 function buildRadarContext_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var tz = 'Asia/Bangkok';
-  var now = new Date(); // เวลาปัจจุบันระดับ Server
+  var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+  var now = getServerNowBangkok_();
 
-  // Helper สำหรับแปลง Date/Time ให้ล็อกอยู่ใน Timezone BKK ป้องกันเวลาเพี้ยน
   function getRadarDateTime_(dISO, tStr, defaultTime) {
-      if (!dISO) return null;
-      var cleanISO = parseDateToISO_(dISO);
-      if (!cleanISO) return null;
-      var cleanTime = parseTimeSafe_(tStr) || defaultTime;
-      var fullStr = cleanISO + ' ' + cleanTime + ':00';
-      return Utilities.parseDate(fullStr, tz, 'yyyy-MM-dd HH:mm:ss');
+    if (!dISO) return null;
+    var cleanISO = parseDateToISO_(dISO);
+    if (!cleanISO) return null;
+
+    var cleanTime = parseTimeSafe_(tStr) || defaultTime || '00:00';
+    var fullStr = cleanISO + ' ' + cleanTime + ':00';
+    return Utilities.parseDate(fullStr, tz, 'yyyy-MM-dd HH:mm:ss');
   }
 
-  var availBlocks =[];
+  var availBlocks = [];
   var shAvail = ss.getSheetByName('Availability');
   if (shAvail && shAvail.getLastRow() > 1) {
     var avVals = shAvail.getRange(2, 1, shAvail.getLastRow() - 1, shAvail.getLastColumn()).getValues();
+
     for (var i = 0; i < avVals.length; i++) {
       var row = avVals[i];
       var resourceType = String(row[0] || '').trim().toLowerCase();
       var resourceId = String(row[1] || '').trim();
-      
-      // อ้างอิง index ตามหัวคอลัมน์มาตรฐาน: 0=Type, 1=Id, 2=startD, 3=startT, 4=endD, 5=endT, 6=Reason
+
       var startAt = getRadarDateTime_(row[2], row[3], '00:00');
       var endAt = getRadarDateTime_(row[4] || row[2], row[5], '23:59');
 
@@ -7396,7 +7410,7 @@ function buildRadarContext_() {
 
       availBlocks.push({
         resourceType: resourceType,
-        resourceId: resourceType === 'driver' ? normalizeRadarName_(resourceId) : normalizeRadarPlate_(resourceId),
+        resourceId: resourceId,
         startAt: startAt,
         endAt: endAt,
         reason: String(row[6] || '').trim()
@@ -7404,10 +7418,12 @@ function buildRadarContext_() {
     }
   }
 
-  var approvedBookings =[];
+  var approvedBookings = [];
   var shData = ss.getSheetByName('Data');
   if (shData && shData.getLastRow() > 1) {
-    var headers = shData.getRange(1, 1, 1, shData.getLastColumn()).getValues()[0].map(function(h) { return String(h || '').trim(); });
+    var headers = shData.getRange(1, 1, 1, shData.getLastColumn()).getValues()[0].map(function(h) {
+      return String(h || '').trim();
+    });
     var idx = headerIndex_(headers);
     var dataVals = shData.getRange(2, 1, shData.getLastRow() - 1, shData.getLastColumn()).getValues();
 
@@ -7418,14 +7434,13 @@ function buildRadarContext_() {
 
       var startAt2 = getRadarDateTime_(row2[idx.startDate], row2[idx.startTime], '00:00');
       var endAt2 = getRadarDateTime_(row2[idx.endDate] || row2[idx.startDate], row2[idx.endTime], '23:59');
-      
       if (!startAt2 || !endAt2) continue;
 
       approvedBookings.push({
         bookingId: String(row2[idx.bookingId] || '').trim(),
         status: statusKey,
-        driver: normalizeRadarName_(row2[idx.driver]),
-        vehicle: normalizeRadarPlate_(row2[idx.vehicle]),
+        driverRaw: String(row2[idx.driver] || '').trim(),
+        vehicleRaw: String(row2[idx.vehicle] || '').trim(),
         destination: String(row2[idx.destination] || '').trim(),
         workName: String(row2[idx.workName] || '').trim(),
         startAt: startAt2,
@@ -7434,7 +7449,6 @@ function buildRadarContext_() {
     }
   }
 
-  // 🍓 BERRY FIX: ตัดการส่งค่า Global Toggle ทิ้ง บังคับให้ใช้เวลาจาก Sheet เท่านั้น
   return {
     now: now,
     tz: tz,
@@ -7443,96 +7457,303 @@ function buildRadarContext_() {
   };
 }
 
-// ANCHOR: calculateVehicleStatus
+function isBookingActiveNow(start, end, now) {
+  if (!start || !end || !now) return false;
+
+  var s = new Date(start);
+  var e = new Date(end);
+  var n = new Date(now);
+
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || isNaN(n.getTime())) return false;
+
+  // FIX: handle end < start (ข้ามวัน / ข้อมูลเวลาสลับ)
+  if (e.getTime() < s.getTime()) {
+    e.setDate(e.getDate() + 1);
+  }
+
+  return n.getTime() >= s.getTime() && n.getTime() <= e.getTime();
+}
+
+function isSameDay(dateA, dateB) {
+  if (!dateA || !dateB) return false;
+  return dateA.getFullYear() === dateB.getFullYear() &&
+         dateA.getMonth() === dateB.getMonth() &&
+         dateA.getDate() === dateB.getDate();
+}
+
+function isBookingToday(start, end, now) {
+  if (!start || !end || !now) return false;
+
+  var s = new Date(start);
+  var e = new Date(end);
+  var n = new Date(now);
+
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || isNaN(n.getTime())) return false;
+
+  // FIX: handle end < start (ข้ามวัน / ข้อมูลเวลาสลับ)
+  if (e.getTime() < s.getTime()) {
+    e.setDate(e.getDate() + 1);
+  }
+
+  return isSameDay(s, n) || isSameDay(e, n) || (n.getTime() >= s.getTime() && n.getTime() <= e.getTime());
+}
+
 function calculateVehicleStatus(plate, ctx) {
   var normPlate = normalizeRadarPlate_(plate);
-  var now = ctx.now;
+  var now = (ctx && ctx.now instanceof Date) ? ctx.now : new Date();
 
-  function isTargetActive(startAt, endAt) {
-    if (!startAt || !endAt) return false;
-    // กฎ: เวลาปัจจุบัน ต้องอยู่ระหว่าง วันเวลาเริ่มต้น และ สิ้นสุด เท่านั้น
-    return now.getTime() >= startAt.getTime() && now.getTime() <= endAt.getTime();
+  function splitPlateValues(raw) {
+    return String(raw || '')
+      .split(/[,\n|\/]+/)
+      .map(function(x) { return normalizeRadarPlate_(x); })
+      .filter(function(x) { return x; });
   }
 
-  // 1. ส่งซ่อม (ตรวจสอบจาก Availability Block ตามเวลาจริง)
-  var activeRepair = (ctx.availBlocks ||[]).find(function(b) {
-    return b.resourceType === 'vehicle' && normalizeRadarPlate_(b.resourceId) === normPlate && isTargetActive(b.startAt, b.endAt);
+  function normalizeRange(startAt, endAt) {
+    if (!startAt || !endAt) return null;
+
+    var s = new Date(startAt);
+    var e = new Date(endAt);
+
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+
+    if (e.getTime() < s.getTime()) {
+      e.setDate(e.getDate() + 1);
+    }
+
+    return { start: s, end: e };
+  }
+
+  function isTargetActiveRightNow(startAt, endAt) {
+    var range = normalizeRange(startAt, endAt);
+    if (!range) return false;
+
+    var nowMs = now.getTime();
+    return nowMs >= range.start.getTime() && nowMs <= range.end.getTime();
+  }
+
+  function isBookingBusyForRadarToday(startAt, endAt) {
+    var range = normalizeRange(startAt, endAt);
+    if (!range) return false;
+
+    var s = range.start;
+    var e = range.end;
+    var nowMs = now.getTime();
+
+    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+    var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+
+    var startMs = s.getTime();
+    var endMs = e.getTime();
+
+    if (startMs > todayEnd || endMs < todayStart) return false;
+
+    if (startMs > nowMs && startMs <= todayEnd) return true;
+    if (nowMs >= startMs && nowMs <= endMs) return true;
+    if (startMs < todayStart && endMs >= nowMs) return true;
+
+    return false;
+  }
+
+  function buildRadarStatus(status, label, color, job, fallbackJob) {
+    return {
+      status: status,
+      label: label,
+      color: color,
+      job: String(job || fallbackJob || '').trim()
+    };
+  }
+
+  // 1) ส่งซ่อม: ตรวจตามเวลาจริง
+  var activeRepair = (ctx.availBlocks || []).find(function(b) {
+    return b.resourceType === 'vehicle' &&
+      normalizeRadarPlate_(b.resourceId) === normPlate &&
+      isTargetActiveRightNow(b.startAt, b.endAt);
   });
-  
+
   if (activeRepair) {
-     return { status: 'repair', label: 'ส่งซ่อม', color: 'red', job: activeRepair.reason || 'ซ่อมบำรุง' };
+    return buildRadarStatus(
+      'repair',
+      'ส่งซ่อม',
+      'red',
+      activeRepair.reason,
+      'ส่งซ่อม / ไม่พร้อมใช้งาน'
+    );
   }
 
-  // 2. ไม่ว่าง (งาน Booking ที่กำลังเกิดขึ้น ณ วินาทีนี้)
-  var activeBooking = (ctx.approvedBookings ||[]).find(function(b) {
-    if (!isTargetActive(b.startAt, b.endAt)) return false;
-    var plates = String(b.vehicle || '').split(',').map(function(x) { return normalizeRadarPlate_(x); });
+  // 2) ติดภารกิจ: ก่อนเริ่มงานวันนี้ / ระหว่างงาน
+  var busyBooking = (ctx.approvedBookings || []).find(function(b) {
+    if (!isBookingBusyForRadarToday(b.startAt, b.endAt)) return false;
+
+    var plates = splitPlateValues(b.vehicleRaw || b.vehicle || b.plate || '');
     return plates.indexOf(normPlate) > -1;
   });
-  
-  if (activeBooking) {
-     return { status: 'busy', label: 'ไม่ว่าง', color: 'yellow', job: activeBooking.destination || activeBooking.workName };
+
+  if (busyBooking) {
+    return buildRadarStatus(
+      'busy',
+      'ติดภารกิจ',
+      'yellow',
+      busyBooking.destination || busyBooking.workName,
+      'มีภารกิจวันนี้'
+    );
   }
 
-  // 3. พร้อม (ไม่ติดทั้งซ่อมและงาน)
-  return { status: 'ready', label: 'พร้อม', color: 'green', job: 'พร้อมใช้งาน' };
+  // 3) พร้อม
+  return buildRadarStatus(
+    'ready',
+    'พร้อม',
+    'green',
+    'พร้อมใช้งาน',
+    'พร้อมใช้งาน'
+  );
 }
 
-// ANCHOR: calculateDriverStatus
 function calculateDriverStatus(driverName, ctx) {
   var name = normalizeRadarName_(driverName);
-  var now = ctx.now;
+  var now = (ctx && ctx.now instanceof Date) ? ctx.now : new Date();
 
-  function isTargetActive(startAt, endAt) {
-    if (!startAt || !endAt) return false;
-    return now.getTime() >= startAt.getTime() && now.getTime() <= endAt.getTime();
+  function splitDriverNames(raw) {
+    return String(raw || '')
+      .split(/[,\n|\/]+/)
+      .map(function(x) { return normalizeRadarName_(x); })
+      .filter(function(x) { return x; });
   }
 
-  // 1. ลา (ตรวจสอบจาก Availability Block ตามเวลาจริง)
-  var activeLeave = (ctx.availBlocks ||[]).find(function(b) {
-    return b.resourceType === 'driver' && normalizeRadarName_(b.resourceId) === name && isTargetActive(b.startAt, b.endAt);
+  function normalizeRange(startAt, endAt) {
+    if (!startAt || !endAt) return null;
+
+    var s = new Date(startAt);
+    var e = new Date(endAt);
+
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+
+    if (e.getTime() < s.getTime()) {
+      e.setDate(e.getDate() + 1);
+    }
+
+    return { start: s, end: e };
+  }
+
+  function isTargetActiveRightNow(startAt, endAt) {
+    var range = normalizeRange(startAt, endAt);
+    if (!range) return false;
+
+    var nowMs = now.getTime();
+    return nowMs >= range.start.getTime() && nowMs <= range.end.getTime();
+  }
+
+  function isBookingBusyForRadarToday(startAt, endAt) {
+    var range = normalizeRange(startAt, endAt);
+    if (!range) return false;
+
+    var s = range.start;
+    var e = range.end;
+    var nowMs = now.getTime();
+
+    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+    var todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).getTime();
+
+    var startMs = s.getTime();
+    var endMs = e.getTime();
+
+    if (startMs > todayEnd || endMs < todayStart) return false;
+
+    if (startMs > nowMs && startMs <= todayEnd) return true;
+    if (nowMs >= startMs && nowMs <= endMs) return true;
+    if (startMs < todayStart && endMs >= nowMs) return true;
+
+    return false;
+  }
+
+  function buildRadarStatus(status, label, color, job, fallbackJob) {
+    return {
+      status: status,
+      label: label,
+      color: color,
+      job: String(job || fallbackJob || '').trim()
+    };
+  }
+
+  // 1) ลา: ตรวจตามเวลาจริง
+  var activeLeave = (ctx.availBlocks || []).find(function(b) {
+    return b.resourceType === 'driver' &&
+      normalizeRadarName_(b.resourceId) === name &&
+      isTargetActiveRightNow(b.startAt, b.endAt);
   });
-  
+
   if (activeLeave) {
-     return { status: 'leave', label: 'ลา', color: 'red', job: activeLeave.reason || 'ลางาน' };
+    return buildRadarStatus(
+      'leave',
+      'ลา',
+      'red',
+      activeLeave.reason,
+      'ลางาน / ไม่พร้อมปฏิบัติงาน'
+    );
   }
 
-  // 2. ติดภารกิจ (งาน Booking ที่กำลังเกิดขึ้น ณ วินาทีนี้)
-  var activeBooking = (ctx.approvedBookings ||[]).find(function(b) {
-    if (!isTargetActive(b.startAt, b.endAt)) return false;
-    var drivers = String(b.driver || '').split(',').map(function(x) { return normalizeRadarName_(x); });
+  // 2) ติดภารกิจ: ก่อนเริ่มงานวันนี้ / ระหว่างงาน
+  var busyBooking = (ctx.approvedBookings || []).find(function(b) {
+    if (!isBookingBusyForRadarToday(b.startAt, b.endAt)) return false;
+
+    var drivers = splitDriverNames(b.driverRaw || b.driver || b.driverName || '');
     return drivers.indexOf(name) > -1;
   });
-  
-  if (activeBooking) {
-     return { status: 'busy', label: 'ติดภารกิจ', color: 'yellow', job: activeBooking.destination || activeBooking.workName };
+
+  if (busyBooking) {
+    return buildRadarStatus(
+      'busy',
+      'ติดภารกิจ',
+      'yellow',
+      busyBooking.destination || busyBooking.workName,
+      'มีภารกิจวันนี้'
+    );
   }
 
-  // 3. พร้อม 
-  return { status: 'ready', label: 'พร้อม', color: 'green', job: 'พร้อมปฏิบัติงาน' };
+  // 3) พร้อม
+  return buildRadarStatus(
+    'ready',
+    'พร้อม',
+    'green',
+    'พร้อมปฏิบัติงาน',
+    'พร้อมปฏิบัติงาน'
+  );
 }
 
-// ANCHOR: ฟังก์ชัน buildRadarData (เรียกใช้สถานะปัจจุบัน)
 function buildRadarData() {
   var ctx = buildRadarContext_();
   var yearBE = parseInt(Utilities.formatDate(ctx.now, ctx.tz, 'yyyy'), 10) + 543;
 
   var drivers = VB_RADAR_DRIVER_MASTER.map(function(name) {
     var st = calculateDriverStatus(name, ctx);
-    return { name: name, active: true, status: st.status, label: st.label, color: st.color, job: st.job };
+    return {
+      name: name,
+      active: true,
+      status: st.status,
+      label: st.label,
+      color: st.color,
+      job: st.job
+    };
   });
 
   var vehicles = VB_RADAR_VEHICLE_MASTER.map(function(plate) {
     var st = calculateVehicleStatus(plate, ctx);
-    return { plate: plate, active: true, status: st.status, label: st.label, color: st.color, job: st.job };
+    return {
+      plate: plate,
+      active: true,
+      status: st.status,
+      label: st.label,
+      color: st.color,
+      job: st.job
+    };
   });
 
   return {
     ok: true,
     serverNow: Utilities.formatDate(ctx.now, ctx.tz, 'yyyy-MM-dd HH:mm:ss'),
     serverDateThai: Utilities.formatDate(ctx.now, ctx.tz, 'dd/MM/') + yearBE,
-    drivers: drivers, 
-    vehicles: vehicles 
+    drivers: drivers,
+    vehicles: vehicles
   };
 }
 
@@ -7828,5 +8049,177 @@ function runFullTelegramLogTest() {
   Logger.log('\n🏁 === สิ้นสุดการทดสอบระบบ V-Berry Diagnostics ===');
 }
 
+function selfTestRadarStatusFlow() {
+  Logger.log('🚀 === SELF TEST: RADAR STATUS FLOW START ===');
 
+  function assertEqual(step, actual, expected, detail) {
+    var pass = actual === expected;
+    Logger.log((pass ? 'PASS' : 'FAIL') + ' | ' + step +
+      ' | expected=' + expected +
+      ' | actual=' + actual +
+      (detail ? ' | ' + detail : ''));
+    return pass;
+  }
 
+  // -----------------------------
+  // TEST DATA
+  // -----------------------------
+  var testVehicle = 'ฮล-466';
+  var testDriver = 'ปริญญา ก้อนสัมฤทธิ์';
+
+  var bookingStart = new Date(2026, 2, 17, 8, 0, 0);   // 17 Mar 2026 08:00
+  var bookingEnd = new Date(2026, 2, 17, 15, 30, 0);   // 17 Mar 2026 15:30
+
+  function buildCtx(nowDate) {
+    return {
+      now: nowDate,
+      availBlocks: [],
+      approvedBookings: [
+        {
+          bookingId: 'SELFTEST-001',
+          status: 'approved',
+          vehicleRaw: testVehicle,
+          driverRaw: testDriver,
+          destination: 'ศูนย์บริการใบอนุญาตทำงานของคนต่างด้าว จังหวัดแพร่',
+          workName: 'งานทดสอบเรดาร์',
+          startAt: bookingStart,
+          endAt: bookingEnd
+        }
+      ]
+    };
+  }
+
+  // -----------------------------
+  // CASE 1: BEFORE START
+  // -----------------------------
+  var ctxBefore = buildCtx(new Date(2026, 2, 17, 7, 0, 0));
+  var vehicleBefore = calculateVehicleStatus(testVehicle, ctxBefore);
+  var driverBefore = calculateDriverStatus(testDriver, ctxBefore);
+
+  assertEqual(
+    'STEP 1 Vehicle Before Start',
+    vehicleBefore.status,
+    'busy',
+    JSON.stringify(vehicleBefore)
+  );
+  assertEqual(
+    'STEP 2 Driver Before Start',
+    driverBefore.status,
+    'busy',
+    JSON.stringify(driverBefore)
+  );
+
+  // -----------------------------
+  // CASE 2: DURING JOB
+  // -----------------------------
+  var ctxDuring = buildCtx(new Date(2026, 2, 17, 10, 0, 0));
+  var vehicleDuring = calculateVehicleStatus(testVehicle, ctxDuring);
+  var driverDuring = calculateDriverStatus(testDriver, ctxDuring);
+
+  assertEqual(
+    'STEP 3 Vehicle During Job',
+    vehicleDuring.status,
+    'busy',
+    JSON.stringify(vehicleDuring)
+  );
+  assertEqual(
+    'STEP 4 Driver During Job',
+    driverDuring.status,
+    'busy',
+    JSON.stringify(driverDuring)
+  );
+
+  // -----------------------------
+  // CASE 3: AFTER END
+  // -----------------------------
+  var ctxAfter = buildCtx(new Date(2026, 2, 17, 16, 0, 0));
+  var vehicleAfter = calculateVehicleStatus(testVehicle, ctxAfter);
+  var driverAfter = calculateDriverStatus(testDriver, ctxAfter);
+
+  assertEqual(
+    'STEP 5 Vehicle After End',
+    vehicleAfter.status,
+    'ready',
+    JSON.stringify(vehicleAfter)
+  );
+  assertEqual(
+    'STEP 6 Driver After End',
+    driverAfter.status,
+    'ready',
+    JSON.stringify(driverAfter)
+  );
+
+  // -----------------------------
+  // CASE 4: REPAIR OVERRIDE
+  // -----------------------------
+  var ctxRepair = {
+    now: new Date(2026, 2, 17, 10, 0, 0),
+    availBlocks: [
+      {
+        resourceType: 'vehicle',
+        resourceId: testVehicle,
+        startAt: new Date(2026, 2, 17, 9, 0, 0),
+        endAt: new Date(2026, 2, 17, 17, 0, 0),
+        reason: 'เข้าศูนย์ซ่อม'
+      }
+    ],
+    approvedBookings: [
+      {
+        bookingId: 'SELFTEST-002',
+        status: 'approved',
+        vehicleRaw: testVehicle,
+        driverRaw: testDriver,
+        destination: 'งานทับซ้อน',
+        workName: 'งานทดสอบซ่อม',
+        startAt: bookingStart,
+        endAt: bookingEnd
+      }
+    ]
+  };
+
+  var vehicleRepair = calculateVehicleStatus(testVehicle, ctxRepair);
+  assertEqual(
+    'STEP 7 Vehicle Repair Override',
+    vehicleRepair.status,
+    'repair',
+    JSON.stringify(vehicleRepair)
+  );
+
+  // -----------------------------
+  // CASE 5: LEAVE OVERRIDE
+  // -----------------------------
+  var ctxLeave = {
+    now: new Date(2026, 2, 17, 10, 0, 0),
+    availBlocks: [
+      {
+        resourceType: 'driver',
+        resourceId: testDriver,
+        startAt: new Date(2026, 2, 17, 9, 0, 0),
+        endAt: new Date(2026, 2, 17, 17, 0, 0),
+        reason: 'ลาป่วย'
+      }
+    ],
+    approvedBookings: [
+      {
+        bookingId: 'SELFTEST-003',
+        status: 'approved',
+        vehicleRaw: testVehicle,
+        driverRaw: testDriver,
+        destination: 'งานทับซ้อน',
+        workName: 'งานทดสอบลา',
+        startAt: bookingStart,
+        endAt: bookingEnd
+      }
+    ]
+  };
+
+  var driverLeave = calculateDriverStatus(testDriver, ctxLeave);
+  assertEqual(
+    'STEP 8 Driver Leave Override',
+    driverLeave.status,
+    'leave',
+    JSON.stringify(driverLeave)
+  );
+
+  Logger.log('🏁 === SELF TEST: RADAR STATUS FLOW END ===');
+}
