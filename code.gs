@@ -205,11 +205,40 @@ function getMainData_() {
        const shAvail = ss.getSheetByName('Availability');
        if(shAvail && shAvail.getLastRow() > 1) {
           const avData = shAvail.getDataRange().getValues();
+          const header = avData[0] || [];
+          const col_assignedDriver = header.indexOf('assignedDriver');
+          
+          let step1_totalRows = avData.length - 1;
+          let step2_driverRepairSkipped = 0;
+          let step3_driverLeavePushed = 0;
+          let step4_vehiclePushed = 0;
+          let step5_vehicleAssignedDriverPass = 0;
+
           for(let i=1; i<avData.length; i++) {
              const resType = String(avData[i][0] || '').trim();
              const resId = String(avData[i][1] || '').trim();
+             const reason = String(avData[i][6] || '').trim();
              const isDriver = (resType === 'driver');
+             const isRepair = reason.indexOf('ซ่อม') !== -1;
              
+             // 🍓 BERRY FIX: Skip driver_block if reason contains "ซ่อม"
+             if (isDriver && isRepair) {
+                 step2_driverRepairSkipped++;
+                 continue; // ข้ามการสร้าง event ในปฏิทิน
+             }
+             
+             if (isDriver && !isRepair) {
+                 step3_driverLeavePushed++;
+             }
+             if (!isDriver) {
+                 step4_vehiclePushed++;
+                 if (col_assignedDriver > -1 && avData[i][col_assignedDriver]) {
+                     step5_vehicleAssignedDriverPass++;
+                 }
+             }
+             
+             const assignedDriverValue = (col_assignedDriver > -1) ? avData[i][col_assignedDriver] : '';
+
              sortedBookings.push({
                 bookingId: 'BLK-' + i,
                 status: isDriver ? 'driver_block' : 'vehicle_block',
@@ -226,12 +255,20 @@ function getMainData_() {
                 startTime: parseTimeSafe_(avData[i][3]),
                 endDate: parseDateToISO_(avData[i][4]) || parseDateToISO_(avData[i][2]),
                 endTime: parseTimeSafe_(avData[i][5]),
-                dateNum: new Date(parseDateToISO_(avData[i][2])).getTime()
+                dateNum: new Date(parseDateToISO_(avData[i][2])).getTime(),
+                assignedDriver: assignedDriverValue // 🍓 BERRY FIX: Pass assignedDriver
              });
           }
+          
+          Logger.log('--- SELF TEST: Merge Availability Blocks ---');
+          Logger.log('STEP1: loop avData พบกี่ row ทั้งหมด: ' + step1_totalRows);
+          Logger.log('STEP2: นับ driver_block ที่ reason=ซ่อม และถูก skip: ' + step2_driverRepairSkipped);
+          Logger.log('STEP3: นับ driver_block ที่ reason=ลา/พัก และถูก push: ' + step3_driverLeavePushed);
+          Logger.log('STEP4: นับ vehicle_block ที่ถูก push: ' + step4_vehiclePushed);
+          Logger.log('STEP5: vehicle_block มี assignedDriver ถูกต้อง: ' + (step4_vehiclePushed > 0 ? (step5_vehicleAssignedDriverPass > 0 ? 'PASS' : 'FAIL (No assignedDriver)') : 'N/A'));
        }
     } catch(ex) {
-       Logger.log("Availability Merge Error: " + ex.message);
+       Logger.log("Availability Merge Error: " + ex.message + "\nstack: " + ex.stack);
     }
 
     const driversRes = getDriversFromAdmin_();
@@ -7270,7 +7307,13 @@ function _getAvailabilitySheet() {
   var sh = ss.getSheetByName('Availability');
   if(!sh) {
     sh = ss.insertSheet('Availability');
-    sh.appendRow(['resourceType','resourceId','startDate','startTime','endDate','endTime','reason','createdBy','createdAt']);
+    sh.appendRow(['resourceType','resourceId','startDate','startTime','endDate','endTime','reason','createdBy','createdAt','assignedDriver']);
+  } else {
+    // 🍓 BERRY FIX: Backward compatibility for assignedDriver
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    if (headers.indexOf('assignedDriver') === -1) {
+      sh.getRange(1, sh.getLastColumn() + 1).setValue('assignedDriver');
+    }
   }
   return sh;
 }
@@ -7280,12 +7323,74 @@ function createAvailabilityBlock(payload) {
   if(!lock.tryLock(5000)) return {ok:false, error:'System busy'};
   try {
     var sh = _getAvailabilitySheet();
-    sh.appendRow([
-      payload.resourceType, payload.resourceId,
-      parseDateToISO_(payload.startDate), parseTimeSafe_(payload.startTime),
-      parseDateToISO_(payload.endDate), parseTimeSafe_(payload.endTime),
-      payload.reason, payload.createdBy, new Date()
-    ]);
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var assignedDriverColIndex = headers.indexOf('assignedDriver');
+    
+    var rowData = [
+      payload.resourceType || '', 
+      payload.resourceId || '',
+      parseDateToISO_(payload.startDate), 
+      parseTimeSafe_(payload.startTime),
+      parseDateToISO_(payload.endDate), 
+      parseTimeSafe_(payload.endTime),
+      payload.reason || '', 
+      payload.createdBy || '', 
+      new Date()
+    ];
+
+    if (assignedDriverColIndex > -1) {
+      // Pad array if needed
+      while (rowData.length < assignedDriverColIndex) {
+        rowData.push('');
+      }
+      rowData[assignedDriverColIndex] = payload.assignedDriver || '';
+    }
+
+    sh.appendRow(rowData);
+    return {ok:true};
+  } catch(e) { return {ok:false, error:e.message}; }
+  finally { lock.releaseLock(); }
+}
+
+function saveMaintenanceAvailability(payload) {
+  var lock = LockService.getScriptLock();
+  if(!lock.tryLock(10000)) return {ok:false, error:'System busy'};
+  try {
+    var sh = _getAvailabilitySheet();
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var assignedDriverColIndex = headers.indexOf('assignedDriver');
+    var timestamp = new Date();
+    var baseRow = [
+      '', '', // resourceType, resourceId (to be filled)
+      parseDateToISO_(payload.startDate), 
+      parseTimeSafe_(payload.startTime),
+      parseDateToISO_(payload.endDate), 
+      parseTimeSafe_(payload.endTime),
+      payload.reason || 'ซ่อม', 
+      payload.createdBy || '', 
+      timestamp
+    ];
+    if (assignedDriverColIndex > -1) {
+      while (baseRow.length < assignedDriverColIndex) baseRow.push('');
+      baseRow[assignedDriverColIndex] = payload.assignedDriver || '';
+    }
+
+    var rows = [];
+    // 1. Vehicle Block
+    var vRow = baseRow.slice();
+    vRow[0] = 'vehicle';
+    vRow[1] = payload.vehiclePlate || payload.resourceId || '';
+    rows.push(vRow);
+
+    // 2. Driver Block
+    if (payload.assignedDriver) {
+      var dRow = baseRow.slice();
+      dRow[0] = 'driver';
+      dRow[1] = payload.assignedDriver;
+      rows.push(dRow);
+    }
+
+    sh.getRange(sh.getLastRow() + 1, 1, rows.length, rows[0].length).setValues(rows);
     return {ok:true};
   } catch(e) { return {ok:false, error:e.message}; }
   finally { lock.releaseLock(); }
@@ -7427,6 +7532,8 @@ function buildRadarContext_() {
   var availBlocks =[];
   var shAvail = ss.getSheetByName('Availability');
   if (shAvail && shAvail.getLastRow() > 1) {
+    var availHeaders = shAvail.getRange(1, 1, 1, shAvail.getLastColumn()).getValues()[0];
+    var assignedDriverColIndex = availHeaders.indexOf('assignedDriver');
     var avVals = shAvail.getRange(2, 1, shAvail.getLastRow() - 1, shAvail.getLastColumn()).getValues();
 
     for (var i = 0; i < avVals.length; i++) {
@@ -7450,7 +7557,8 @@ function buildRadarContext_() {
         resourceId: resourceId,
         startAt: startAt,
         endAt: endAt,
-        reason: String(row[6] || '').trim()
+        reason: String(row[6] || '').trim(),
+        assignedDriver: assignedDriverColIndex > -1 ? String(row[assignedDriverColIndex] || '').trim() : ''
       });
     }
   }
@@ -7703,6 +7811,17 @@ function calculateDriverStatus(driverName, ctx) {
   });
 
   if (activeLeave) {
+    // 🍓 BERRY FIX: ถ้าเป็นการส่งซ่อม (reason มีคำว่า ซ่อม) ให้แสดงเป็น ติดภารกิจ
+    var isRepair = (activeLeave.reason || '').indexOf('ซ่อม') !== -1;
+    if (isRepair) {
+      return buildRadarStatus(
+        'busy',
+        'ติดภารกิจ',
+        'yellow',
+        activeLeave.reason,
+        'นำรถไปซ่อม / ติดภารกิจ'
+      );
+    }
     return buildRadarStatus(
       'leave',
       'ลา',

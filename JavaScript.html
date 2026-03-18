@@ -682,6 +682,20 @@ window.openSuspendModal = function(type, id, btn) {
     const eEl = document.getElementById('suspend-end');
     if (sEl) { sEl.value = today; sEl.dataset.iso = today; }
     if (eEl) { eEl.value = today; eEl.dataset.iso = today; }
+
+    // 🍓 BERRY FIX: Show/hide driver dropdown and reset
+    const driverWrap = document.getElementById('suspend-driver-wrapper');
+    const driverSelect = document.getElementById('suspend-driver');
+    if (driverWrap && driverSelect) {
+        driverSelect.value = ''; // Reset value
+        if (type === 'vehicle') {
+            driverWrap.style.display = 'block';
+            driverSelect.required = true;
+        } else {
+            driverWrap.style.display = 'none';
+            driverSelect.required = false;
+        }
+    }
     
     // 🍓 BERRY FIX: Reset Time & Quick Buttons
     const stEl = document.getElementById('suspend-start-time');
@@ -743,24 +757,46 @@ window.submitSuspend = async function(e) {
         adminName = window.currentUser.displayName || window.currentUser.name || window.currentUser.username || 'Admin';
     }
 
+    // 🍓 BERRY FIX: รับค่า assignedDriver ถ้าเป็นรถ
+    const driverSelect = document.getElementById('suspend-driver');
+    const assignedDriver = (type === 'vehicle' && driverSelect) ? driverSelect.value : '';
+
     try {
-        const blockRes = await googleScriptRun('createAvailabilityBlock', {
-            resourceType: type, resourceId: id,
-            startDate: start, startTime: startTime,
-            endDate: end, endTime: endTime,
-            reason: reason, 
-            createdBy: adminName // 🍓 BERRY FIX: ใช้ตัวแปรที่หามาได้
-        });
+        let blockRes;
+        if (type === 'vehicle' && assignedDriver) {
+             console.log('📝 [Client] maintenancePayloadBeforeSubmit:', { vehicle: id, start, end, reason, assignedDriver });
+             // 🍓 BERRY FIX: ใช้ saveMaintenanceAvailability สร้าง 2 block พร้อมกัน
+             blockRes = await googleScriptRun('saveMaintenanceAvailability', {
+                 vehiclePlate: id,
+                 startDate: start, startTime: startTime,
+                 endDate: end, endTime: endTime,
+                 reason: reason,
+                 createdBy: adminName,
+                 assignedDriver: assignedDriver
+             });
+        } else {
+            blockRes = await googleScriptRun('createAvailabilityBlock', {
+                resourceType: type, resourceId: id,
+                startDate: start, startTime: startTime,
+                endDate: end, endTime: endTime,
+                reason: reason, 
+                createdBy: adminName,
+                assignedDriver: type === 'vehicle' ? assignedDriver : id
+            });
+        }
         
         if (!blockRes || !blockRes.ok) throw new Error(blockRes ? blockRes.error : 'Failed to create block');
+        console.log('✅ [Client] maintenanceAvailabilitySaveResult:', blockRes);
 
         await executeToggle(type, id, false, activeSuspendBtn);
 
         closeModalA11y('suspend-modal');
         showToast('บันทึกข้อมูลการระงับใช้งานเรียบร้อยแล้วค่ะ 🗓️', 'success');
         
+        console.log('🔄 [Client] maintenanceRadarSyncResult: refreshing dashboard dashboard');
         await googleScriptRun('apiRefreshDashboard'); 
         if (typeof loadCalendarView === 'function' && window.calendarState) {
+            console.log('📅 [Client] maintenanceCalendarRenderResult: updating calendar');
             loadCalendarView(window.calendarState.currentYear, window.calendarState.currentMonth);
         }
     } catch (err) {
@@ -3017,6 +3053,11 @@ const CalendarTooltip = {
             const safeDriver = (data.driver && data.driver !== '-') ? data.driver : 'รอระบุ';
             detailsHtml += `<div style="color:#64748b;">🚐 รถ: <span style="font-weight:600; color:#16a34a;">${escapeHtml(safePlate)}</span></div>`;
             detailsHtml += `<div style="color:#64748b;">👨‍✈️ คนขับ: <span style="font-weight:600; color:#16a34a;">${escapeHtml(safeDriver)}</span></div>`;
+        } else if (data.status === 'vehicle_block') {
+             // 🍓 BERRY FIX: Show assigned driver for vehicle repair block if available
+             if (data.assignedDriver && data.assignedDriver !== '-') {
+                 detailsHtml += `<div style="color:#64748b;">👨‍✈️ คนขับ: <span style="font-weight:600; color:#ea580c;">${escapeHtml(data.assignedDriver)}</span></div>`;
+             }
         }
     }
 
@@ -3101,7 +3142,8 @@ function buildCalendarData(sourceRows) {
                 startTime: sTime,
                 endTime: eTime,
                 workType: String(row?.workType || '').trim(),
-                workName: String(row?.workName || row?.project || '').trim()
+                workName: String(row?.workName || row?.project || '').trim(),
+                assignedDriver: String(row?.assignedDriver || '').trim() // 🍓 BERRY FIX: Extract assignedDriver
             };
         })
         .filter(item => item.sMs > 0 && item.eMs > 0);
@@ -3136,6 +3178,14 @@ function renderCalendar(year, month) {
 
     const sourceRows = Array.isArray(window.allBookingsData) ? window.allBookingsData :[];
     const calendarRows = (typeof buildCalendarData === 'function') ? buildCalendarData(sourceRows) :[];
+
+    // 🍓 BERRY FIX: Client Test
+    const vLogs = calendarRows.filter(r => r.status === 'vehicle_block');
+    const dLogs = calendarRows.filter(r => r.status === 'driver_block');
+    console.log('--- SELF TEST: maintenanceCalendarEventsFiltered ---');
+    console.log('Total events: ' + calendarRows.length);
+    console.log('vehicle_block count: ' + vLogs.length, vLogs);
+    console.log('driver_block count: ' + dLogs.length, dLogs);
 
     const firstDay = new Date(year, month - 1, 1);
     const lastDay = new Date(year, month, 0);
@@ -3338,7 +3388,8 @@ function renderCalendar(year, month) {
                     status: statusKey,
                     blockName: String(ev?.blockName || ev?.name || ev?.driver || ev?.plate || ev?.vehicle || '-'),
                     driver: String(ev?.driver || '-'),
-                    plate: String(ev?.plate || ev?.vehicle || '-')
+                    plate: String(ev?.plate || ev?.vehicle || '-'),
+                    assignedDriver: String(ev?.assignedDriver || '-') // 🍓 BERRY FIX: pass assignedDriver to tooltip
                 };
 
                 eventEl.addEventListener('mouseenter', function (e) { safeShowTooltip(e, tooltipData); });
@@ -4751,8 +4802,15 @@ async function showActivityDetails(bookingId, event) {
   } else if (statusKey === 'rejected') {
     badgeHtml = '<span style="background:white; color:#dc2626; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">❌ ไม่อนุมัติ</span>';
   } else if (statusKey === 'driver_block') {
-    badgeHtml = '<span style="background:white; color:#ea580c; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">⏸ พนักงานลา/พักงาน</span>';
-    mainTitle = 'บันทึกการลางาน';
+    // 🍓 BERRY FIX: แยกแยะระหว่างลางานกับพารถไปซ่อม
+    let isRepair = String(b.purpose || b.reason || b.workName || b.project || '').indexOf('ซ่อม') !== -1;
+    if (isRepair) {
+      badgeHtml = '<span style="background:white; color:#991b1b; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">🛠 ส่งซ่อม/นำรถไปซ่อม</span>';
+      mainTitle = 'นำรถไปซ่อมบำรุง / ติดภารกิจ';
+    } else {
+      badgeHtml = '<span style="background:white; color:#ea580c; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">⏸ พนักงานลา/พักงาน</span>';
+      mainTitle = 'บันทึกการลางาน';
+    }
   } else if (statusKey === 'vehicle_block') {
     badgeHtml = '<span style="background:white; color:#991b1b; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">🛠 ส่งซ่อมบำรุง</span>';
     mainTitle = 'บันทึกการส่งรถซ่อม';
@@ -4811,7 +4869,8 @@ async function showActivityDetails(bookingId, event) {
     labelUser = 'พนักงานขับรถ:';
     labelType = '📋 สถานะ:';
     labelProj = '💬 สาเหตุ/หมายเหตุ:';
-    purposeHtml = '<span style="color:#ea580c; font-weight:700;">พักงาน / ลางาน</span>';
+    let isRepair = String(b.purpose || b.reason || b.workName || b.project || '').indexOf('ซ่อม') !== -1;
+    purposeHtml = isRepair ? '<span style="color:#991b1b; font-weight:700;">ส่งซ่อม/นำรถไปซ่อม</span>' : '<span style="color:#ea580c; font-weight:700;">พักงาน / ลางาน</span>';
     destHtml = '-';
     vehicleDisplay = '-';
     paxHtml = '-';
@@ -4857,9 +4916,15 @@ async function showActivityDetails(bookingId, event) {
         <div style="width:100%; margin-bottom:8px;">
           <div class="bx-label" style="margin-bottom:2px;">${labelUser}</div>
           <div style="font-size:0.95rem; font-weight:700; color:#1e293b; line-height:1.4; word-wrap:break-word; overflow-wrap:anywhere;">
-            ${escapeHtml(b.name || '-')}
+            ${escapeHtml((statusKey === 'driver_block' && b.assignedDriver) ? b.assignedDriver : (b.name || '-'))}
           </div>
           ${(position && statusKey !== 'driver_block' && statusKey !== 'vehicle_block') ? `<div style="font-size:0.85rem; color:#64748b; margin-top:2px;">ตำแหน่ง: ${escapeHtml(position)}</div>` : ''}
+          ${(statusKey === 'vehicle_block' && b.assignedDriver && b.assignedDriver !== '-') ? `
+            <div style="margin-top:12px; border-top:1px dashed #cbd5e1; padding-top:8px;">
+              <div style="font-size:0.8rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">👨‍✈️ คนขับที่นำรถไปซ่อม:</div>
+              <div style="font-size:0.95rem; font-weight:700; color:#ea580c; line-height:1.4;">${escapeHtml(b.assignedDriver)}</div>
+            </div>
+          ` : ''}
         </div>
         ${phoneHtml}
       </div>
