@@ -4630,6 +4630,7 @@ function _generatePdfCommon_(tplName, dataOpt) {
     var summaryMap = {}; // เก็บข้อมูลแยกตามทะเบียนรถ
 
     fuelData.forEach(function(r) {
+       r.remark = r.jobType || r.budgetType || '-';
        var c = (r.cost || 0);
        var l = (r.liters || 0);
        var p = r.plate || 'ไม่ระบุ';
@@ -4639,15 +4640,20 @@ function _generatePdfCommon_(tplName, dataOpt) {
 
        // Grouping Logic
        if (!summaryMap[p]) {
-           summaryMap[p] = { plate: p, trips: 0, liters: 0, cost: 0 };
+           summaryMap[p] = { plate: p, trips: 0, liters: 0, cost: 0, driversSet: new Set() };
        }
        summaryMap[p].trips++;
        summaryMap[p].liters += l;
        summaryMap[p].cost += c;
+       if (r.driver) summaryMap[p].driversSet.add(r.driver);
     });
 
     // แปลง Map กลับเป็น Array เพื่อส่งให้ Template วนลูป
-    var summaryArray = Object.keys(summaryMap).map(function(k) { return summaryMap[k]; });
+    var summaryArray = Object.keys(summaryMap).map(function(k) { 
+      var sm = summaryMap[k];
+      sm.drivers = Array.from(sm.driversSet || []).filter(Boolean).join(', ');
+      return sm; 
+    });
 
     // 5. เตรียม Template Data
     var templateData = {
@@ -4710,6 +4716,45 @@ function apiGenerateFuelDailyPdf() {
   // ส่งวันที่ปัจจุบันเข้าไปเพื่อทำรายงานรายวัน
   return _generatePdfCommon_('FuelReport', { day: new Date().getDate() });
 }
+
+function selfTestFuelReportUIFix() {
+  Logger.log("--- SELF TEST: Fuel Report Modification ---");
+  var fRes = apiGetFuelHistory();
+  var allFuel = (fRes && fRes.ok) ? fRes.data : [];
+  Logger.log("STEP1: fuelData โหลดได้กี่ record: " + allFuel.length);
+
+  var totalCost = 0, totalLiters = 0, summaryMap = {};
+  allFuel.forEach(function(r) {
+     var c = (r.cost || 0), l = (r.liters || 0), p = r.plate || 'ไม่ระบุ';
+     r.remark = r.jobType || r.budgetType || '-'; 
+     if (!summaryMap[p]) summaryMap[p] = { plate: p, trips: 0, liters: 0, cost: 0, driversSet: new Set() };
+     summaryMap[p].trips++;
+     summaryMap[p].liters += l;
+     summaryMap[p].cost += c;
+     if (r.driver) summaryMap[p].driversSet.add(r.driver);
+  });
+
+  var summaryArray = Object.keys(summaryMap).map(function(k) { 
+        var sm = summaryMap[k];
+        sm.drivers = Array.from(sm.driversSet || []).filter(Boolean).join(', ');
+        return sm; 
+    });
+  Logger.log("STEP2: summaryMap grouping มีกี่ plate: " + summaryArray.length);
+
+  var allPlatesHaveDrivers = summaryArray.every(function(s) { return s.drivers != null; });
+  Logger.log("STEP3: แต่ละ plate มี drivers field ถูกต้อง: " + (allPlatesHaveDrivers ? "PASS" : "FAIL"));
+
+  var allDetailsHaveRemark = allFuel.every(function(r) { return r.remark != null; });
+  Logger.log("STEP4: detail array มี remark field ครบทุก record: " + (allDetailsHaveRemark ? "PASS" : "FAIL"));
+
+  try {
+     var res = apiGenerateFuelMonthlyPdf();
+     Logger.log("STEP5: PDF generate สำเร็จ: " + ((res && res.ok && res.url) ? "PASS" : "FAIL"));
+  } catch (e) {
+     Logger.log("STEP5: PDF generate สำเร็จ: FAIL (" + e.message + ")\n" + e.stack);
+  }
+}
+
 // ===================== DRIVER MANAGEMENT =====================
 function getDriversFromAdmin_() {
   try {
