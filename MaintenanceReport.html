@@ -3,40 +3,81 @@
 <head>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap');
-    body { font-family: 'Sarabun', sans-serif; padding: 10mm; color: #333; line-height: 1.5; }
-    .header { text-align: center; margin-bottom: 25px; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; }
-    .title { font-size: 20pt; font-weight: bold; color: #1e3a8a; }
-    .period { font-size: 16pt; margin-top: 5px; color: #444; }
-    
-    .stats-container { 
-      background-color: #f8fafc; border: 1px solid #e2e8f0; 
-      padding: 15px; border-radius: 8px; margin-bottom: 20px;
+    @page { size: A4 portrait; margin: 15mm 15mm; }
+    html, body { background: #fff; margin: 0; padding: 0; }
+    body {
+      font-family: 'Sarabun', Tahoma, Arial, sans-serif;
+      font-size: 12px; color: #333; line-height: 1.5;
     }
-    .stats-grid { display: table; width: 100%; font-size: 14pt; }
-    .stats-row { display: table-row; }
-    .stats-cell { display: table-cell; padding: 5px 0; }
 
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; }
-    th, td { 
-      border: 1px solid #666; padding: 8px; font-size: 12pt; 
-      text-align: center; word-wrap: break-word; vertical-align: top;
-    }
-    th { background-color: #f1f5f9; font-weight: bold; color: #1e3a8a; }
-    .text-left { text-align: left; }
-    .text-right { text-align: right; }
+    /* Common Header Classes */
+    .header-container, .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #1e3a8a; padding-bottom: 15px; }
+    .org-name, .title { font-size: 20px !important; font-weight: bold; color: #1e3a8a; margin-bottom: 5px; margin-top: 5px; }
+    .report-title, .period, .subtitle { font-size: 16px !important; font-weight: bold; color: #333; margin-top: 5px; }
+    .meta, .note { font-size: 12px !important; color: #666; margin-top: 5px; }
+    .note { color: #dc2626; font-style: italic; }
     
-    /* จำกัดเนื้อหาไม่เกิน 5 บรรทัด */
-    .clamp-text {
+    .rule { height: 2px; background: #f59e0b; margin: 15px 0 20px; }
+
+    /* Tables */
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; table-layout: fixed; }
+    th, td { 
+      border: 1px solid #666; padding: 6px 8px; vertical-align: top; 
+      word-wrap: break-word; font-size: 12px !important; line-height: 1.4;
+    }
+    thead th, th { 
+      background-color: #f1f5f9; font-weight: bold; color: #1e3a8a; text-align: center; font-size: 12px !important; 
+    }
+    .total-row { font-weight: bold; background-color: #f8fafc; }
+    tbody tr:nth-child(even) { background-color: #f8fafc; }
+
+    /* Utilities */
+    .tright, .text-right { text-align: right !important; }
+    .tcenter, .text-center { text-align: center !important; }
+    .tleft, .text-left { text-align: left !important; }
+    
+    .badge-active { color: #166534; font-weight: bold; }
+    .badge-expired { color: #991b1b; font-weight: bold; }
+
+    /* Sections / Boxes */
+    .section-head, h2 { 
+      font-size: 14px !important; font-weight: bold; margin: 20px 0 10px 0; 
+      color: #1e3a8a; border-left: 4px solid #f59e0b; padding-left: 10px; text-align: left;
+    }
+    .summary-box, .stats-container { 
+      background-color: #f8fafc; border: 1px solid #cbd5e1; 
+      padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 12px !important; line-height: 1.6;
+    }
+    .summary-item { 
+      width: 23%; padding: 15px 10px; background: #f8fafc; border-radius: 8px; 
+      text-align: center; border: 1px solid #e2e8f0; 
+    }
+    .summary-value { font-size: 18px !important; font-weight: bold; color: #1e3a8a; }
+    .summary-label { font-size: 11px !important; color: #64748b; margin-top: 5px; }
+
+    .stats-grid { display: table; width: 100%; font-size: 12px !important; }
+    .stats-row { display: table-row; }
+    .stats-cell { display: table-cell; padding: 5px 0; font-size: 12px !important; }
+
+    /* Footer */
+    .footer { 
+      margin-top: 30px; font-size: 10px !important; color: #666; 
+      text-align: right; border-top: 1px solid #eee; padding-top: 10px; 
+    }
+
+    /* Wrap Modifiers */
+    .limit-lines, .clamp-text {
       display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden;
     }
-    
-    .footer { margin-top: 30px; text-align: right; font-size: 10pt; color: #666; }
+    tr { page-break-inside: avoid; }
+    .break { page-break-after: always; }
   </style>
 </head>
 <body>
-  <div class="header">
-    <div class="title">รายงานสรุปการแจ้งซ่อมประจำเดือน</div>
-    <div class="period">ประจำงวด: <?= period ?></div>
+  <div class="header-container">
+    <div class="org-name">มหาวิทยาลัยสวนดุสิต ศูนย์การศึกษาลำปาง</div>
+    <div class="report-title">รายงานสรุปการแจ้งซ่อมประจำเดือน</div>
+    <div class="meta">ประจำงวด: <?= period ?></div>
   </div>
 
   <div class="stats-container">
