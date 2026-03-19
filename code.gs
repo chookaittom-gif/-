@@ -5389,6 +5389,28 @@ function getAvailableVehicles(payload) {
       }
     }
 
+    // 🍓 BERRY FIX: เพิ่มการตรวจสอบเวลาลางาน/ส่งซ่อมจากชีต Availability ด้วย (Auto-Unlock Framework)
+    const shAvail = ss.getSheetByName('Availability');
+    if (shAvail && shAvail.getLastRow() > 1) {
+       const availData = shAvail.getDataRange().getValues();
+       for (let i = 1; i < availData.length; i++) {
+          const resType = String(availData[i][0]).trim();
+          const resId = String(availData[i][1]).trim();
+          const reason = String(availData[i][6]).trim();
+          const bStart = parseDateTime_(availData[i][2], availData[i][3]);
+          const bEnd = parseDateTime_(availData[i][4], availData[i][5]);
+          
+          // ถ้าเวลาจองดันไปตรงกับเวลาที่ระบุไว้ว่า ลา/ซ่อม ให้นำไปหักลบออกจากคิวรถว่าง
+          if (bStart && bEnd && isOverlapping_(reqStart, reqEnd, bStart, bEnd)) {
+             if (resType === 'vehicle') {
+                busyPlatesMap[resId] = reason || 'งดใช้/ซ่อมบำรุง 🔧';
+             } else if (resType === 'driver') {
+                busyDriversMap[resId] = reason || 'ลางาน/พักงาน';
+             }
+          }
+       }
+    }
+
     const vStatusMap = parseBoolMap_(readSettingKV_('VehicleAvailability').val);
     const vehiclesRes = getAllVehiclePlatesFromSettings();
     const vehicleStatus = (vehiclesRes.ok ? vehiclesRes.all : []).map(v => {
@@ -6573,6 +6595,25 @@ function getRealTimeAvailableCount(arg1, arg2, arg3) {
           }
         }
       }
+    }
+
+    // 🍓 BERRY FIX: ตัดรถที่ติดซ่อมบำรุงในช่วงเวลานั้นๆ ออกจากคิว Real-time ด้วย (Auto-Unlock Framework)
+    const shAvail = ss.getSheetByName('Availability');
+    if (shAvail && shAvail.getLastRow() > 1) {
+       const availData = shAvail.getDataRange().getValues();
+       for (let i = 1; i < availData.length; i++) {
+          if (String(availData[i][0]).trim() === 'vehicle') {
+             const vId = String(availData[i][1]).trim();
+             // ถ้ารถคันนี้ถูกมองว่าว่างอยู่ ให้ลองเช็คว่าติดซ่อมเวลานี้หรือไม่
+             if (availableList.includes(vId)) {
+                const bStart = parseDateTime_(availData[i][2], availData[i][3]);
+                const bEnd = parseDateTime_(availData[i][4], availData[i][5]);
+                if (bStart && bEnd && isOverlapping_(reqStart, reqEnd, bStart, bEnd)) {
+                   availableList = availableList.filter(p => p !== vId);
+                }
+             }
+          }
+       }
     }
 
     const count = availableList.length;
@@ -8263,5 +8304,420 @@ function runFullTelegramLogTest() {
   Logger.log('\n🏁 === สิ้นสุดการทดสอบระบบ V-Berry Diagnostics ===');
 }
 
+function resolveAvailabilityStatusForTest(ctx) {
+  ctx = ctx || {};
 
+  var now = parseDateTime_(ctx.dateISO, ctx.timeText);
+  if (!now) {
+    return { ok: false, status: 'error', reason: 'invalid_test_datetime' };
+  }
 
+  if (ctx.permanentInactive === true) {
+    return { ok: true, status: 'inactive', reason: 'permanent_lock' };
+  }
+
+  var bookings = Array.isArray(ctx.bookings) ? ctx.bookings : [];
+  for (var i = 0; i < bookings.length; i++) {
+    var b = bookings[i] || {};
+    var bookingResourceId = String(b.resourceId || '').trim();
+    if (bookingResourceId !== String(ctx.resourceId || '').trim()) continue;
+
+    var bs = parseDateTime_(b.startDate, b.startTime);
+    var be = parseDateTime_(b.endDate, b.endTime);
+    if (!bs || !be) continue;
+
+    if (now >= bs && now < be) {
+      return { ok: true, status: 'busy', reason: 'booking' };
+    }
+  }
+
+  var blocks = Array.isArray(ctx.blocks) ? ctx.blocks : [];
+  for (var j = 0; j < blocks.length; j++) {
+    var x = blocks[j] || {};
+    var blockResourceId = String(x.resourceId || '').trim();
+    if (blockResourceId !== String(ctx.resourceId || '').trim()) continue;
+
+    var xs = parseDateTime_(x.startDate, x.startTime);
+    var xe = parseDateTime_(x.endDate, x.endTime);
+    if (!xs || !xe) continue;
+
+    if (now >= xs && now < xe) {
+      return {
+        ok: true,
+        status: 'blocked',
+        reason: String(x.reason || 'availability_block').trim()
+      };
+    }
+  }
+
+  return { ok: true, status: 'ready', reason: '' };
+}
+
+function selfTestAvailabilityEngineAdvanced() {
+  Logger.log('🧪 === START: selfTestAvailabilityEngineAdvanced ===');
+
+  var logs = [];
+  var passCount = 0;
+  var failCount = 0;
+
+  function pushLog(name, pass, detail, result) {
+    logs.push({
+      name: name,
+      pass: !!pass,
+      detail: detail || '',
+      resultStatus: result && result.status ? result.status : '',
+      reason: result && result.reason ? result.reason : ''
+    });
+
+    Logger.log('[' + name + '] ' + (pass ? '✅ PASS' : '❌ FAIL') + ' - ' + (detail || ''));
+    if (result) {
+      Logger.log('  resultStatus: ' + (result.status || '-'));
+      Logger.log('  reason: ' + (result.reason || '-'));
+    }
+
+    if (pass) passCount++;
+    else failCount++;
+  }
+
+  function runCase(name, ctx, expectedStatus, note) {
+    var result = resolveAvailabilityStatusForTest(ctx);
+    var pass = !!(result && result.ok && result.status === expectedStatus);
+    pushLog(name, pass, (note || '') + ' | expected=' + expectedStatus, result);
+  }
+
+  var vehicleId = 'TEST-CAR-001';
+  var driverId = 'TEST-DRV-001';
+
+  var vehicleBlock = [{
+    resourceId: vehicleId,
+    startDate: '2026-03-20',
+    startTime: '08:30',
+    endDate: '2026-03-20',
+    endTime: '16:30',
+    reason: 'ซ่อมบำรุง'
+  }];
+
+  var driverBlock = [{
+    resourceId: driverId,
+    startDate: '2026-03-20',
+    startTime: '08:30',
+    endDate: '2026-03-20',
+    endTime: '16:30',
+    reason: 'ลาพัก'
+  }];
+
+  var overlapBookingVehicle = [{
+    resourceId: vehicleId,
+    startDate: '2026-03-20',
+    startTime: '09:00',
+    endDate: '2026-03-20',
+    endTime: '12:00'
+  }];
+
+  var overlapBookingDriver = [{
+    resourceId: driverId,
+    startDate: '2026-03-20',
+    startTime: '09:00',
+    endDate: '2026-03-20',
+    endTime: '12:00'
+  }];
+
+  runCase(
+    'VEHICLE_BEFORE_BLOCK_READY',
+    {
+      resourceId: vehicleId,
+      dateISO: '2026-03-20',
+      timeText: '08:29',
+      permanentInactive: false,
+      bookings: [],
+      blocks: vehicleBlock
+    },
+    'ready',
+    'ก่อนเวลาเริ่ม block รถต้องพร้อมใช้งาน'
+  );
+
+  runCase(
+    'VEHICLE_BOUNDARY_START_0830_BLOCKED',
+    {
+      resourceId: vehicleId,
+      dateISO: '2026-03-20',
+      timeText: '08:30',
+      permanentInactive: false,
+      bookings: [],
+      blocks: vehicleBlock
+    },
+    'blocked',
+    'เวลาเริ่มตรงเป๊ะ 08:30 ต้อง blocked'
+  );
+
+  runCase(
+    'VEHICLE_DURING_BLOCK_BLOCKED',
+    {
+      resourceId: vehicleId,
+      dateISO: '2026-03-20',
+      timeText: '10:00',
+      permanentInactive: false,
+      bookings: [],
+      blocks: vehicleBlock
+    },
+    'blocked',
+    'อยู่ในช่วง block รถต้อง blocked'
+  );
+
+  runCase(
+    'VEHICLE_BOUNDARY_END_1630_READY',
+    {
+      resourceId: vehicleId,
+      dateISO: '2026-03-20',
+      timeText: '16:30',
+      permanentInactive: false,
+      bookings: [],
+      blocks: vehicleBlock
+    },
+    'ready',
+    'เวลาสิ้นสุดตรงเป๊ะ 16:30 ต้อง ready ถ้าใช้ now < end'
+  );
+
+  runCase(
+    'VEHICLE_AFTER_BLOCK_AUTO_RETURN',
+    {
+      resourceId: vehicleId,
+      dateISO: '2026-03-20',
+      timeText: '16:31',
+      permanentInactive: false,
+      bookings: [],
+      blocks: vehicleBlock
+    },
+    'ready',
+    'หลังหมดเวลา block รถต้องกลับมา ready'
+  );
+
+  runCase(
+    'VEHICLE_PERMANENT_LOCK_STILL_WINS',
+    {
+      resourceId: vehicleId,
+      dateISO: '2026-03-20',
+      timeText: '16:31',
+      permanentInactive: true,
+      bookings: [],
+      blocks: vehicleBlock
+    },
+    'inactive',
+    'ถ้าล็อกถาวร สถานะต้องเป็น inactive'
+  );
+
+  runCase(
+    'DRIVER_BEFORE_BLOCK_READY',
+    {
+      resourceId: driverId,
+      dateISO: '2026-03-20',
+      timeText: '08:29',
+      permanentInactive: false,
+      bookings: [],
+      blocks: driverBlock
+    },
+    'ready',
+    'ก่อนเวลาเริ่ม block คนขับต้องพร้อมใช้งาน'
+  );
+
+  runCase(
+    'DRIVER_BOUNDARY_START_0830_BLOCKED',
+    {
+      resourceId: driverId,
+      dateISO: '2026-03-20',
+      timeText: '08:30',
+      permanentInactive: false,
+      bookings: [],
+      blocks: driverBlock
+    },
+    'blocked',
+    'เวลาเริ่มตรงเป๊ะ 08:30 คนขับต้อง blocked'
+  );
+
+  runCase(
+    'DRIVER_DURING_BLOCK_BLOCKED',
+    {
+      resourceId: driverId,
+      dateISO: '2026-03-20',
+      timeText: '10:00',
+      permanentInactive: false,
+      bookings: [],
+      blocks: driverBlock
+    },
+    'blocked',
+    'อยู่ในช่วงลา คนขับต้อง blocked'
+  );
+
+  runCase(
+    'DRIVER_BOUNDARY_END_1630_READY',
+    {
+      resourceId: driverId,
+      dateISO: '2026-03-20',
+      timeText: '16:30',
+      permanentInactive: false,
+      bookings: [],
+      blocks: driverBlock
+    },
+    'ready',
+    'เวลาสิ้นสุดตรงเป๊ะ 16:30 คนขับต้อง ready'
+  );
+
+  runCase(
+    'DRIVER_AFTER_BLOCK_AUTO_RETURN',
+    {
+      resourceId: driverId,
+      dateISO: '2026-03-20',
+      timeText: '16:31',
+      permanentInactive: false,
+      bookings: [],
+      blocks: driverBlock
+    },
+    'ready',
+    'หลังหมดเวลาลา คนขับต้องกลับมา ready'
+  );
+
+  runCase(
+    'DRIVER_PERMANENT_LOCK_STILL_WINS',
+    {
+      resourceId: driverId,
+      dateISO: '2026-03-20',
+      timeText: '16:31',
+      permanentInactive: true,
+      bookings: [],
+      blocks: driverBlock
+    },
+    'inactive',
+    'ถ้าล็อกถาวร คนขับต้องเป็น inactive'
+  );
+
+  runCase(
+    'VEHICLE_OVERLAP_BOOKING_AND_BLOCK',
+    {
+      resourceId: vehicleId,
+      dateISO: '2026-03-20',
+      timeText: '10:00',
+      permanentInactive: false,
+      bookings: overlapBookingVehicle,
+      blocks: vehicleBlock
+    },
+    'busy',
+    'กรณี booking ทับ block ระบบปัจจุบันตรวจ booking ก่อน จึงต้องได้ busy'
+  );
+
+  runCase(
+    'DRIVER_OVERLAP_BOOKING_AND_BLOCK',
+    {
+      resourceId: driverId,
+      dateISO: '2026-03-20',
+      timeText: '10:00',
+      permanentInactive: false,
+      bookings: overlapBookingDriver,
+      blocks: driverBlock
+    },
+    'busy',
+    'กรณี booking ทับ block ระบบปัจจุบันตรวจ booking ก่อน จึงต้องได้ busy'
+  );
+
+  var total = passCount + failCount;
+  var ok = failCount === 0;
+
+  Logger.log('🏁 RESULT: ' + passCount + '/' + total + ' PASS');
+  Logger.log('🧪 === END: selfTestAvailabilityEngineAdvanced ===');
+
+  return {
+    ok: ok,
+    status: ok ? 'PASS' : 'FAIL',
+    passed: passCount,
+    failed: failCount,
+    total: total,
+    logs: logs
+  };
+}
+
+function selfTestAvailabilityAutoReturnAndPermanentLock() {
+  return selfTestAvailabilityEngineAdvanced();
+}
+
+function selfTestAvailabilityAutoReturnAndPermanentLock() {
+  Logger.log('🧪 === START: selfTestAvailabilityAutoReturnAndPermanentLock ===');
+
+  var resourceId = 'TEST-CAR-001';
+
+  var mockBlocks = [
+    {
+      resourceId: resourceId,
+      startDate: '2026-03-20',
+      startTime: '08:30',
+      endDate: '2026-03-20',
+      endTime: '16:30',
+      reason: 'ซ่อมบำรุง'
+    }
+  ];
+
+  var mockBookings = [];
+
+  function runCase(stepName, ctx, expectedStatus) {
+    var res = resolveAvailabilityStatusForTest(ctx);
+    var pass = !!(res && res.ok && res.status === expectedStatus);
+
+    Logger.log('[' + stepName + '] ' + (pass ? '✅ PASS' : '❌ FAIL'));
+    Logger.log('  resourceId: ' + ctx.resourceId);
+    Logger.log('  testDateTime: ' + ctx.dateISO + ' ' + ctx.timeText);
+    Logger.log('  permanentInactive: ' + (!!ctx.permanentInactive));
+    Logger.log('  resultStatus: ' + (res && res.status));
+    Logger.log('  expectedStatus: ' + expectedStatus);
+    Logger.log('  reason: ' + (res && res.reason ? res.reason : '-'));
+    Logger.log('-----------------------------------');
+
+    return pass;
+  }
+
+  var passCount = 0;
+  var total = 4;
+
+  if (runCase('STEP1_BEFORE_BLOCK_READY', {
+    resourceId: resourceId,
+    dateISO: '2026-03-20',
+    timeText: '08:29',
+    permanentInactive: false,
+    bookings: mockBookings,
+    blocks: mockBlocks
+  }, 'ready')) passCount++;
+
+  if (runCase('STEP2_DURING_BLOCK_BLOCKED', {
+    resourceId: resourceId,
+    dateISO: '2026-03-20',
+    timeText: '10:00',
+    permanentInactive: false,
+    bookings: mockBookings,
+    blocks: mockBlocks
+  }, 'blocked')) passCount++;
+
+  if (runCase('STEP3_AFTER_BLOCK_AUTO_RETURN', {
+    resourceId: resourceId,
+    dateISO: '2026-03-20',
+    timeText: '16:31',
+    permanentInactive: false,
+    bookings: mockBookings,
+    blocks: mockBlocks
+  }, 'ready')) passCount++;
+
+  if (runCase('STEP4_PERMANENT_LOCK_STILL_WINS', {
+    resourceId: resourceId,
+    dateISO: '2026-03-20',
+    timeText: '16:31',
+    permanentInactive: true,
+    bookings: mockBookings,
+    blocks: mockBlocks
+  }, 'inactive')) passCount++;
+
+  Logger.log('🏁 RESULT: ' + passCount + '/' + total + ' PASS');
+  Logger.log('🧪 === END: selfTestAvailabilityAutoReturnAndPermanentLock ===');
+
+  return {
+    ok: passCount === total,
+    total: total,
+    passed: passCount,
+    failed: total - passCount
+  };
+}

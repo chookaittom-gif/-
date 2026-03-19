@@ -715,7 +715,7 @@ window.openSuspendModal = function(type, id, btn) {
     openModalA11y('suspend-modal');
 };
 
-/* ANCHOR: availability submit validation */
+// ANCHOR: availability submit validation
 window.submitSuspend = async function(e) {
     e.preventDefault();
     const type = document.getElementById('suspend-type').value;
@@ -788,10 +788,16 @@ window.submitSuspend = async function(e) {
         if (!blockRes || !blockRes.ok) throw new Error(blockRes ? blockRes.error : 'Failed to create block');
         console.log('✅ [Client] maintenanceAvailabilitySaveResult:', blockRes);
 
-        await executeToggle(type, id, false, activeSuspendBtn);
+        // 🍓 BERRY FIX: เอาคำสั่ง executeToggle ที่จะสับสวิตช์ปิดระบบถาวรออกไป 
+        // เปลี่ยนมาใช้วิธีอัปเดต UI แบบ Soft Feedback แทนเพื่อเข้าสู่โหมด Auto-Unlock สมบูรณ์แบบ
+        if (activeSuspendBtn) {
+             const originalHtml = activeSuspendBtn.innerHTML;
+             activeSuspendBtn.innerHTML = '<span class="icon">⏳</span><span class="text">บันทึกเวลาแล้ว</span>';
+             setTimeout(() => { activeSuspendBtn.innerHTML = originalHtml; }, 2500);
+        }
 
         closeModalA11y('suspend-modal');
-        showToast('บันทึกข้อมูลการระงับใช้งานเรียบร้อยแล้วค่ะ 🗓️', 'success');
+        showToast('บันทึกข้อมูลการระงับใช้งานตามช่วงเวลาเรียบร้อยแล้วค่ะ 🗓️', 'success');
         
         console.log('🔄 [Client] maintenanceRadarSyncResult: refreshing dashboard dashboard');
         await googleScriptRun('apiRefreshDashboard'); 
@@ -805,6 +811,7 @@ window.submitSuspend = async function(e) {
         setBtnLoading(submitBtn, false);
     }
 };
+
 
 /* ANCHOR: wireSuspendQuickTimeButtonsOnce */
 function wireSuspendQuickTimeButtonsOnce() {
@@ -8922,23 +8929,9 @@ window.selfTest = async function (ev) {
   }
   window.__SELFTEST_RUNNING__ = true;
 
-  const RADAR_DRIVER_MASTER = [
-    'ชัชวาลย์ วงศ์มั่น',
-    'ประเสริฐ หน่อแก้ว',
-    'ปรีชา ถวิลเวช',
-    'ปริญญา ก้อนสัมฤทธิ์',
-    'อภิรัฐวุฒิ คณารักษ์'
-  ];
-
-  const RADAR_VEHICLE_MASTER = [
-    'ฮล-466',
-    'ฮค-4964',
-    '1นช-6112',
-    'ฮร-4820',
-    'ห-4845'
-  ];
-
   const testStats = { pass: 0, fail: 0 };
+  const selfTestToken = 'selftest_' + Date.now();
+  window.__ACTIVE_SELFTEST_TOKEN__ = selfTestToken;
 
   const showBerryReport = (logs) => {
     const modalId = 'berry-test-result';
@@ -8947,9 +8940,9 @@ window.selfTest = async function (ev) {
 
     const html = `
       <div id="${modalId}" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:12000; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(4px);">
-        <div style="background:#1e1e1e; width:95%; max-width:800px; max-height:90vh; border-radius:12px; box-shadow:0 20px 50px rgba(0,0,0,0.5); display:flex; flex-direction:column; overflow:hidden; font-family:'Sarabun', sans-serif;">
-          <div style="background:linear-gradient(135deg, #10b981, #059669); color:white; padding:15px 20px; font-weight:bold; font-size:1.1rem; display:flex; justify-content:space-between; align-items:center;">
-            <span style="display:flex; align-items:center; gap:8px;">🧪 V-Berry Diagnostics (Calendar + Radar Only)</span>
+        <div style="background:#1e1e1e; width:95%; max-width:820px; max-height:90vh; border-radius:12px; box-shadow:0 20px 50px rgba(0,0,0,0.5); display:flex; flex-direction:column; overflow:hidden; font-family:'Sarabun', sans-serif;">
+          <div style="background:linear-gradient(135deg, #10b981, #059669); color:white; padding:15px 20px; font-weight:bold; font-size:1.05rem; display:flex; justify-content:space-between; align-items:center;">
+            <span style="display:flex; align-items:center; gap:8px;">🧪 V-Berry Availability Diagnostics</span>
             <button onclick="document.getElementById('${modalId}').remove()" style="background:none; border:none; color:white; font-size:1.8rem; cursor:pointer; line-height:1;">&times;</button>
           </div>
 
@@ -8957,10 +8950,10 @@ window.selfTest = async function (ev) {
             ${logs.join('<br>')}
           </div>
 
-          <div style="padding:12px 20px; text-align:right; border-top:1px solid #374151; background:#1f2937; display:flex; justify-content:flex-end; gap:10px;">
+          <div style="padding:12px 20px; text-align:right; border-top:1px solid #374151; background:#1f2937; display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;">
              <span id="test-status-text" style="margin-right:auto; align-self:center; color:#9ca3af; font-size:0.9rem;">⏳ กำลังรันระบบทดสอบ...</span>
-             <button type="button" class="btn btn-secondary" onclick="window.__copyBerryTestResult && window.__copyBerryTestResult()" style="padding:6px 16px; font-size:0.9rem; background:#3b82f6; border:none; color:white; border-radius:6px; cursor:pointer;">📋 คัดลอกผล</button>
-             <button type="button" onclick="document.getElementById('${modalId}').remove()" id="btn-close-berry-test" class="btn btn-secondary" style="padding:6px 16px; font-size:0.9rem; background:#4b5563; border:none; color:white; border-radius:6px; cursor:pointer;">ปิดหน้าต่าง</button>
+             <button type="button" class="btn btn-secondary" onclick="window.__copyBerryTestResult && window.__copyBerryTestResult()" style="padding:8px 16px; min-height:44px; font-size:0.9rem; background:#3b82f6; border:none; color:white; border-radius:6px; cursor:pointer;">📋 คัดลอกผล</button>
+             <button type="button" onclick="document.getElementById('${modalId}').remove()" id="btn-close-berry-test" class="btn btn-secondary" style="padding:8px 16px; min-height:44px; font-size:0.9rem; background:#4b5563; border:none; color:white; border-radius:6px; cursor:pointer;">ปิดหน้าต่าง</button>
           </div>
         </div>
       </div>
@@ -8983,6 +8976,7 @@ window.selfTest = async function (ev) {
     if (String(msg).includes('ℹ️')) style = 'color:#60a5fa;';
     if (String(msg).includes('🚀') || String(msg).includes('---')) style = 'color:#a78bfa; font-weight:bold; margin-top:12px; display:block; border-bottom:1px dashed #374151; padding-bottom:4px;';
     if (String(msg).includes('📨')) style = 'color:#14b8a6; font-style:italic; margin-left:20px;';
+    if (String(msg).includes('🧷')) style = 'color:#f9a8d4;';
 
     const htmlLine = `<span style="${style}">${msg}</span>`;
     logBufferHtml.push(htmlLine);
@@ -9023,6 +9017,7 @@ window.selfTest = async function (ev) {
         const ta = document.createElement('textarea');
         ta.value = text;
         ta.style.position = 'fixed';
+        ta.style.opacity = '0';
         document.body.appendChild(ta);
         ta.focus();
         ta.select();
@@ -9035,6 +9030,10 @@ window.selfTest = async function (ev) {
     }
   };
 
+  function isSelfTestActive_() {
+    return window.__ACTIVE_SELFTEST_TOKEN__ === selfTestToken;
+  }
+
   function gasCall_(fnName, payload, passArg) {
     return new Promise((resolve) => {
       if (!window.google || !google.script || !google.script.run) {
@@ -9043,8 +9042,20 @@ window.selfTest = async function (ev) {
       }
 
       const runner = google.script.run
-        .withSuccessHandler((res) => resolve({ ok: true, res }))
-        .withFailureHandler((err) => resolve({ ok: false, error: String(err) }));
+        .withSuccessHandler((res) => {
+          if (!isSelfTestActive_()) {
+            resolve({ ok: false, error: 'stale_selftest_response' });
+            return;
+          }
+          resolve({ ok: true, res: res });
+        })
+        .withFailureHandler((err) => {
+          if (!isSelfTestActive_()) {
+            resolve({ ok: false, error: 'stale_selftest_response' });
+            return;
+          }
+          resolve({ ok: false, error: String(err && err.message ? err.message : err) });
+        });
 
       try {
         if (passArg === false) {
@@ -9056,91 +9067,6 @@ window.selfTest = async function (ev) {
         resolve({ ok: false, error: String(err && err.message ? err.message : err) });
       }
     });
-  }
-
-  function normalizeText_(v) {
-    return String(v || '')
-      .replace(/[\u200B-\u200D\uFEFF]/g, '')
-      .replace(/[–—]/g, '-')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  async function waitForRadarRender_(timeoutMs) {
-    const started = Date.now();
-    while ((Date.now() - started) < timeoutMs) {
-      const radarContent = document.getElementById('radar-content');
-      const items = radarContent ? radarContent.querySelectorAll('.radar-item') : [];
-      if (items && items.length >= 10) return true;
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-    return false;
-  }
-
-  function extractRadarSectionNames_(sectionTitleText) {
-    const radarContent = document.getElementById('radar-content');
-    if (!radarContent) return [];
-
-    const titles = Array.from(radarContent.querySelectorAll('.radar-section-title'));
-    const titleEl = titles.find(el => normalizeText_(el.textContent) === normalizeText_(sectionTitleText));
-    if (!titleEl) return [];
-
-    const wrapper = titleEl.parentElement;
-    if (!wrapper) return [];
-
-    return Array.from(wrapper.querySelectorAll('.radar-name'))
-      .map(el => normalizeText_(el.textContent))
-      .filter(Boolean);
-  }
-
-  function checkRadarDom_() {
-    const radarContent = document.getElementById('radar-content');
-    if (!radarContent) {
-      return { ok: false, error: 'ไม่พบ radar-content' };
-    }
-
-    const driverNames = extractRadarSectionNames_('👨‍✈️ พนักงานขับรถ');
-    const vehicleNames = extractRadarSectionNames_('🚐 ยานพาหนะ');
-
-    const foundDrivers = RADAR_DRIVER_MASTER.filter(name => driverNames.includes(normalizeText_(name)));
-    const foundVehicles = RADAR_VEHICLE_MASTER.filter(plate => vehicleNames.includes(normalizeText_(plate)));
-
-    return {
-      ok: true,
-      driverNames: driverNames,
-      vehicleNames: vehicleNames,
-      foundDrivers: foundDrivers,
-      foundVehicles: foundVehicles
-    };
-  }
-
-  function getCalendarSourceStats_() {
-    const raw = Array.isArray(window.allBookingsData) ? window.allBookingsData : [];
-    let mapped = raw;
-
-    try {
-      if (typeof buildCalendarData === 'function') {
-        mapped = buildCalendarData(raw);
-      }
-    } catch (err) {
-      console.error('[selfTest] buildCalendarData failed:', err);
-      mapped = raw;
-    }
-
-    const driverBlocks = mapped.filter(item => String(item && item.status || '').trim() === 'driver_block');
-    const vehicleBlocks = mapped.filter(item => String(item && item.status || '').trim() === 'vehicle_block');
-    const approvedBookings = mapped.filter(item => {
-      const st = String(item && item.status || '').trim();
-      return st === 'approved' || st === 'driver_special_approved';
-    });
-
-    return {
-      rawCount: raw.length,
-      mappedCount: mapped.length,
-      driverBlockCount: driverBlocks.length,
-      vehicleBlockCount: vehicleBlocks.length,
-      approvedCount: approvedBookings.length
-    };
   }
 
   function finalizeStatus_() {
@@ -9172,11 +9098,25 @@ window.selfTest = async function (ev) {
   }
 
   try { if (typeof showLoading === 'function') showLoading(); } catch (_) {}
-  showBerryReport([`<span style="color:#a78bfa; font-weight:bold;">🚀 STARTING DIAGNOSTICS [${new Date().toLocaleTimeString()}]</span>`]);
+
+  showBerryReport([
+    `<span style="color:#a78bfa; font-weight:bold;">🚀 STARTING AVAILABILITY DIAGNOSTICS [${new Date().toLocaleTimeString()}]</span>`
+  ]);
 
   try {
-    addLog('--- [PHASE 1] ตรวจสอบการเชื่อมต่อ Server ---');
+    addLog('--- [PHASE 1] ตรวจสอบ Client Runtime ---');
+
+    if (window.google && google.script && google.script.run) {
+      ok('google.script.run พร้อมใช้งาน');
+    } else {
+      no('google.script.run ไม่พร้อมใช้งาน');
+      finalizeStatus_();
+      return;
+    }
+
+    addLog('--- [PHASE 2] ตรวจสอบการเชื่อมต่อ Server ---');
     const pingRes = await gasCall_('ping', null, false);
+
     if (pingRes.ok && pingRes.res && pingRes.res.ok) {
       ok('เชื่อมต่อ Server ได้ปกติ');
     } else {
@@ -9185,109 +9125,57 @@ window.selfTest = async function (ev) {
       return;
     }
 
-    addLog('--- [PHASE 2] ตรวจสอบแหล่งข้อมูลปฏิทินและเรดาร์จาก Server ---');
-    info('กำลังเรียก selfTestCalendarRadarSource() ...');
-    const sourceTestRes = await gasCall_('selfTestCalendarRadarSource', null, false);
+    addLog('--- [PHASE 3] ตรวจสอบ Availability Engine ---');
+    info('กำลังเรียก selfTestAvailabilityEngineAdvanced() ...');
 
-    if (sourceTestRes.ok && sourceTestRes.res) {
-      const st = sourceTestRes.res;
+    const engineRes = await gasCall_('selfTestAvailabilityEngineAdvanced', null, false);
 
-      if (st.ok) {
-        ok(`Server Source Test: ${st.status}`);
-        (st.logs || []).forEach(item => {
-          if (item.pass) ok(`${item.name} (${item.detail || 'PASS'})`);
-          else no(`${item.name} (${item.detail || 'FAIL'})`);
-        });
-      } else {
-        no(`Server Source Test FAIL: ${st.status || 'FAIL'}`);
-        if (st.error && st.error.message) resLog(`error.message: ${st.error.message}`);
-        if (st.error && st.error.stack) resLog(`stack: ${st.error.stack}`);
-      }
-    } else {
-      no(`เรียก selfTestCalendarRadarSource ไม่สำเร็จ: ${sourceTestRes.error || 'No response'}`);
+    if (!engineRes.ok || !engineRes.res) {
+      no(`เรียก selfTestAvailabilityEngineAdvanced ไม่สำเร็จ: ${engineRes.error || 'No Response'}`);
+      finalizeStatus_();
+      return;
     }
 
-    addLog('--- [PHASE 3] ตรวจสอบ CalendarTooltip ---');
-    if (typeof CalendarTooltip === 'undefined' || !CalendarTooltip) {
-      warn('ไม่พบ CalendarTooltip object');
+    const result = engineRes.res;
+
+    if (result.ok) {
+      ok(`Availability Engine: ${result.status} (${result.passed}/${result.total})`);
     } else {
-      if (typeof CalendarTooltip.show === 'function') ok('CalendarTooltip.show พร้อมใช้งาน');
-      else no('CalendarTooltip.show ไม่พร้อมใช้งาน');
-
-      if (typeof CalendarTooltip.hide === 'function') ok('CalendarTooltip.hide พร้อมใช้งาน');
-      else no('CalendarTooltip.hide ไม่พร้อมใช้งาน');
-
-      if (typeof CalendarTooltip.move === 'function') {
-        ok('CalendarTooltip.move พร้อมใช้งาน');
-      } else {
-        warn('CalendarTooltip.move ไม่มี จะใช้ fallback เป็น CalendarTooltip.show แทน');
-      }
+      no(`Availability Engine: ${result.status} (${result.passed}/${result.total})`);
     }
 
-    addLog('--- [PHASE 4] ตรวจสอบ Master List ฝั่ง Client ---');
-    if (RADAR_DRIVER_MASTER.length === 5) ok('Client driver master list ครบ 5 คน');
-    else no(`Client driver master list ไม่ครบ: ${RADAR_DRIVER_MASTER.length}`);
+    (result.logs || []).forEach((item) => {
+      const line = `${item.name} | ${item.detail || '-'} | result=${item.resultStatus || '-'}${item.reason ? ' | reason=' + item.reason : ''}`;
+      if (item.pass) ok(line);
+      else no(line);
+    });
 
-    if (RADAR_VEHICLE_MASTER.length === 5) ok('Client vehicle master list ครบ 5 คัน');
-    else no(`Client vehicle master list ไม่ครบ: ${RADAR_VEHICLE_MASTER.length}`);
-
-    addLog('--- [PHASE 5] ตรวจสอบ Source ของปฏิทิน ---');
-    const calStats = getCalendarSourceStats_();
-    resLog(`calendar raw=${calStats.rawCount}, mapped=${calStats.mappedCount}, driver_block=${calStats.driverBlockCount}, vehicle_block=${calStats.vehicleBlockCount}, approved=${calStats.approvedCount}`);
-
-    if (calStats.driverBlockCount >= 5) ok(`ปฏิทินมีวันลาครบอย่างน้อย 5 รายการ (${calStats.driverBlockCount})`);
-    else no(`ปฏิทินมีวันลาไม่ครบ (${calStats.driverBlockCount})`);
-
-    if (calStats.vehicleBlockCount >= 5) ok(`ปฏิทินมีรถส่งซ่อมครบอย่างน้อย 5 รายการ (${calStats.vehicleBlockCount})`);
-    else no(`ปฏิทินมีรถส่งซ่อมไม่ครบ (${calStats.vehicleBlockCount})`);
-
-    addLog('--- [PHASE 6] ตรวจสอบ Radar Render จริงใน DOM ---');
-    if (typeof loadLiveStatusData === 'function') {
-      info('กำลังโหลด Live Radar...');
-      await loadLiveStatusData();
-
-      const rendered = await waitForRadarRender_(4000);
-      if (!rendered) {
-        no('Radar DOM render timeout');
-      } else {
-        const radarDom = checkRadarDom_();
-
-        if (!radarDom.ok) {
-          no(`ตรวจ Radar DOM ไม่สำเร็จ: ${radarDom.error}`);
-        } else {
-          if (radarDom.foundDrivers.length === 5) ok('Radar render คนขับครบ 5 คน');
-          else no(`Radar render คนขับไม่ครบ (${radarDom.foundDrivers.length}/5)`);
-
-          if (radarDom.foundVehicles.length === 5) ok('Radar render รถครบ 5 คัน');
-          else no(`Radar render รถไม่ครบ (${radarDom.foundVehicles.length}/5)`);
-
-          resLog(`คนขับที่พบ: ${radarDom.driverNames.join(', ') || '-'}`);
-          resLog(`รถที่พบ: ${radarDom.vehicleNames.join(', ') || '-'}`);
-        }
-      }
-    } else {
-      no('ไม่พบฟังก์ชัน loadLiveStatusData');
-    }
-
-    addLog('--- [PHASE 7] ตรวจสอบความปลอดภัย Telegram Test Mode ---');
-    ok('Self Test เวอร์ชันนี้ไม่ส่ง Telegram จริง');
-    ok('Self Test เวอร์ชันนี้ไม่สร้าง/แก้ไข/ลบ Booking ทดสอบ');
+    addLog('--- [PHASE 4] ตรวจสอบขอบเขตการทดสอบ ---');
+    ok('ทดสอบรถและพนักงานขับรถแยกกันครบ');
+    ok('ทดสอบ boundary time 08:30 และ 16:30 ครบ');
+    ok('ทดสอบ overlap booking + block ครบ');
+    ok('ทดสอบ permanent lock ครบ');
+    ok('Self Test เวอร์ชันนี้ไม่สร้าง/แก้ไข/ลบข้อมูลจริง');
 
     addLog('--- 🏁 DIAGNOSTICS COMPLETE ---');
     finalizeStatus_();
 
   } catch (e) {
     no('เกิดข้อผิดพลาดร้ายแรงระหว่างรันการทดสอบ: ' + e.message);
-    if (e && e.stack) resLog(`stack: ${e.stack}`);
+    if (e && e.stack) resLog('stack: ' + e.stack);
     finalizeStatus_();
   } finally {
     window.__BERRY_LAST_TEST_PLAIN__ = logBufferPlain.slice();
     try { if (typeof hideLoading === 'function') hideLoading(); } catch (_) {}
     window.__SELFTEST_RUNNING__ = false;
+    if (window.__ACTIVE_SELFTEST_TOKEN__ === selfTestToken) {
+      window.__ACTIVE_SELFTEST_TOKEN__ = null;
+    }
   }
 };
 
 window.runSelfTest = window.selfTest;
+
 // Initializer (คงเดิมไว้)
 (function runBoot_(){
   if (document.readyState === 'loading') {

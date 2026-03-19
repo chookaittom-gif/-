@@ -1102,7 +1102,6 @@
       </div>
     </div>
 
-       <!-- 🍓 BERRY FIX: Modal สำหรับระบุวันลา/ซ่อมบำรุง -->
     <div id="suspend-modal" class="modal" role="dialog" aria-hidden="true" style="z-index: 12000 !important;">
       <div class="modal-content" style="max-width: 400px; border-radius: 16px;">
         <div class="modal-header" style="background: linear-gradient(135deg, #F59E0B, #B45309); padding: 1.2rem 1.5rem;">
@@ -1160,9 +1159,10 @@
               <input type="text" id="suspend-reason" class="form-control" placeholder="เช่น ลากิจ, เข้าศูนย์ซ่อม" required style="height: 44px; border-radius: 8px; border: 1px solid #cbd5e1; padding: 0 12px; width: 100%;">
             </div>
           </div>
+          <!-- ANCHOR -->
           <div class="modal-footer" style="padding: 1rem 1.5rem; background: #f8fafc; display: flex; justify-content: flex-end; gap: 10px;">
-            <button type="button" onclick="closeModalA11y('suspend-modal')" class="btn btn-secondary" style="border-radius: 8px;">ยกเลิก</button>
-            <button type="submit" class="btn btn-warning" style="border-radius: 8px; color: white;">💾 บันทึกข้อมูล</button>
+            <button type="button" onclick="closeModalA11y('suspend-modal')" class="btn btn-secondary" style="border-radius: 8px; padding: 8px 16px;">ยกเลิก</button>
+            <button type="submit" class="btn btn-warning" style="border-radius: 8px; color: white; padding: 8px 16px; font-weight: 700;">💾 บันทึกข้อมูล</button>
           </div>
         </form>
       </div>
