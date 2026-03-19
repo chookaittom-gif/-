@@ -1231,7 +1231,8 @@ function getIntegratedDailyReport(targetDate) {
       startD: h.indexOf('วันเริ่มต้น'),
       endD: h.indexOf('วันสิ้นสุด'),
       startT: h.indexOf('เวลาเริ่มต้น'),
-      endT: h.indexOf('เวลาสิ้นสุด')
+      endT: h.indexOf('เวลาสิ้นสุด'),
+      vehicleCount: h.indexOf('จำนวนรถที่ต้องการ')
     };
 
     var groups = {
@@ -1251,6 +1252,18 @@ function getIntegratedDailyReport(targetDate) {
         .split(/[,\n|\/]+/)
         .map(function(x) { return String(x || '').trim(); })
         .filter(function(x) { return x && x !== '-'; });
+    }
+
+    function cleanText_(v, fallback) {
+      var s = String(v == null ? '' : v).trim();
+      if (!s || s === '-') return fallback || '';
+      return s;
+    }
+
+    function getAssignedCount_(plateRaw, driverRaw) {
+      var plates = splitMultiValue_(plateRaw);
+      var drivers = splitMultiValue_(driverRaw);
+      return Math.max(plates.length, drivers.length);
     }
 
     function buildAssignmentLines_(plateRaw, driverRaw) {
@@ -1356,6 +1369,8 @@ function getIntegratedDailyReport(targetDate) {
         var name = String(r[idx.name] || '-').trim() || '-';
         var plateRaw = r[idx.vehicle];
         var driverRaw = r[idx.driver];
+        var requestedCount = cleanText_(idx.vehicleCount > -1 ? r[idx.vehicleCount] : '', '');
+        var assignedCount = getAssignedCount_(plateRaw, driverRaw);
 
         lines.push(icon + ' ' + timeRange + ' : ' + place);
         lines.push('   👤 ' + name);
@@ -1363,6 +1378,10 @@ function getIntegratedDailyReport(targetDate) {
         var assignmentLines = buildAssignmentLines_(plateRaw, driverRaw);
         if (assignmentLines.length > 0) {
           lines = lines.concat(assignmentLines);
+        }
+
+        if (requestedCount && assignedCount > 0 && String(requestedCount) !== String(assignedCount)) {
+          lines.push('   ℹ️ ขอ ' + requestedCount + ' คัน | จัดให้ ' + assignedCount + ' คัน');
         }
 
         lines.push('');
@@ -1633,11 +1652,11 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   var isUpdate = rawNote && (rawNote.indexOf('อัปเดต') > -1 || rawNote.indexOf('เปลี่ยน') > -1);
 
   var headMap = {
-    pending: '🚌 ระบบจองรถ: แจ้งเตือนการจองใหม่',
-    approved: isUpdate ? '🔄 ระบบจองรถ: อัปเดตการมอบหมายงาน' : '✅ ระบบจองรถ: อนุมัติรายการ',
-    driver_special_approved: isUpdate ? '🔄 ระบบจองรถ: อัปเดตการมอบหมายงาน (ด่วน)' : '⚡ ระบบจองรถ: อนุมัติกรณีพิเศษ',
-    rejected: '⛔ ระบบจองรถ: แจ้งผลการพิจารณา',
-    cancelled: '🚫 ระบบจองรถ: แจ้งยกเลิก'
+    pending: '🚌 ระบบจองยานพาหนะ: แจ้งเตือนการจองใหม่',
+    approved: isUpdate ? '🔄 ระบบจองยานพาหนะ: อัปเดตการมอบหมายงาน' : '✅ ระบบจองยานพาหนะ: อนุมัติรายการ',
+    driver_special_approved: isUpdate ? '🔄 ระบบจองยานพาหนะ: อัปเดตการมอบหมายงาน (ด่วน)' : '⚡ ระบบจองยานพาหนะ: อนุมัติกรณีพิเศษ',
+    rejected: '⛔ ระบบจองยานพาหนะ: แจ้งผลการพิจารณา',
+    cancelled: '🚫 ระบบจองยานพาหนะ: แจ้งยกเลิก'
   };
 
   var statusLabelMap = {
@@ -8109,6 +8128,7 @@ function runFullTelegramLogTest() {
       Logger.log(msg);
     } catch (e) {
       Logger.log('❌ Daily case failed: ' + caseTitle + ' | ' + e.message);
+      Logger.log(e.stack || '');
     } finally {
       SpreadsheetApp.getActiveSpreadsheet = originalGetActive;
     }
@@ -8185,15 +8205,16 @@ function runFullTelegramLogTest() {
       'วันเริ่มต้น',
       'เวลาเริ่มต้น',
       'วันสิ้นสุด',
-      'เวลาสิ้นสุด'
+      'เวลาสิ้นสุด',
+      'จำนวนรถที่ต้องการ'
     ];
 
     runDailyCase(
       '8. รายงานสรุปประจำวัน (Daily Summary: มีงาน 1 คัน - 05:00 AM)',
       [
         mockHeaders,
-        ['BK-001', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-4964', 'ประเสริฐ', '2026-03-12', '09:00', '2026-03-12', '12:00'],
-        ['BK-002', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00']
+        ['BK-001', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-4964', 'ประเสริฐ', '2026-03-12', '09:00', '2026-03-12', '12:00', '1'],
+        ['BK-002', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00', '1']
       ],
       new Date(2026, 2, 12)
     );
@@ -8202,9 +8223,9 @@ function runFullTelegramLogTest() {
       '9. รายงานสรุปประจำวัน (Daily Summary: หลายคันใน 1 งาน - 05:00 AM)',
       [
         mockHeaders,
-        ['BK-010', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-1234|กท-4567', 'พี่ยอด|พี่เอก', '2026-03-12', '09:00', '2026-03-12', '12:00'],
-        ['BK-011', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับแขก', 'สนามบิน', 'นข-1111|ฮค-7777', 'พี่ยอด|นายสมชาย', '2026-03-12', '14:00', '2026-03-12', '16:00'],
-        ['BK-012', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00']
+        ['BK-010', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-1234|กท-4567', 'พี่ยอด|พี่เอก', '2026-03-12', '09:00', '2026-03-12', '12:00', '2'],
+        ['BK-011', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับแขก', 'สนามบิน', 'นข-1111|ฮค-7777', 'พี่ยอด|นายสมชาย', '2026-03-12', '14:00', '2026-03-12', '16:00', '2'],
+        ['BK-012', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00', '1']
       ],
       new Date(2026, 2, 12)
     );
@@ -8213,7 +8234,7 @@ function runFullTelegramLogTest() {
       '10. รายงานสรุปประจำวัน (Daily Summary: ขอ 3 ได้ 2 - 05:00 AM)',
       [
         mockHeaders,
-        ['BK-020', 'approved', 'ดร.ทดสอบ ขอสามได้สอง', 'สัมมนา', 'โครงการทดสอบหลายคัน', 'ศูนย์การประชุมฯ', 'ฮค-2222|กท-3333', 'พี่ต้น|พี่หนึ่ง', '2026-03-12', '08:30', '2026-03-12', '16:30']
+        ['BK-020', 'approved', 'ดร.ทดสอบ ขอสามได้สอง', 'สัมมนา', 'โครงการทดสอบหลายคัน', 'ศูนย์การประชุมฯ', 'ฮค-2222|กท-3333', 'พี่ต้น|พี่หนึ่ง', '2026-03-12', '08:30', '2026-03-12', '16:30', '3']
       ],
       new Date(2026, 2, 12)
     );
@@ -8222,8 +8243,8 @@ function runFullTelegramLogTest() {
       '11. รายงานสรุปประจำวัน (Daily Summary: งานข้ามวัน - 05:00 AM)',
       [
         mockHeaders,
-        ['BK-030', 'approved', 'ผศ.ดร.นพพร แพทย์รัตน์', 'อบรม', 'อบรมเชิงปฏิบัติการ', 'มหาวิทยาลัยสวนดุสิต กรุงเทพมหานคร', 'นข-5000', 'นายสมชาย', '2026-03-08', '09:00', '2026-03-10', '17:00'],
-        ['BK-031', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับคณะดูงาน', 'สนามบินดอนเมือง', 'ฮค-9000|กท-1111', 'พี่ยอด|พี่เอก', '2026-03-10', '06:00', '2026-03-12', '20:00']
+        ['BK-030', 'approved', 'ผศ.ดร.นพพร แพทย์รัตน์', 'อบรม', 'อบรมเชิงปฏิบัติการ', 'มหาวิทยาลัยสวนดุสิต กรุงเทพมหานคร', 'นข-5000', 'นายสมชาย', '2026-03-08', '09:00', '2026-03-10', '17:00', '1'],
+        ['BK-031', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับคณะดูงาน', 'สนามบินดอนเมือง', 'ฮค-9000|กท-1111', 'พี่ยอด|พี่เอก', '2026-03-10', '06:00', '2026-03-12', '20:00', '2']
       ],
       new Date(2026, 2, 10)
     );
@@ -8242,262 +8263,5 @@ function runFullTelegramLogTest() {
   Logger.log('\n🏁 === สิ้นสุดการทดสอบระบบ V-Berry Diagnostics ===');
 }
 
-function selfTestApiGetLiveStatus() {
-  Logger.log('🚀 === START: selfTestApiGetLiveStatus ===');
-  var res = apiGetLiveStatus();
-  Logger.log('RESULT: ' + JSON.stringify(res, null, 2));
-  Logger.log('🏁 === END: selfTestApiGetLiveStatus ===');
-}
 
-function selfTestRadarRealtimeStatus_() {
-  Logger.log('🚀 === START: selfTestRadarRealtimeStatus_ ===');
-  
-  var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
-  var now = new Date(2026, 2, 17, 18, 49, 0); // 17 Mar 2026 18:49
-  
-  // จำลอง data ที่มาจาก Sheet เพื่อทดสอบ getRadarDateTime_ ภายใน calculate
-  function getRadarDateTime_(dISO, tStr, defaultTime) {
-    if (!dISO) return null;
-    var cleanISO = parseDateToISO_(dISO);
-    
-    var cleanTime = defaultTime || '00:00';
-    if (tStr != null && tStr !== '') {
-      if (tStr instanceof Date && !isNaN(tStr.getTime())) {
-        cleanTime = Utilities.formatDate(tStr, tz, 'HH:mm');
-      } else if (typeof tStr === 'number' && isFinite(tStr)) {
-        var num = tStr % 1;
-        var tm = Math.round(num * 24 * 60);
-        if (tm >= 1440) tm = 1439;
-        if (tm < 0) tm = 0;
-        var hh = Math.floor(tm / 60);
-        var mi = tm % 60;
-        cleanTime = (hh < 10 ? '0' : '') + hh + ':' + (mi < 10 ? '0' : '') + mi;
-      } else {
-        var rawTime = String(tStr).trim();
-        if (rawTime) {
-          cleanTime = parseTimeSafe_(rawTime);
-          if (cleanTime === '00:00' && !/^0(?:$|\.)|^:0|^00/.test(rawTime) && rawTime !== '0') {
-            cleanTime = defaultTime || '00:00';
-          }
-        }
-      }
-    }
-    var fullStr = cleanISO + ' ' + cleanTime + ':00';
-    return Utilities.parseDate(fullStr, tz, 'yyyy-MM-dd HH:mm:ss');
-  }
 
-  // ทดสอบเคสที่เวลาสิ้นสุดเป็นทศนิยม (เช่น 16:30 คือ 0.6875)
-  // วันที่ 17 มีนาคม 2026
-  var sDateRaw = new Date(2026, 2, 17);
-  var sTimeRaw = 0.33333333; // ~08:00
-  var eTimeRaw = 0.6875;     // 16:30
-
-  var startAt = getRadarDateTime_(sDateRaw, sTimeRaw, '00:00');
-  var endAt = getRadarDateTime_(sDateRaw, eTimeRaw, '23:59');
-
-  Logger.log('[TEST] parsed startAt: ' + Utilities.formatDate(startAt, tz, 'yyyy-MM-dd HH:mm:ss'));
-  Logger.log('[TEST] parsed endAt: ' + Utilities.formatDate(endAt, tz, 'yyyy-MM-dd HH:mm:ss'));
-
-  var mockCtx = {
-    now: now,
-    tz: tz,
-    availBlocks: [],
-    approvedBookings: [{
-      bookingId: 'MOCK-1',
-      status: 'approved',
-      driverRaw: 'ปริญญา ก้อนสัมฤทธิ์',
-      vehicleRaw: 'ฮล-466',
-      startAt: startAt,
-      endAt: endAt
-    }]
-  };
-
-  var vStatus = calculateVehicleStatus('ฮล-466', mockCtx);
-  var dStatus = calculateDriverStatus('ปริญญา ก้อนสัมฤทธิ์', mockCtx);
-
-  // ตอน 18:49 ต้องพ้นเวลาจอง 16:30 ไปแล้ว จะต้องขึ้น "พร้อม"
-  if (vStatus.status === 'ready' && dStatus.status === 'ready') {
-    Logger.log('✅ PASS | Vehicle and Driver returned to Ready after job ended (Real-time overlap).');
-  } else {
-    Logger.log('❌ FAIL | Expected Ready, but got Vehicle:' + vStatus.status + ' Driver:' + dStatus.status);
-    throw new Error('Real-time overlap logic failed (Timezone / Decimal Time parsing bug).');
-  }
-  
-  Logger.log('🏁 === END: selfTestRadarRealtimeStatus_ ===');
-}
-
-function selfTestRadarStatusFlow() {
-  Logger.log('🚀 === SELF TEST: RADAR STATUS FLOW START ===');
-
-  function assertEqual(step, actual, expected, detail) {
-    var pass = actual === expected;
-    Logger.log((pass ? 'PASS' : 'FAIL') + ' | ' + step +
-      ' | expected=' + expected +
-      ' | actual=' + actual +
-      (detail ? ' | ' + detail : ''));
-    return pass;
-  }
-
-  // -----------------------------
-  // TEST DATA
-  // -----------------------------
-  var testVehicle = 'ฮล-466';
-  var testDriver = 'ปริญญา ก้อนสัมฤทธิ์';
-
-  var bookingStart = new Date(2026, 2, 17, 8, 0, 0);   // 17 Mar 2026 08:00
-  var bookingEnd = new Date(2026, 2, 17, 15, 30, 0);   // 17 Mar 2026 15:30
-
-  function buildCtx(nowDate) {
-    return {
-      now: nowDate,
-      availBlocks: [],
-      approvedBookings: [
-        {
-          bookingId: 'SELFTEST-001',
-          status: 'approved',
-          vehicleRaw: testVehicle,
-          driverRaw: testDriver,
-          destination: 'ศูนย์บริการใบอนุญาตทำงานของคนต่างด้าว จังหวัดแพร่',
-          workName: 'งานทดสอบเรดาร์',
-          startAt: bookingStart,
-          endAt: bookingEnd
-        }
-      ]
-    };
-  }
-
-  // -----------------------------
-  // CASE 1: BEFORE START
-  // -----------------------------
-  var ctxBefore = buildCtx(new Date(2026, 2, 17, 7, 0, 0));
-  var vehicleBefore = calculateVehicleStatus(testVehicle, ctxBefore);
-  var driverBefore = calculateDriverStatus(testDriver, ctxBefore);
-
-  // 🍓 BERRY FIX v2: ก่อนเริ่มงานต้อง ready ไม่ใช่ busy (real-time overlap)
-  assertEqual(
-    'STEP 1 Vehicle Before Start',
-    vehicleBefore.status,
-    'ready',
-    JSON.stringify(vehicleBefore)
-  );
-  assertEqual(
-    'STEP 2 Driver Before Start',
-    driverBefore.status,
-    'ready',
-    JSON.stringify(driverBefore)
-  );
-
-  // -----------------------------
-  // CASE 2: DURING JOB
-  // -----------------------------
-  var ctxDuring = buildCtx(new Date(2026, 2, 17, 10, 0, 0));
-  var vehicleDuring = calculateVehicleStatus(testVehicle, ctxDuring);
-  var driverDuring = calculateDriverStatus(testDriver, ctxDuring);
-
-  assertEqual(
-    'STEP 3 Vehicle During Job',
-    vehicleDuring.status,
-    'busy',
-    JSON.stringify(vehicleDuring)
-  );
-  assertEqual(
-    'STEP 4 Driver During Job',
-    driverDuring.status,
-    'busy',
-    JSON.stringify(driverDuring)
-  );
-
-  // -----------------------------
-  // CASE 3: AFTER END
-  // -----------------------------
-  var ctxAfter = buildCtx(new Date(2026, 2, 17, 16, 0, 0));
-  var vehicleAfter = calculateVehicleStatus(testVehicle, ctxAfter);
-  var driverAfter = calculateDriverStatus(testDriver, ctxAfter);
-
-  assertEqual(
-    'STEP 5 Vehicle After End',
-    vehicleAfter.status,
-    'ready',
-    JSON.stringify(vehicleAfter)
-  );
-  assertEqual(
-    'STEP 6 Driver After End',
-    driverAfter.status,
-    'ready',
-    JSON.stringify(driverAfter)
-  );
-
-  // -----------------------------
-  // CASE 4: REPAIR OVERRIDE
-  // -----------------------------
-  var ctxRepair = {
-    now: new Date(2026, 2, 17, 10, 0, 0),
-    availBlocks: [
-      {
-        resourceType: 'vehicle',
-        resourceId: testVehicle,
-        startAt: new Date(2026, 2, 17, 9, 0, 0),
-        endAt: new Date(2026, 2, 17, 17, 0, 0),
-        reason: 'เข้าศูนย์ซ่อม'
-      }
-    ],
-    approvedBookings: [
-      {
-        bookingId: 'SELFTEST-002',
-        status: 'approved',
-        vehicleRaw: testVehicle,
-        driverRaw: testDriver,
-        destination: 'งานทับซ้อน',
-        workName: 'งานทดสอบซ่อม',
-        startAt: bookingStart,
-        endAt: bookingEnd
-      }
-    ]
-  };
-
-  var vehicleRepair = calculateVehicleStatus(testVehicle, ctxRepair);
-  assertEqual(
-    'STEP 7 Vehicle Repair Override',
-    vehicleRepair.status,
-    'repair',
-    JSON.stringify(vehicleRepair)
-  );
-
-  // -----------------------------
-  // CASE 5: LEAVE OVERRIDE
-  // -----------------------------
-  var ctxLeave = {
-    now: new Date(2026, 2, 17, 10, 0, 0),
-    availBlocks: [
-      {
-        resourceType: 'driver',
-        resourceId: testDriver,
-        startAt: new Date(2026, 2, 17, 9, 0, 0),
-        endAt: new Date(2026, 2, 17, 17, 0, 0),
-        reason: 'ลาป่วย'
-      }
-    ],
-    approvedBookings: [
-      {
-        bookingId: 'SELFTEST-003',
-        status: 'approved',
-        vehicleRaw: testVehicle,
-        driverRaw: testDriver,
-        destination: 'งานทับซ้อน',
-        workName: 'งานทดสอบลา',
-        startAt: bookingStart,
-        endAt: bookingEnd
-      }
-    ]
-  };
-
-  var driverLeave = calculateDriverStatus(testDriver, ctxLeave);
-  assertEqual(
-    'STEP 8 Driver Leave Override',
-    driverLeave.status,
-    'leave',
-    JSON.stringify(driverLeave)
-  );
-
-  Logger.log('🏁 === SELF TEST: RADAR STATUS FLOW END ===');
-}
