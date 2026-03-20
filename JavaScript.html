@@ -471,12 +471,14 @@ function updateCounters() {
     console.log("📊 Updating counters...");
     const arr = window.allBookingsData || [];
 
-    const counts = { approved: 0, pending: 0, rejected: 0, cancelled: 0, driver_special_approved: 0, other: 0 };
+    const counts = { approved: 0, pending: 0, rejected: 0, cancelled: 0, driver_special_approved: 0, blocks: 0, other: 0 };
 
     arr.forEach(booking => {
         const statusKey = normalizeClientStatus(booking?.status || 'pending');
 
-        if (counts[statusKey] !== undefined) {
+        if (statusKey === 'driver_block' || statusKey === 'vehicle_block' || statusKey === 'maintenance') {
+            counts.blocks++;
+        } else if (counts[statusKey] !== undefined) {
             counts[statusKey]++;
         } else {
             counts.other++;
@@ -491,6 +493,8 @@ function updateCounters() {
         setText_('approved-count', totalApproved);
         setText_('rejected-count', counts.rejected);
         setText_('cancelled-count', counts.cancelled);
+        setText_('blocks-count', counts.blocks);
+        setText_('total-bookings-badge', totalPending + totalApproved + counts.rejected + counts.cancelled + counts.other);
     }
 
     const claimedSub = document.getElementById('sub-claimed-count');
@@ -584,69 +588,134 @@ async function loadAdminPanelData() {
     }
 }
 
-// 🍓 BERRY FIX: Render Drivers (Cyber Card Style)
 function renderAdminDrivers(drivers) {
-    const container = document.getElementById('admin-drivers-list');
-    if (!container) return;
-    if (drivers.length === 0) {
-        container.innerHTML = '<p class="text-center text-muted p-4">ไม่พบข้อมูล</p>'; return;
-    }
-    container.innerHTML = drivers.map(d => {
-        const isActive = d.active !== false;
-        const glowClass = isActive ? 'glow-green' : 'glow-gray';
-        const btnIcon = isActive ? '✅' : '⏸';
-        const btnText = isActive ? 'ทำงานอยู่' : 'พักงาน';
+  const container = document.getElementById('admin-drivers-list');
+  if (!container) return;
 
-        return `
-        <div class="cyber-card ${!isActive ? 'inactive' : ''}">
-            <div class="cyber-card-left">
-                <div class="cyber-avatar avatar-blue">👤</div>
-            </div>
-            <div class="cyber-card-right">
-                <div class="cyber-info">
-                    <div class="cyber-name" title="${escapeHtml(d.name)}">${escapeHtml(d.name)}</div>
-                    <div class="cyber-meta">User: ${escapeHtml(d.username)}</div>
-                </div>
-                <button class="cyber-status-badge ${glowClass}" onclick="toggleDriverStatus(this, '${escapeHtml(d.name)}', ${isActive})">
-                    <span class="icon">${btnIcon}</span><span class="text">${btnText}</span>
-                </button>
-            </div>
-        </div>`;
-    }).join('');
+  if (!Array.isArray(drivers) || drivers.length === 0) {
+    container.innerHTML = '<p class="text-center text-muted p-4">ไม่พบข้อมูล</p>';
+    return;
+  }
+
+  const safeText = (v) => {
+    const s = String(v == null ? '' : v).trim();
+    return s && s !== '-' ? s : '-';
+  };
+
+  container.innerHTML = drivers.map(d => {
+    const name = safeText(d && d.name);
+    const isActive = d && d.active !== false;
+    const isBusy = d && d.isBusy === true;
+    const rawBadge = safeText(d && d.badge);
+
+    const btnClass = isActive ? 'glow-green' : 'glow-orange';
+    const btnIcon = isActive ? '✅' : '☕';
+    const btnText = isActive ? 'ทำงาน' : 'พักงาน';
+
+    // 🍓 UX IMPROVE: dynamic title
+    const btnTitle = isActive ? 'คลิกเพื่อพักงาน' : 'คลิกเพื่อกลับเข้าทำงาน';
+
+    let metaText = 'ทำงาน';
+    let metaClass = '';
+
+    if (!isActive) {
+      metaText = 'พักงาน';
+    } else if (isBusy) {
+      metaText = (rawBadge !== '-' ? rawBadge : 'ติดภารกิจ');
+      metaClass = 'text-warning';
+    }
+
+    return `
+      <div class="cyber-card ${!isActive ? 'inactive' : ''}">
+        <div class="cyber-card-left">
+          <div class="cyber-avatar avatar-blue">👤</div>
+        </div>
+        <div class="cyber-card-right">
+          <div class="cyber-info">
+            <div class="cyber-name" title="${escapeHtml(name)}">${escapeHtml(name)}</div>
+            <div class="cyber-meta ${metaClass}" style="font-weight:600;">${escapeHtml(metaText)}</div>
+          </div>
+          <button
+            type="button"
+            class="cyber-status-badge ${btnClass}"
+            title="${btnTitle}"
+            data-name="${escapeHtml(name)}"
+            data-active="${isActive ? 'true' : 'false'}"
+            data-available="${!isBusy ? 'true' : 'false'}"
+            onclick="toggleDriverStatus(this, this.dataset.name, ${!isActive})">
+            <span class="icon">${btnIcon}</span><span class="text">${btnText}</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
-// 🍓 BERRY FIX: Render Vehicles (Cyber Card Style)
 function renderAdminVehicles(vehicles) {
-    const container = document.getElementById('admin-vehicles-list');
-    if (!container) return;
-    if (vehicles.length === 0) {
-        container.innerHTML = '<p class="text-center text-muted p-4">ไม่พบข้อมูล</p>'; return;
+  const container = document.getElementById('admin-vehicles-list');
+  if (!container) return;
+
+  if (!Array.isArray(vehicles) || vehicles.length === 0) {
+    container.innerHTML = '<p class="text-center text-muted p-4">ไม่พบข้อมูล</p>';
+    return;
+  }
+
+  const safeText = (v) => {
+    const s = String(v == null ? '' : v).trim();
+    return s && s !== '-' ? s : '-';
+  };
+
+  container.innerHTML = vehicles.map(v => {
+    const plate = safeText(v && v.plate);
+    const typeRaw = String((v && v.type) || '').trim().toLowerCase();
+    const isActive = v && v.active !== false;
+    const isAvailable = v && v.available !== false;
+    const rawBadge = safeText(v && v.badge);
+
+    const btnClass = isActive ? 'glow-green' : 'glow-orange';
+    const btnIcon = isActive ? '✅' : '🛠';
+    const btnText = isActive ? 'พร้อมใช้' : 'ส่งซ่อม';
+
+    // 🍓 UX IMPROVE: dynamic title
+    const btnTitle = isActive ? 'คลิกเพื่อส่งซ่อม' : 'คลิกเพื่อกลับมาใช้งาน';
+
+    let metaText = 'พร้อมใช้';
+    let metaClass = '';
+
+    if (!isActive) {
+      metaText = 'ส่งซ่อม';
+    } else if (!isAvailable) {
+      metaText = (rawBadge !== '-' ? rawBadge : 'ไม่ว่าง');
+      metaClass = 'text-warning';
     }
-    container.innerHTML = vehicles.map(v => {
-        const isActive = v.active !== false;
-        const glowClass = isActive ? 'glow-green' : 'glow-orange';
-        const btnIcon = isActive ? '✅' : '🛠';
-        const btnText = isActive ? 'พร้อมใช้' : 'ซ่อมบำรุง';
-        const typeIcon = (v.type && (v.type.includes('truck') || v.type.includes('บรรทุก'))) ? '🚚' : '🚐';
 
-        return `
-        <div class="cyber-card ${!isActive ? 'inactive' : ''}">
-            <div class="cyber-card-left">
-                <div class="cyber-avatar avatar-purple">${typeIcon}</div>
-            </div>
-            <div class="cyber-card-right">
-                <div class="cyber-info">
-                    <div class="cyber-name" title="${escapeHtml(v.plate)}">${escapeHtml(v.plate)}</div>
-                    <div class="cyber-meta">Type: ${escapeHtml(v.name || v.type || '-')}</div>
-                </div>
-                <button class="cyber-status-badge ${glowClass}" onclick="toggleVehicleStatus(this, '${escapeHtml(v.plate)}', ${isActive})">
-                    <span class="icon">${btnIcon}</span><span class="text">${btnText}</span>
-                </button>
-            </div>
-        </div>`;
-    }).join('');
+    const typeIcon = (typeRaw.includes('truck') || typeRaw.includes('บรรทุก')) ? '🚚' : '🚐';
+
+    return `
+      <div class="cyber-card ${!isActive ? 'inactive' : ''}">
+        <div class="cyber-card-left">
+          <div class="cyber-avatar avatar-purple">${typeIcon}</div>
+        </div>
+        <div class="cyber-card-right">
+          <div class="cyber-info">
+            <div class="cyber-name" title="${escapeHtml(plate)}">${escapeHtml(plate)}</div>
+            <div class="cyber-meta ${metaClass}" style="font-weight:600;">${escapeHtml(metaText)}</div>
+          </div>
+          <button
+            type="button"
+            class="cyber-status-badge ${btnClass}"
+            title="${btnTitle}"
+            data-plate="${escapeHtml(plate)}"
+            data-active="${isActive ? 'true' : 'false'}"
+            data-available="${isAvailable ? 'true' : 'false'}"
+            onclick="toggleVehicleStatus(this, this.dataset.plate, ${!isActive})">
+            <span class="icon">${btnIcon}</span><span class="text">${btnText}</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
-
 // สลับแท็บใน Admin Modal
 window.switchAdminTab = function(targetId) {
     // 1. จัดการปุ่ม Tab
@@ -751,21 +820,17 @@ window.submitSuspend = async function(e) {
     const submitBtn = e.target.querySelector('button[type="submit"]');
     setBtnLoading(submitBtn, true);
 
-    // 🍓 BERRY FIX: ดึงชื่อผู้บันทึกให้ครอบคลุมทุกกรณี (ป้องกันค่าว่าง)
     let adminName = 'Admin';
     if (window.currentUser) {
         adminName = window.currentUser.displayName || window.currentUser.name || window.currentUser.username || 'Admin';
     }
 
-    // 🍓 BERRY FIX: รับค่า assignedDriver ถ้าเป็นรถ
     const driverSelect = document.getElementById('suspend-driver');
     const assignedDriver = (type === 'vehicle' && driverSelect) ? driverSelect.value : '';
 
     try {
         let blockRes;
         if (type === 'vehicle' && assignedDriver) {
-             console.log('📝 [Client] maintenancePayloadBeforeSubmit:', { vehicle: id, start, end, reason, assignedDriver });
-             // 🍓 BERRY FIX: ใช้ saveMaintenanceAvailability สร้าง 2 block พร้อมกัน
              blockRes = await googleScriptRun('saveMaintenanceAvailability', {
                  vehiclePlate: id,
                  startDate: start, startTime: startTime,
@@ -786,10 +851,7 @@ window.submitSuspend = async function(e) {
         }
         
         if (!blockRes || !blockRes.ok) throw new Error(blockRes ? blockRes.error : 'Failed to create block');
-        console.log('✅ [Client] maintenanceAvailabilitySaveResult:', blockRes);
 
-        // 🍓 BERRY FIX: เอาคำสั่ง executeToggle ที่จะสับสวิตช์ปิดระบบถาวรออกไป 
-        // เปลี่ยนมาใช้วิธีอัปเดต UI แบบ Soft Feedback แทนเพื่อเข้าสู่โหมด Auto-Unlock สมบูรณ์แบบ
         if (activeSuspendBtn) {
              const originalHtml = activeSuspendBtn.innerHTML;
              activeSuspendBtn.innerHTML = '<span class="icon">⏳</span><span class="text">บันทึกเวลาแล้ว</span>';
@@ -797,21 +859,22 @@ window.submitSuspend = async function(e) {
         }
 
         closeModalA11y('suspend-modal');
-        showToast('บันทึกข้อมูลการระงับใช้งานตามช่วงเวลาเรียบร้อยแล้วค่ะ 🗓️', 'success');
+        if (typeof showToast === 'function') showToast('บันทึกข้อมูลการระงับใช้งานตามช่วงเวลาเรียบร้อยแล้วค่ะ 🗓️', 'success');
         
-        console.log('🔄 [Client] maintenanceRadarSyncResult: refreshing dashboard dashboard');
         await googleScriptRun('apiRefreshDashboard'); 
         if (typeof loadCalendarView === 'function' && window.calendarState) {
-            console.log('📅 [Client] maintenanceCalendarRenderResult: updating calendar');
             loadCalendarView(window.calendarState.currentYear, window.calendarState.currentMonth);
         }
+        // 🍓 BERRY FIX: บังคับให้อัปเดตหน้าต่าง Day Off UI ทันที
+        if (typeof loadAdminPanelData === 'function') {
+            await loadAdminPanelData();
+        }
     } catch (err) {
-        showToast('Error: ' + err.message, 'error');
+        if (typeof showToast === 'function') showToast('Error: ' + err.message, 'error');
     } finally {
         setBtnLoading(submitBtn, false);
     }
 };
-
 
 /* ANCHOR: wireSuspendQuickTimeButtonsOnce */
 function wireSuspendQuickTimeButtonsOnce() {
@@ -849,38 +912,50 @@ function wireSuspendQuickTimeButtonsOnce() {
 // 🍓 BERRY FIX: Export ลง Global Scope ให้ safeCall หาเจอ
 window.wireSuspendQuickTimeButtonsOnce = wireSuspendQuickTimeButtonsOnce;
 
-
-
-window.executeToggle = async function(type, id, isActive, btn) {
+// ANCHOR: executeToggle
+window.executeToggle = async function(type, id, nextActive, btn) {
+    if (btn.disabled) return; // 🍓 BERRY FIX: Guard ป้องกันชัวร์ 100%
+    
     const originalContent = btn.innerHTML;
     const originalClass = btn.className;
+    
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;border-top-color:currentColor;"></span>';
+    btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;border-top-color:currentColor;margin-right:4px;"></span><span class="text">รอสักครู่...</span>';
 
     try {
-        let res = type === 'driver' 
-            ? await googleScriptRun('apiToggleDriverStatus', { name: id, active: isActive })
-            : await googleScriptRun('apiToggleVehicleStatus', { plate: id, active: isActive });
+        const res = type === 'driver'
+            ? await googleScriptRun('apiToggleDriverStatus', { name: id, active: nextActive })
+            : await googleScriptRun('apiToggleVehicleStatus', { plate: id, active: nextActive });
 
         if (!res || !res.ok) throw new Error(res ? res.error : 'Toggle failed');
 
+        const finalActive = res.active === true;
+
         if (type === 'driver') {
-            btn.className = `cyber-status-badge ${isActive ? 'glow-green' : 'glow-gray'}`;
-            btn.innerHTML = `<span class="icon">${isActive ? '✅' : '⏸'}</span><span class="text">${isActive ? 'ทำงานอยู่' : 'พักงาน'}</span>`;
-            btn.onclick = () => toggleDriverStatus(btn, id, isActive);
+            btn.className = `cyber-status-badge ${finalActive ? 'glow-green' : 'glow-orange'}`;
+            btn.innerHTML = `<span class="icon">${finalActive ? '✅' : '☕'}</span><span class="text">${finalActive ? 'ทำงาน' : 'พักงาน'}</span>`;
+            btn.dataset.active = finalActive ? 'true' : 'false';
+            btn.onclick = function() { toggleDriverStatus(btn, id, finalActive); };
         } else {
-            btn.className = `cyber-status-badge ${isActive ? 'glow-green' : 'glow-orange'}`;
-            btn.innerHTML = `<span class="icon">${isActive ? '✅' : '🛠'}</span><span class="text">${isActive ? 'พร้อมใช้' : 'ซ่อมบำรุง'}</span>`;
-            btn.onclick = () => toggleVehicleStatus(btn, id, isActive);
+            btn.className = `cyber-status-badge ${finalActive ? 'glow-green' : 'glow-orange'}`;
+            btn.innerHTML = `<span class="icon">${finalActive ? '✅' : '🛠'}</span><span class="text">${finalActive ? 'พร้อมใช้' : 'ส่งซ่อม'}</span>`;
+            btn.dataset.active = finalActive ? 'true' : 'false';
+            btn.onclick = function() { toggleVehicleStatus(btn, id, finalActive); };
         }
 
         const card = btn.closest('.cyber-card');
-        if(card) {
-            if(isActive) card.classList.remove('inactive');
+        if (card) {
+            if (finalActive) card.classList.remove('inactive');
             else card.classList.add('inactive');
         }
+
+        // 🍓 BERRY FIX: อัปเดตข้อมูลภาพรวมเงียบๆ หลังสลับสวิตช์สำเร็จ
+        if (typeof loadAdminPanelData === 'function') {
+            loadAdminPanelData().catch(e => console.warn('Background refresh fail', e));
+        }
+
     } catch (e) {
-        showToast('บันทึกไม่สำเร็จ: ' + e.message, 'error');
+        if (typeof showToast === 'function') showToast('บันทึกไม่สำเร็จ: ' + e.message, 'error');
         btn.className = originalClass;
         btn.innerHTML = originalContent;
     } finally {
@@ -888,15 +963,42 @@ window.executeToggle = async function(type, id, isActive, btn) {
     }
 };
 
-// จุดรับ Event จากการกดปุ่ม
-window.toggleDriverStatus = function(btn, name, currentStatus) {
-    if (currentStatus) openSuspendModal('driver', name, btn); // ปัจจุบันทำงานอยู่ -> กดเพื่อพักงาน (ต้องระบุวัน)
-    else executeToggle('driver', name, true, btn); // ปัจจุบันพักอยู่ -> กดเพื่อกลับมาทำงาน (ทำได้เลย)
+// ANCHOR: toggleDriverStatus
+window.toggleDriverStatus = function(btn, name, currentDisplayOff) {
+    if (btn && btn.disabled) return; // 🍓 BERRY FIX: Guard ป้องกันกดรัว
+
+    const isManualActive = btn && btn.dataset && btn.dataset.active === 'true'; // 🍓 BERRY FIX: ใช้ dataset.active ให้ตรงกับ HTML
+    const isLiveBusy = btn && btn.dataset && btn.dataset.available === 'false'; 
+
+    if (currentDisplayOff) {
+        if (isManualActive && isLiveBusy) {
+            if (typeof showToast === 'function') {
+                showToast('พนักงานขับรถคนนี้ติดสถานะลา/ภารกิจจากข้อมูลจริง กรุณาแก้ที่ต้นทางก่อนค่ะ', 'warning');
+            }
+            return;
+        }
+        executeToggle('driver', name, true, btn);
+        return;
+    }
+    openSuspendModal('driver', name, btn);
 };
 
-window.toggleVehicleStatus = function(btn, plate, currentStatus) {
-    if (currentStatus) openSuspendModal('vehicle', plate, btn); // ปัจจุบันพร้อมใช้ -> กดเพื่อซ่อม (ต้องระบุวัน)
-    else executeToggle('vehicle', plate, true, btn); // ปัจจุบันซ่อมอยู่ -> กดเพื่อกลับมาพร้อมใช้ (ทำได้เลย)
+// ANCHOR: toggleVehicleStatus
+window.toggleVehicleStatus = function(btn, plate, currentDisplayOff) {
+    if (btn && btn.disabled) return; // 🍓 BERRY FIX: Guard ป้องกันกดรัว
+
+    const actualActive = btn && btn.dataset && btn.dataset.active === 'true';
+    const actualAvailable = btn && btn.dataset && btn.dataset.available === 'true';
+
+    if (currentDisplayOff) {
+        if (actualActive && !actualAvailable) {
+            if (typeof showToast === 'function') showToast('รถติดสถานะซ่อม/บล็อกจากข้อมูลจริง ต้องล้างที่ปฏิทินก่อนจึงจะพร้อมได้ค่ะ', 'warning');
+            return;
+        }
+        executeToggle('vehicle', plate, true, btn);
+        return;
+    }
+    openSuspendModal('vehicle', plate, btn);
 };
     /* ================== DASHBOARD BUTTONS WIRING ================== */
    function wireDashboardButtons() {
@@ -2191,32 +2293,27 @@ function showTab(tabKey) {
     return true;
   }
 
-  function schedule(reason) {
-    clearTimeout(timer);
-    timer = setTimeout(function () {
-      if (!isCalendarReady()) return;
-
-      const now = Date.now();
-      if (now - lastRun < 350) return;
-      lastRun = now;
-
-      if (typeof __berryReflowCalendarAfterTabShown__ === 'function') {
-        try {
-          __berryReflowCalendarAfterTabShown__();
-          console.log('✅ [Calendar] Reflow executed from:', reason || 'unknown');
-        } catch (err) {
-          console.error('❌ [Calendar] Reflow failed:', err);
-        }
+  function scheduleCalendarReflow(reason) {
+  // Debounce calendar reflow to avoid excessive renders.
+  if (window.__berryScheduleTimer) clearTimeout(window.__berryScheduleTimer);
+  window.__berryScheduleTimer = setTimeout(() => {
+    if (!isCalendarReady()) return;
+    if (typeof __berryReflowCalendarAfterTabShown__ === 'function') {
+      try {
+        __berryReflowCalendarAfterTabShown__();
+        console.log('✅ [Calendar] Reflow executed from:', reason || 'unknown');
+      } catch (err) {
+        console.error('❌ [Calendar] Reflow failed:', err);
       }
-    }, 200);
-  }
-
-  window.__berryScheduleCalendarResize__ = schedule;
-  window.addEventListener('resize', function () { schedule('resize'); }, { passive: true });
-  window.addEventListener('orientationchange', function () { schedule('orientationchange'); }, { passive: true });
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) schedule('visibilitychange');
-  });
+    }
+  }, 300);
+}
+window.__berryScheduleCalendarResize__ = scheduleCalendarReflow;
+window.addEventListener('resize', () => scheduleCalendarReflow('resize'), { passive: true });
+window.addEventListener('orientationchange', () => scheduleCalendarReflow('orientationchange'), { passive: true });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) scheduleCalendarReflow('visibilitychange');
+});
 })();
 
 window.addEventListener('load', async function () {
@@ -2703,9 +2800,7 @@ function initUiComponents() {
 
   setTimeout(deferWiring, 150);
 }
-/**
- * [SECTION 2] Header & Navigation Functions
- */
+
 function wireHeaderButtons() {
     const bookingBtn = document.getElementById('show-booking-btn') || document.getElementById('new-booking-btn');
     const cancelBtn = document.getElementById('show-cancel-btn') || document.getElementById('cancel-booking-btn');
@@ -2714,14 +2809,63 @@ function wireHeaderButtons() {
     const logoutBtn = document.getElementById('logout-btn');
     const selfTestBtn = document.getElementById('self-test-btn');
 
-    const bind = (el, fn) => { if (el && !el.__WIRED__) { el.__WIRED__ = true; el.onclick = null; el.addEventListener('click', (e) => { e.preventDefault(); fn(e); }); } };
+    const bind = (el, fn) => {
+        if (!el || el.__WIRED__) return;
+        el.__WIRED__ = true;
+        el.onclick = null;
+        el.addEventListener('click', function (e) {
+            e.preventDefault();
+            fn(e);
+        });
+    };
 
-    bind(bookingBtn, () => typeof showBookingForm === 'function' && showBookingForm());
-    bind(cancelBtn, () => typeof openModalA11y === 'function' && openModalA11y('cancel-modal'));
-    bind(loginBtn, () => typeof openModalA11y === 'function' && openModalA11y('admin-login-modal'));
-    bind(adminBtn, () => typeof openAdminPanel === 'function' ? openAdminPanel() : showTab('#dashboard-tab'));
-    if (logoutBtn) bind(logoutBtn, () => confirm('ต้องการออกจากระบบ?') && typeof handleLogout === 'function' && handleLogout());
-    if (selfTestBtn) bind(selfTestBtn, (e) => typeof runSelfTest === 'function' && runSelfTest(e));
+    bind(bookingBtn, () => {
+        if (typeof showBookingForm === 'function') showBookingForm();
+    });
+
+    bind(cancelBtn, () => {
+        if (typeof openModalA11y === 'function') openModalA11y('cancel-modal');
+    });
+
+    bind(loginBtn, () => {
+        if (typeof openModalA11y === 'function') openModalA11y('admin-login-modal');
+    });
+
+    bind(adminBtn, () => {
+        const modal = document.getElementById('admin-panel-modal');
+
+        if (!modal) {
+            console.error('❌ Day Off button: #admin-panel-modal not found');
+            if (typeof showToast === 'function') {
+                showToast('ไม่พบหน้าต่าง Day Off Control Center', 'error');
+            }
+            return;
+        }
+
+        if (typeof window.openAdminPanel === 'function') {
+            window.openAdminPanel();
+            return;
+        }
+
+        console.error('❌ Day Off button: openAdminPanel not found');
+        if (typeof showToast === 'function') {
+            showToast('ฟังก์ชัน Day Off ยังไม่พร้อมใช้งาน', 'error');
+        }
+    });
+
+    if (logoutBtn) {
+        bind(logoutBtn, () => {
+            if (confirm('ต้องการออกจากระบบ?') && typeof handleLogout === 'function') {
+                handleLogout();
+            }
+        });
+    }
+
+    if (selfTestBtn) {
+        bind(selfTestBtn, (e) => {
+            if (typeof runSelfTest === 'function') runSelfTest(e);
+        });
+    }
 }
 
 function wireTabRouter() {
@@ -3034,69 +3178,70 @@ const CalendarTooltip = {
     if (this.el) return;
     this.el = document.createElement('div');
     this.el.className = 'vberry-tooltip';
-    this.el.style.pointerEvents = 'none'; // FIX BUG: Allow clicking elements visually under the tooltip
+    this.el.style.pointerEvents = 'none';
     document.body.appendChild(this.el);
   },
+
   show(e, data) {
-    // 🍓 BERRY FIX: ปิด Tooltip แบบลอยบนอุปกรณ์มือถือและจอสัมผัส (ใช้การ Tap เพื่อเปิด Modal แทน)
-    if (window.innerWidth <= 768 || window.matchMedia("(hover: none)").matches) return;
-    
+    if (window.innerWidth <= 768 || window.matchMedia('(hover: none)').matches) return;
     this.init();
-    const typeHtml = data.type ? `<span style="background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:10px; font-weight:700; font-size:0.75rem;">${escapeHtml(data.type)}</span>` : '';
-    
-    // 🍓 ถ้าไม่มีชื่องาน ให้ซ่อนบรรทัดนี้ไปเลยเพื่อความสะอาดตา
-    const projHtml = data.proj ? `<div style="font-weight:800; font-size:0.95rem;">${escapeHtml(data.proj)}</div>` : '';
-    
-   let detailsHtml = `<div style="color:#64748b;">🕒 ${escapeHtml(data.time)} น.</div>`;
+
+    const typeHtml = data.type
+      ? `<span style="background:#e0e7ff; color:#4338ca; padding:2px 8px; border-radius:10px; font-weight:700; font-size:0.75rem;">${escapeHtml(data.type)}</span>`
+      : '';
+
+    const projHtml = data.proj
+      ? `<div style="font-weight:800; font-size:0.95rem;">${escapeHtml(data.proj)}</div>`
+      : '';
+
+    let detailsHtml = `<div style="color:#64748b;">🕒 ${escapeHtml(data.time)} น.</div>`;
 
     if (data.status === 'driver_block') {
-        detailsHtml += `<div style="color:#64748b;">👨‍✈️ พนักงานขับรถ: <span style="font-weight:600; color:#ea580c;">${escapeHtml(data.blockName)}</span></div>`;
+      detailsHtml += `<div style="color:#64748b;">👤 พนักงานขับรถ: <span style="font-weight:600; color:#ea580c;">${escapeHtml(data.blockName)}</span></div>`;
     } else if (data.status === 'vehicle_block') {
-        detailsHtml += `<div style="color:#64748b;">🚐 ทะเบียนรถ: <span style="font-weight:600; color:#991b1b;">${escapeHtml(data.blockName)}</span></div>`;
+      detailsHtml += `<div style="color:#64748b;">🚐 ทะเบียนรถ: <span style="font-weight:600; color:#991b1b;">${escapeHtml(data.blockName)}</span></div>`;
+      if (data.assignedDriver && data.assignedDriver !== '-') {
+        detailsHtml += `<div style="color:#64748b;">👤 คนขับ: <span style="font-weight:600; color:#ea580c;">${escapeHtml(data.assignedDriver)}</span></div>`;
+      }
     } else {
-        detailsHtml += `<div style="color:#64748b;">📍 ${escapeHtml(data.place)}</div>`;
-        if (data.status === 'approved' || data.status === 'driver_special_approved' || data.status === 'driver_claimed') {
-            const safePlate = (data.plate && data.plate !== '-') ? data.plate : 'รอระบุ';
-            const safeDriver = (data.driver && data.driver !== '-') ? data.driver : 'รอระบุ';
-            detailsHtml += `<div style="color:#64748b;">🚐 รถ: <span style="font-weight:600; color:#16a34a;">${escapeHtml(safePlate)}</span></div>`;
-            detailsHtml += `<div style="color:#64748b;">👨‍✈️ คนขับ: <span style="font-weight:600; color:#16a34a;">${escapeHtml(safeDriver)}</span></div>`;
-        } else if (data.status === 'vehicle_block') {
-             // 🍓 BERRY FIX: Show assigned driver for vehicle repair block if available
-             if (data.assignedDriver && data.assignedDriver !== '-') {
-                 detailsHtml += `<div style="color:#64748b;">👨‍✈️ คนขับ: <span style="font-weight:600; color:#ea580c;">${escapeHtml(data.assignedDriver)}</span></div>`;
-             }
-        }
+      detailsHtml += `<div style="color:#64748b;">📍 ${escapeHtml(data.place)}</div>`;
+
+      if (data.status === 'approved' || data.status === 'driver_special_approved' || data.status === 'driver_claimed') {
+        const safePlate = (data.plate && data.plate !== '-') ? data.plate : 'รอระบุ';
+        const safeDriver = (data.driver && data.driver !== '-') ? data.driver : 'รอระบุ';
+        detailsHtml += `<div style="color:#64748b;">🚐 รถ: <span style="font-weight:600; color:#16a34a;">${escapeHtml(safePlate)}</span></div>`;
+        detailsHtml += `<div style="color:#64748b;">👤 คนขับ: <span style="font-weight:600; color:#16a34a;">${escapeHtml(safeDriver)}</span></div>`;
+      }
     }
 
-    this.el.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:6px;">
-        <div>${typeHtml}</div>
-        ${projHtml}
-        ${detailsHtml}
-      </div>
-    `;
-    
-    // คำนวณตำแหน่ง
-    const rect = e.target.getBoundingClientRect();
+    this.el.innerHTML = `<div style="display:flex; flex-direction:column; gap:6px;"><div>${typeHtml}</div>${projHtml}${detailsHtml}</div>`;
+
+    const target = e && e.target ? e.target : null;
+    if (!target || typeof target.getBoundingClientRect !== 'function') return;
+
+    const rect = target.getBoundingClientRect();
     let top = rect.top - this.el.offsetHeight - 8;
     let left = rect.left + (rect.width / 2) - (this.el.offsetWidth / 2);
-    
-    // กันล้นจอ
+
     if (top < 10) top = rect.bottom + 8;
     if (left < 10) left = 10;
-    if (left + this.el.offsetWidth > window.innerWidth - 10) left = window.innerWidth - this.el.offsetWidth - 10;
-    
+    if (left + this.el.offsetWidth > window.innerWidth - 10) {
+      left = window.innerWidth - this.el.offsetWidth - 10;
+    }
+
     this.el.style.top = `${top}px`;
     this.el.style.left = `${left}px`;
     this.el.classList.add('show');
   },
+
   move(e) {
-    // Tooltip จะถูกวางตำแหน่งใน show() โดยอิงจาก e.target อยู่แล้ว ไม่จำเป็นต้องอัปเดตตำแหน่งตามเมาส์ตลอดเวลา
+    return e;
   },
+
   hide() {
     if (this.el) this.el.classList.remove('show');
   }
-};    
+};
 
 /* ==================== [BERRY FIX] CALENDAR DATE RANGE RENDERER ==================== */
 function buildCalendarData(sourceRows) {
@@ -3186,13 +3331,7 @@ function renderCalendar(year, month) {
     const sourceRows = Array.isArray(window.allBookingsData) ? window.allBookingsData :[];
     const calendarRows = (typeof buildCalendarData === 'function') ? buildCalendarData(sourceRows) :[];
 
-    // 🍓 BERRY FIX: Client Test
-    const vLogs = calendarRows.filter(r => r.status === 'vehicle_block');
-    const dLogs = calendarRows.filter(r => r.status === 'driver_block');
-    console.log('--- SELF TEST: maintenanceCalendarEventsFiltered ---');
-    console.log('Total events: ' + calendarRows.length);
-    console.log('vehicle_block count: ' + vLogs.length, vLogs);
-    console.log('driver_block count: ' + dLogs.length, dLogs);
+    // Self-test logs moved to admin panel. No console spam during normal render.
 
     const firstDay = new Date(year, month - 1, 1);
     const lastDay = new Date(year, month, 0);
@@ -3203,10 +3342,15 @@ function renderCalendar(year, month) {
     const monthStartMs = new Date(year, month - 1, 1, 12, 0, 0).getTime();
     const monthEndMs = new Date(year, month - 1, totalDays, 12, 0, 0).getTime();
 
+    const includeClosed = document.getElementById('chk-show-closed') ? document.getElementById('chk-show-closed').checked : false;
+
     const monthEvents = calendarRows
         .filter(item => {
             const sMs = Number(item?.sMs || 0);
             const eMs = Number(item?.eMs || 0);
+            const st = normalizeClientStatus(item?.status || 'pending');
+            const isItemClosed = item?.isClosed || st === 'closed' || (item?.blockStatus && String(item?.blockStatus).toLowerCase() === 'closed');
+            if (isItemClosed && !includeClosed) return false;
             return sMs > 0 && eMs > 0 && !(eMs < monthStartMs || sMs > monthEndMs);
         })
         .sort((a, b) => {
@@ -3334,6 +3478,11 @@ function renderCalendar(year, month) {
                 eventEl.className = `calendar-event status-${statusKey}`;
                 eventEl.disabled = false;
                 eventEl.setAttribute('aria-disabled', 'false');
+                const isItemClosed = ev?.isClosed || statusKey === 'closed' || (ev?.blockStatus && String(ev?.blockStatus).toLowerCase() === 'closed');
+                if (isItemClosed) {
+                    eventEl.style.opacity = '0.5';
+                    eventEl.style.filter = 'grayscale(0.6)';
+                }
 
                 // 🍓 [BERRY FIX] centering + reset styles
                 eventEl.style.width = '100%';
@@ -4680,6 +4829,43 @@ function showCalendarEventDetail(ev, event) {
     try { event.stopPropagation(); } catch (_) {}
   }
 
+window.closeAvailBlock = async function(bookingId) {
+    if (!bookingId || !bookingId.startsWith('BLK-')) return;
+    if (!confirm('ยืนยันปิดรายการ (Soft Close) ใช่หรือไม่?\n\nรถ/คนขับจะกลับมาว่าง และสามารถจองได้ทันที')) return;
+    
+    try {
+        Swal.fire({
+            title: 'กำลังปิดรายการ...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading()
+        });
+        
+        const closeNote = prompt('ระบุหมายเหตุการปิด (ถ้ามี):', 'ปิดใช้งานก่อนกำหนด') || 'ปิดใช้งานก่อนกำหนด';
+        const adminName = typeof getAdminName === 'function' ? getAdminName() : 'Admin';
+        
+        const res = await runner('closeAvailabilityBlock', { 
+            bookingId: bookingId,
+            closedBy: adminName,
+            closeNote: closeNote
+        });
+        
+        if (res && res.ok) {
+            Swal.fire({
+                title: 'สำเร็จ',
+                text: 'ปิดรายการเรียบร้อยแล้ว',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
+            if (typeof loadAllData === 'function') setTimeout(() => loadAllData(), 500);
+        } else {
+            Swal.fire('ผิดพลาด', res?.error || 'เกิดข้อผิดพลาดในการปิดรายการ', 'error');
+        }
+    } catch (e) {
+        Swal.fire('ข้อผิดพลาด', e.message, 'error');
+    }
+};
+
   const modal = document.getElementById('activity-modal');
   const header = document.getElementById('activity-modal-header');
   const title = document.getElementById('activity-title');
@@ -4688,7 +4874,12 @@ function showCalendarEventDetail(ev, event) {
 
   if (!modal || !title || !details || !footer) return;
 
-  const statusKey = String(ev?.status || 'pending').toLowerCase().trim();
+  const statusKey = String(
+    typeof normalizeClientStatus === 'function'
+      ? normalizeClientStatus(ev?.status || 'pending')
+      : (ev?.status || 'pending')
+  ).toLowerCase().trim();
+
   const isDriverBlock = statusKey === 'driver_block';
   const isVehicleBlock = statusKey === 'vehicle_block';
 
@@ -4703,25 +4894,31 @@ function showCalendarEventDetail(ev, event) {
       : '📋 รายละเอียดกิจกรรม';
 
   const safe = (v) => escapeHtml(String(v || '-'));
-  const startDate = ev.startDate || ev.date || '-';
-  const endDate = ev.endDate || ev.date || '-';
-  const startTime = ev.startTime || '-';
-  const endTime = ev.endTime || '-';
+  const startDate = ev?.startDate || ev?.date || '-';
+  const endDate = ev?.endDate || ev?.date || '-';
+  const startTime = ev?.startTime || '-';
+  const endTime = ev?.endTime || '-';
+
+  const displayName = isDriverBlock
+    ? (ev?.blockName || ev?.driver || ev?.name || '-')
+    : (ev?.plate || ev?.vehicle || ev?.name || '-');
+
+  const reasonText = ev?.proj || ev?.project || ev?.workName || ev?.reason || ev?.note || 'งดใช้งาน';
 
   details.innerHTML = `
     <div class="detail-container">
       <div class="info-grid">
         <div class="info-item">
           <div class="info-label">ประเภท</div>
-          <div class="info-value">${safe(ev.type || ev.purpose || '-')}</div>
+          <div class="info-value">${safe(ev?.type || ev?.purpose || ev?.workType || '-')}</div>
         </div>
         <div class="info-item">
           <div class="info-label">สถานะ</div>
-          <div class="info-value">${safe(getStatusText ? getStatusText(statusKey) : statusKey)}</div>
+          <div class="info-value">${safe(typeof getStatusText === 'function' ? getStatusText(statusKey) : statusKey)}</div>
         </div>
         <div class="info-item">
           <div class="info-label">วันที่</div>
-          <div class="info-value">${safe(formatDate(startDate))}${endDate !== startDate ? ' - ' + safe(formatDate(endDate)) : ''}</div>
+          <div class="info-value">${safe(typeof formatDate === 'function' ? formatDate(startDate) : startDate)}${endDate !== startDate ? ' - ' + safe(typeof formatDate === 'function' ? formatDate(endDate) : endDate) : ''}</div>
         </div>
         <div class="info-item">
           <div class="info-label">เวลา</div>
@@ -4729,26 +4926,46 @@ function showCalendarEventDetail(ev, event) {
         </div>
         <div class="info-item">
           <div class="info-label">${isDriverBlock ? 'พนักงานขับรถ' : 'รถ/ทะเบียน'}</div>
-          <div class="info-value">${safe(ev.blockName || ev.driver || ev.plate || ev.vehicle || ev.name)}</div>
+          <div class="info-value">${safe(displayName)}</div>
         </div>
         <div class="info-item">
           <div class="info-label">สถานที่</div>
-          <div class="info-value">${safe(ev.place || ev.destination || '-')}</div>
+          <div class="info-value">${safe(ev?.place || ev?.destination || '-')}</div>
         </div>
         <div class="info-item info-item-full">
           <div class="info-label">รายละเอียด</div>
-          <div class="info-value">${safe(ev.proj || ev.project || ev.reason || ev.note || '-')}</div>
+          <div class="info-value">${safe(reasonText)}</div>
         </div>
       </div>
     </div>
   `;
 
-  footer.innerHTML = `
-    <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
-  `;
+  if (isDriverBlock) {
+    // 🍓 BERRY FIX: Add Soft Close button, but only show if it's not already closed
+    // ใช้วิธีดึง isClosed จาก ev
+    const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
+    footer.innerHTML = `
+      <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
+      ${!isClosed ? `<button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('driver', '${safe(displayName)}', null);">เพิ่มวันลา</button>
+      <button type="button" class="btn btn-danger" onclick="closeActivityModal(); window.closeAvailBlock('${ev?.bookingId}');">ปิดงาน (Soft Close)</button>` : ''}
+    `;
+  } else if (isVehicleBlock) {
+    // 🍓 BERRY FIX: Add Soft Close button, but only show if it's not already closed
+    const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
+    footer.innerHTML = `
+      <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
+      ${!isClosed ? `<button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('vehicle', '${safe(displayName)}', null);">เพิ่มส่งซ่อม</button>
+      <button type="button" class="btn btn-danger" onclick="closeActivityModal(); window.closeAvailBlock('${ev?.bookingId}');">ปิดงาน (Soft Close)</button>` : ''}
+    `;
+  } else {
+    footer.innerHTML = `
+      <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
+    `;
+  }
 
-  if (typeof openModalA11y === 'function') openModalA11y('activity-modal');
-  else {
+  if (typeof openModalA11y === 'function') {
+    openModalA11y('activity-modal');
+  } else {
     modal.classList.add('active');
     modal.style.display = 'flex';
   }
@@ -4782,13 +4999,13 @@ async function showActivityDetails(bookingId, event) {
     }
   } catch (e) {
     console.warn('[showActivityDetails] Fetch error:', e);
+  } finally {
+    if (typeof hideLoading === 'function') hideLoading();
   }
 
   if (!b && window.bookingsById) {
     b = window.bookingsById.get(id);
   }
-
-  if (typeof hideLoading === 'function') hideLoading();
 
   if (!b) {
     if (typeof showToast === 'function') showToast(`ไม่พบข้อมูล ID: ${id}`, 'error');
@@ -4809,8 +5026,7 @@ async function showActivityDetails(bookingId, event) {
   } else if (statusKey === 'rejected') {
     badgeHtml = '<span style="background:white; color:#dc2626; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">❌ ไม่อนุมัติ</span>';
   } else if (statusKey === 'driver_block') {
-    // 🍓 BERRY FIX: แยกแยะระหว่างลางานกับพารถไปซ่อม
-    let isRepair = String(b.purpose || b.reason || b.workName || b.project || '').indexOf('ซ่อม') !== -1;
+    const isRepair = String(b.purpose || b.reason || b.workName || b.project || '').indexOf('ซ่อม') !== -1;
     if (isRepair) {
       badgeHtml = '<span style="background:white; color:#991b1b; padding:4px 12px; border-radius:20px; font-size:0.9rem; display:flex; align-items:center; gap:4px; box-shadow:0 2px 5px rgba(0,0,0,0.1); white-space:nowrap;">🛠 ส่งซ่อม/นำรถไปซ่อม</span>';
       mainTitle = 'นำรถไปซ่อมบำรุง / ติดภารกิจ';
@@ -4876,7 +5092,7 @@ async function showActivityDetails(bookingId, event) {
     labelUser = 'พนักงานขับรถ:';
     labelType = '📋 สถานะ:';
     labelProj = '💬 สาเหตุ/หมายเหตุ:';
-    let isRepair = String(b.purpose || b.reason || b.workName || b.project || '').indexOf('ซ่อม') !== -1;
+    const isRepair = String(b.purpose || b.reason || b.workName || b.project || '').indexOf('ซ่อม') !== -1;
     purposeHtml = isRepair ? '<span style="color:#991b1b; font-weight:700;">ส่งซ่อม/นำรถไปซ่อม</span>' : '<span style="color:#ea580c; font-weight:700;">พักงาน / ลางาน</span>';
     destHtml = '-';
     vehicleDisplay = '-';
@@ -4894,7 +5110,7 @@ async function showActivityDetails(bookingId, event) {
   const position = String(b.position || '').trim();
   let posIcon = '👤';
   if (statusKey === 'driver_block') {
-    posIcon = '👨‍✈️';
+    posIcon = '👤';
   } else if (statusKey === 'vehicle_block') {
     posIcon = '🚐';
   } else {
@@ -4928,7 +5144,7 @@ async function showActivityDetails(bookingId, event) {
           ${(position && statusKey !== 'driver_block' && statusKey !== 'vehicle_block') ? `<div style="font-size:0.85rem; color:#64748b; margin-top:2px;">ตำแหน่ง: ${escapeHtml(position)}</div>` : ''}
           ${(statusKey === 'vehicle_block' && b.assignedDriver && b.assignedDriver !== '-') ? `
             <div style="margin-top:12px; border-top:1px dashed #cbd5e1; padding-top:8px;">
-              <div style="font-size:0.8rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">👨‍✈️ คนขับที่นำรถไปซ่อม:</div>
+              <div style="font-size:0.8rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">👤 ผู้นำรถไปซ่อม:</div>
               <div style="font-size:0.95rem; font-weight:700; color:#ea580c; line-height:1.4;">${escapeHtml(b.assignedDriver)}</div>
             </div>
           ` : ''}
@@ -5030,8 +5246,7 @@ async function showActivityDetails(bookingId, event) {
 
   const user = window.currentUser || { isLoggedIn: false, role: 'Guest' };
   const roleLc = String(user.role || '').toLowerCase().trim();
-  
-  // 🍓 BERRY FIX: สรุปสิทธิ์ให้ชัดเจน ป้องกันเงื่อนไขซ้อนทับ
+
   const isAdminLevel = ['admin', 'admindriver', 'admin_driver'].includes(roleLc);
   const isQuickApprovable = ['admindriver', 'driver'].includes(roleLc);
   const isGuest = !user.isLoggedIn;
@@ -5039,9 +5254,16 @@ async function showActivityDetails(bookingId, event) {
   let btns = '';
   const isBlockEvent = (statusKey === 'driver_block' || statusKey === 'vehicle_block');
 
+  if (isBlockEvent && isAdminLevel) {
+    if (statusKey === 'vehicle_block') {
+      btns += `<button class="btn bx-btn" style="flex:1 1 auto; background:#16a34a; color:white; border:none;" onclick="closeAvailBlock('${id}', event)">✅ ปิดงานซ่อม</button>`;
+    } else if (statusKey === 'driver_block') {
+      btns += `<button class="btn bx-btn" style="flex:1 1 auto; background:#16a34a; color:white; border:none;" onclick="closeAvailBlock('${id}', event)">✅ ปิดการลา</button>`;
+    }
+  }
+
   if (!isBlockEvent) {
     if (statusKey === 'pending') {
-      // กรณี: รออนุมัติ
       if (isQuickApprovable) {
         btns += `<button class="btn bx-btn" style="flex:1 1 auto; background:#8b5cf6; color:white; border:none;" onclick="handleSpecialApprove('${id}', event)">⚡ อนุมัติด่วน</button>`;
       }
@@ -5050,20 +5272,17 @@ async function showActivityDetails(bookingId, event) {
         btns += `<button class="btn btn-danger bx-btn" style="flex:1 1 auto;" onclick="openRejectAndCloseDetails('${id}', event)">⛔ ไม่อนุมัติ</button>`;
       }
     } else if (statusKey === 'approved' || statusKey === 'driver_special_approved') {
-      // 🍓 BERRY FIX: กรณี: อนุมัติแล้ว -> เปิดฟีเจอร์ Re-Assign
       if (isAdminLevel) {
         btns += `<button class="btn btn-warning bx-btn" style="flex:1 1 auto; color:white;" onclick="openAssignmentAndCloseDetails('${id}', event)">🔄 เปลี่ยนรถ/คนขับ</button>`;
         btns += `<button class="btn btn-danger bx-btn" style="flex:1 1 auto;" onclick="openRejectAndCloseDetails('${id}', event)">⛔ ยกเลิกงาน</button>`;
       }
     }
-    
-    // ปุ่มยกเลิกสำหรับผู้จอง (Guest)
-    if (isGuest &&['pending', 'approved', 'driver_special_approved'].includes(statusKey)) {
-       btns += `<button class="btn bx-btn bx-btn-cancel" style="flex:1 1 auto;" onclick="openCancelModalFromDetail('${id}', '${escapeHtml(b.phone)}')">ยกเลิกจอง</button>`;
+
+    if (isGuest && ['pending', 'approved', 'driver_special_approved'].includes(statusKey)) {
+      btns += `<button class="btn bx-btn bx-btn-cancel" style="flex:1 1 auto;" onclick="openCancelModalFromDetail('${id}', '${escapeHtml(b.phone)}')">ยกเลิกจอง</button>`;
     }
   }
 
-  // ปุ่มปิด (เทา) แสดงสำหรับทุก Role
   btns += `<button class="btn bx-btn bx-btn-close" style="flex:1 1 auto; min-width:100px;" onclick="closeModalA11y('activity-modal')">ปิด</button>`;
 
   if (footer) {
@@ -5076,6 +5295,96 @@ async function showActivityDetails(bookingId, event) {
 
   openModalA11y('activity-modal');
 }
+
+// 🍓 BERRY FIX: UI Confirm ที่สวยงามสไตล์เดียวกับระบบ
+window.showCustomConfirm = function(title, text, confirmText = 'ยืนยัน', cancelText = 'ยกเลิก', confirmColor = '#16a34a') {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:20000; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px); opacity:0; transition:opacity 0.2s;';
+        
+        const box = document.createElement('div');
+        box.style.cssText = 'background:#fff; width:min(90vw, 400px); border-radius:16px; overflow:hidden; box-shadow:0 20px 25px -5px rgba(0,0,0,0.1); transform:scale(0.95); transition:transform 0.2s; font-family: "Sarabun", "Kanit", sans-serif;';
+        
+        const iconColor = confirmColor === '#16a34a' ? '#16a34a' : (confirmColor || '#8b5cf6');
+        const iconBg = confirmColor === '#16a34a' ? '#f0fdf4' : '#f5f3ff';
+        const iconChar = confirmColor === '#ef4444' ? '❓' : '❔';
+        
+        box.innerHTML = `
+            <div style="padding:1.5rem 1.5rem 1rem; text-align:center;">
+                <div style="width:64px; height:64px; border-radius:50%; background:${iconBg}; color:${iconColor}; display:flex; align-items:center; justify-content:center; font-size:2rem; margin:0 auto 1rem;">${iconChar}</div>
+                <h3 style="margin:0 0 0.5rem; font-size:1.25rem; color:#1e293b; font-weight:600;">${title}</h3>
+                <p style="margin:0; color:#64748b; font-size:0.95rem; line-height:1.5;">${text}</p>
+            </div>
+            <div style="padding:1rem 1.5rem 1.5rem; display:flex; gap:10px; justify-content:center; background:#f8fafc; border-top:1px solid #e2e8f0;">
+                <button id="custom-confirm-cancel" style="flex:1; padding:0.75rem; border-radius:8px; border:1px solid #cbd5e1; background:#fff; color:#475569; font-weight:600; cursor:pointer;" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#fff'">${cancelText}</button>
+                <button id="custom-confirm-ok" style="flex:1; padding:0.75rem; border-radius:8px; border:none; background:${iconColor}; color:#fff; font-weight:600; cursor:pointer; box-shadow:0 4px 6px rgba(0,0,0,0.1); transition:opacity 0.2s;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">${confirmText}</button>
+            </div>
+        `;
+        
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+        
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+            box.style.transform = 'scale(1)';
+        });
+        
+        const closeMod = (result) => {
+            overlay.style.opacity = '0';
+            box.style.transform = 'scale(0.95)';
+            setTimeout(() => {
+                if(document.body.contains(overlay)) document.body.removeChild(overlay);
+                resolve(result);
+            }, 200);
+        };
+        
+        overlay.querySelector('#custom-confirm-cancel').onclick = () => closeMod(false);
+        overlay.querySelector('#custom-confirm-ok').onclick = () => closeMod(true);
+    });
+};
+
+// 🍓 BERRY FIX: เพิ่มฟังก์ชัน closeAvailBlock สำหรับกดให้คน/รถ กลับมาทำงาน ย้ายมาใช้ Async/Await UI Confirm
+window.closeAvailBlock = async function(id, event) {
+  if (event) event.stopPropagation();
+  
+  const isConfirmed = await showCustomConfirm(
+      'ยืนยันการตั้งค่าสถานะ', 
+      'ยืนยันหน้างานจริง: ปิดงาน และอัปเดตให้รถ/คนขับ กลับมารับงานในระบบได้ทันที ใช่หรือไม่?',
+      '✅ ยืนยัน',
+      'ยกเลิก',
+      '#16a34a'
+  );
+  
+  if (!isConfirmed) return;
+  
+  if (typeof showLoading === 'function') showLoading();
+  const adminName = (window.currentUser && window.currentUser.name) ? window.currentUser.name : 'Admin';
+  
+  googleScriptRun('closeAvailabilityBlock', {
+    bookingId: id,
+    closedBy: adminName,
+    closeNote: 'ปิดงานจากปฏิทิน'
+  }).then(res => {
+    if (typeof hideLoading === 'function') hideLoading();
+    if (res && res.ok) {
+      if (typeof showToast === 'function') showToast('ปิดงานเรียบร้อย อัปเดตคิวพร้อมทำงานทันที', 'success');
+      closeModalA11y('activity-modal');
+      
+      // Refresh Data & Calendar
+      if (typeof loadAdminPanelData === 'function') loadAdminPanelData();
+      
+      const y = (window.calendarState && window.calendarState.currentYear) ? window.calendarState.currentYear : new Date().getFullYear();
+      const m = (window.calendarState && window.calendarState.currentMonth) ? window.calendarState.currentMonth : new Date().getMonth() + 1;
+      if (typeof renderCalendar === 'function') renderCalendar(y, m);
+    } else {
+      if (typeof showToast === 'function') showToast('เกิดข้อผิดพลาด: ' + (res ? res.error : 'Unknown err'), 'error');
+    }
+  }).catch(err => {
+    if (typeof hideLoading === 'function') hideLoading();
+    console.error('closeAvailBlock Error:', err);
+    if (typeof showToast === 'function') showToast('ข้อผิดพลาดเครือข่าย', 'error');
+  });
+};
 
 /* [ANCHOR: Open Cancel Modal from Details (Auto-fill & Auto-select)] */
 /* แทนที่ฟังก์ชันเดิมได้เลยค่ะ */
@@ -5291,8 +5600,15 @@ function updateHeaderUI(user) {
         const role = String(user.role || '').toLowerCase().trim();
         // 🍓 BERRY FIX: เปิดสิทธิ์ให้ Driver สามารถเข้าถึงเมนู Day Off (ลา/ซ่อม) ได้ด้วย
         const isStaff = (role === 'admin' || role === 'admindriver' || role === 'admin_driver' || role === 'driver');
+        const isAdmin = (role === 'admin' || role === 'admindriver' || role === 'admin_driver');
 
         if (adminBtn && isStaff) adminBtn.style.display = 'inline-flex';
+        
+        // 🍓 BERRY FIX: ซ่อน checkbox ลา/ซ่อม (Admin) ของคนที่ไม่ใช่ Admin
+        const chkIncludeBlocksBtn = document.getElementById('chk-include-blocks');
+        if (chkIncludeBlocksBtn && chkIncludeBlocksBtn.closest('div')) {
+            chkIncludeBlocksBtn.closest('div').style.display = isAdmin ? 'flex' : 'none';
+        }
 
         console.log(`✅ User ${user.username} logged in as ${role}`);
     } else {
@@ -5700,6 +6016,23 @@ window.openAssignmentModal = async function (bookingId) {
   window.__ASSIGN_CTX__ = booking;
   window.__ASSIGN_CTX__.requestedCount = requestedCount;
   window.__ASSIGN_CTX__.originalType = requestedType;
+
+  // 🍓 BERRY FIX: Show/hide ปุ่มปิดงานก่อนเวลา
+  const earlyCloseBtn = document.getElementById('assignment-close-job-btn');
+  if (earlyCloseBtn) {
+    const isWorking = (booking.status === 'approved' || booking.status === 'driver_special_approved');
+    const hasActualEnd = !!booking.actualEndAt;
+    
+    // ตรวจสอบว่าเริ่มงานหรือยัง (Start Date <= Now), สำหรับปิดก่อนเวลาควรจะปิดได้เสมอถ้าอนุมัติแล้ว แต่เราจะเช็คเพิ่มเผื่อปลอดภัย
+    const nowMs = new Date().getTime();
+    const startMs = booking.dateNum || 0; 
+    
+    if (isWorking && !hasActualEnd && nowMs >= startMs) {
+        earlyCloseBtn.style.display = 'inline-block';
+    } else {
+        earlyCloseBtn.style.display = 'none';
+    }
+  }
 
   const summaryEl = document.getElementById('assignment-booking-summary');
   if (summaryEl) {
@@ -6130,6 +6463,56 @@ window.handleAssignmentSave = async function () {
       saveBtn.innerHTML = originalBtnHtml;
     }
     if(typeof setBtnLoading === 'function') setBtnLoading(saveBtn, false);
+  }
+};
+
+// 🍓 BERRY FIX: ฟังก์ชันปิดงานก่อนเวลา
+window.handleAssignmentEarlyClose = async function () {
+  if (!window.__ASSIGN_CTX__) return;
+  
+  const bId = window.__ASSIGN_CTX__.bookingId;
+  const isConfirm = confirm("🚨 ยืนยันที่จะ 'ปิดงานก่อนเวลา' หรือไม่?\n\nรถและพนักงานขับทั้งหมดในงานนี้จะถูกตั้งค่าสถานะเป็น 'พร้อม' ทันทีครับ");
+  if (!isConfirm) return;
+
+  const btn = document.getElementById('assignment-close-job-btn');
+  const txt = btn ? btn.innerHTML : '';
+  if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '⏳ กำลังบันทึก...';
+  }
+
+  try {
+     const runner = (typeof window.googleScriptRunLimited !== 'undefined') ? window.googleScriptRunLimited : window.googleScriptRun;
+     
+     // ปิดงาน
+     const res = await runner('closeBookingActualEnd', { 
+         bookingId: bId, 
+         note: 'ปิดผ่าน Modal ทันที', 
+         closedBy: typeof getAdminName === 'function' ? getAdminName() : 'Admin' 
+     });
+     
+     if (!res || !res.ok) throw new Error(res?.error || 'Server Error');
+
+     if (typeof showToast === 'function') showToast(res.message || 'ปิดงานก่อนเวลาเรียบร้อย', 'success');
+     if (typeof closeModalA11y === 'function') closeModalA11y('assignment-modal');
+     
+     // Refresh UI
+     if (typeof loadBookingsView === 'function') loadBookingsView();
+     if (typeof updateCounters === 'function') updateCounters();
+     
+     // Refresh Radar
+     if (typeof window.renderRadarContext === 'function') {
+         // Radar has auto refresh but we can trigger it fast
+         if (typeof fetchLiveStatus === 'function') fetchLiveStatus();
+     }
+  } catch(e) {
+     console.error('❌ Early Close Error:', e.message);
+     if (typeof showToast === 'function') showToast('เกิดข้อผิดพลาด: ' + e.message, 'error');
+  } finally {
+     if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = txt;
+     }
   }
 };
 
@@ -6710,7 +7093,11 @@ window.loadBookingsView = function() {
 
     setTimeout(() => {
         try {
-            const allData = window.allBookingsData || [];
+            // 🍓 BERRY FIX: กรอง BLK (driver_block / vehicle_block) ออกจากการแสดงผล "ทุกรูปแบบ" ในหน้ารายการจอง
+            const allData = (window.allBookingsData || []).filter(b => {
+                const bId = String(b.bookingId || b.id || '');
+                return !bId.startsWith('BLK-');
+            });
 
             if (document.getElementById('total-bookings-badge')) {
                 document.getElementById('total-bookings-badge').textContent = allData.length;
@@ -6735,6 +7122,14 @@ window.loadBookingsView = function() {
 
             let filteredData = allData;
 
+            const includeBlocks = document.getElementById('chk-include-blocks') ? document.getElementById('chk-include-blocks').checked : false;
+            if (!includeBlocks && window.bookingsCurrentFilter !== 'blocks') {
+                 filteredData = filteredData.filter(b => {
+                     const s = normalizeClientStatus(b.status || 'pending');
+                     return s !== 'driver_block' && s !== 'vehicle_block' && s !== 'maintenance';
+                 });
+            }
+
             if (typeof window.filterBookingsByDateRange === 'function') {
                 filteredData = window.filterBookingsByDateRange(filteredData);
             }
@@ -6745,6 +7140,9 @@ window.loadBookingsView = function() {
 
                     if (window.bookingsCurrentFilter === 'approved') {
                         return s === 'approved' || s === 'driver_special_approved';
+                    }
+                    if (window.bookingsCurrentFilter === 'blocks') {
+                        return s === 'driver_block' || s === 'vehicle_block' || s === 'maintenance';
                     }
 
                     return s === window.bookingsCurrentFilter;
@@ -6903,6 +7301,12 @@ function renderBookingsTable(bookings, tbodyId, type) {
     var statusText = (typeof getStatusText === 'function') ? getStatusText(statusKey) : statusKey;
     var statusClass = (typeof statusClassFromKey === 'function') ? statusClassFromKey(statusKey) : ('status-' + statusKey);
 
+    // 🍓 BERRY FIX: ควบคุมหน้าตาเมื่อเป็นงานที่ปิดก่อนเวลา
+    if (b.actualEndAt && (statusKey === 'approved' || statusKey === 'driver_special_approved')) {
+      statusText = 'ปิดงานแล้ว';
+      statusClass = 'status-completed'; // ใช้สีคลาสเดียวกับเสร็จสิ้น
+    }
+
     var fUrl = String(b.fileUrl || b.file || '').trim();
     var fileBtn = isRealUrl(fUrl)
       ? ' <a href="' + esc(fUrl) + '" target="_blank" class="text-info" style="text-decoration:none;" title="ดูไฟล์แนบ">📎</a>'
@@ -6984,6 +7388,11 @@ function renderBookingsTable(bookings, tbodyId, type) {
     // จัดการช่องว่างเวลาให้เนี้ยบ
     var sTimePad = startP.time ? ' ' + esc(startP.time) : '';
     var eTimePad = endP.time ? ' ' + esc(endP.time) : '';
+    
+    // 🍓 BERRY FIX: หากมีการปิดงานก่อนเวลา ให้โชว์ Badge บอก
+    var endLabel = b.actualEndAt ? '<span style="color:#f59e0b; font-weight:800;" title="ปิดงานก่อนกำหนด">จบงานจริง:</span>' : '<span style="color:#f59e0b; font-weight:800;">กลับ:</span>';
+    var mEndLabel = b.actualEndAt ? '<span style="color:#f59e0b; font-weight:800;" title="ปิดงานก่อนกำหนด">จบจริง</span>' : '<span style="color:#f59e0b; font-weight:800;">กลับ</span>';
+    var actualBadge = b.actualEndAt ? ' <span style="font-size:0.75rem; background:#fed7aa; color:#9a3412; padding:1px 4px; border-radius:4px; margin-left:4px;">🏁 ปิดก่อนกำหนด</span>' : '';
 
     var desktopDateHtml =
       '<div class="desktop-only vberry-dt val-block" style="display:flex; flex-direction:column; gap:6px; min-width:0;">' +
@@ -6993,9 +7402,10 @@ function renderBookingsTable(bookings, tbodyId, type) {
           (startP.time ? '<span style="color:#475569; font-size:0.9em; white-space:nowrap;">⏰ ' + esc(startP.time) + '</span>' : '') +
         '</div>' +
         '<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">' +
-          '<span style="color:#f59e0b; font-weight:800;">กลับ:</span>' +
+          endLabel +
           '<span style="font-weight:600; white-space:nowrap;">' + esc(endP.date) + '</span>' +
           (endP.time ? '<span style="color:#475569; font-size:0.9em; white-space:nowrap;">⏰ ' + esc(endP.time) + '</span>' : '') +
+          actualBadge +
         '</div>' +
       '</div>';
 
@@ -7004,7 +7414,7 @@ function renderBookingsTable(bookings, tbodyId, type) {
          '<span style="color:#10b981; font-weight:800;">ไป</span>' +
          '<span style="font-weight:600; white-space:nowrap;">' + esc(sDateShort) + sTimePad + '</span>' +
          '<span style="color:#94a3b8; font-weight:800;">→</span>' +
-         '<span style="color:#f59e0b; font-weight:800;">กลับ</span>' +
+         mEndLabel +
          '<span style="font-weight:600; white-space:nowrap;">' + esc(eDateShort) + eTimePad + '</span>' +
       '</div>';
 
@@ -8804,124 +9214,122 @@ function renderRadarMeta(res) {
 }
 
 async function loadLiveStatusData() {
-    const content = document.getElementById('radar-content');
-    const fab = document.getElementById('radar-fab');
+  const content = document.getElementById('radar-content');
+  const fab = document.getElementById('radar-fab');
 
-    if (!content) {
-        console.error('[Radar] radar-content not found');
-        return;
+  if (!content) {
+    console.error('[Radar] radar-content not found');
+    return;
+  }
+
+  if (fab) fab.disabled = true;
+
+  content.innerHTML = `
+    <div style="text-align:center; padding:24px 12px; color:#64748b;">
+      <div class="spinner" style="margin:0 auto 15px; border-color:#cbd5e1; border-top-color:#3b82f6;"></div>
+      <div style="font-weight:700;">กำลังโหลดสถานะคนขับ 5 คน และรถ 5 คัน...</div>
+      <div style="font-size:0.92rem; margin-top:6px; color:#94a3b8;">กำลังดึงข้อมูลล่าสุดจาก Server</div>
+    </div>
+  `;
+
+  try {
+    const res = await googleScriptRunLimited('apiGetLiveStatus');
+    if (!res || !res.ok) {
+      throw new Error((res && res.error) || 'ไม่สามารถโหลดข้อมูล Radar ได้');
     }
 
-    if (fab) fab.disabled = true;
+    renderRadarMeta(res);
 
-    content.innerHTML = `
-        <div style="text-align:center; padding:24px 12px; color:#64748b;">
-            <div class="spinner" style="margin:0 auto 15px; border-color:#cbd5e1; border-top-color:#3b82f6;"></div>
-            <div style="font-weight:700;">กำลังโหลดสถานะคนขับ 5 คน และรถ 5 คัน...</div>
-            <div style="font-size:0.92rem; margin-top:6px; color:#94a3b8;">กำลังดึงข้อมูลล่าสุดจาก Server</div>
-        </div>
-    `;
+    const renderList = function(items) {
+      if (!items || !items.length) {
+        return '<div class="radar-item"><span class="text-muted">ไม่มีข้อมูล</span></div>';
+      }
 
-    try {
-        const res = await googleScriptRunLimited('apiGetLiveStatus');
-        if (!res || !res.ok) {
-            throw new Error((res && res.error) || 'ไม่สามารถโหลดข้อมูล Radar ได้');
+      return items.map(function(it) {
+        const labelStr = String(it?.label || 'พร้อม').trim();
+        let dotClass = 'available';
+
+        if (labelStr === 'ลา' || labelStr === 'ส่งซ่อม') {
+          dotClass = 'inactive';
+        } else if (labelStr === 'ติดภารกิจ' || labelStr === 'ไม่ว่าง') {
+          dotClass = 'busy';
+        } else {
+          dotClass = 'available';
         }
 
-        renderRadarMeta(res);
+        const displayName = it?.name || it?.plate || '-';
+        const subText = it?.job ? String(it.job).trim() : '';
 
-                const renderList = function(items) {
-            if (!items || !items.length) {
-                return '<div class="radar-item"><span class="text-muted">ไม่มีข้อมูล</span></div>';
-            }
-
-            return items.map(function(it) {
-                const labelStr = String(it?.label || 'พร้อม').trim();
-                let dotClass = 'available';
-
-                // แยกสีจุด (dot) ด้วยคำภาษาไทย (Source of truth) ไปเลย ป้องกันสลับกัน
-                if (labelStr === 'ลา' || labelStr === 'ส่งซ่อม') {
-                    dotClass = 'inactive'; // สีแดง
-                } else if (labelStr === 'ติดภารกิจ' || labelStr === 'ไม่ว่าง') {
-                    dotClass = 'busy'; // สีเหลือง
-                } else {
-                    dotClass = 'available'; // สีเขียว
-                }
-
-                const displayName = it?.name || it?.plate || '-';
-                const subText = it?.job ? String(it.job).trim() : '';
-
-                return `
-                    <div class="radar-item">
-                        <div class="radar-item-left">
-                            <div class="radar-dot ${dotClass}"></div>
-                            <div style="min-width:0; flex:1;">
-                                <div class="radar-name">${escapeHtml(displayName)}</div>
-                                ${subText ? `<div class="radar-subtext" title="${escapeHtml(subText)}">${escapeHtml(subText)}</div>` : ''}
-                            </div>
-                        </div>
-                        <div class="radar-meta radar-status-${dotClass}" title="${escapeHtml(labelStr)}">
-                            ${escapeHtml(labelStr)}
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        };
-
-
-        content.innerHTML = `
-            <div>
-                <div class="radar-section-title">👨‍✈️ พนักงานขับรถ</div>
-                <div class="radar-list">${renderList(res.drivers)}</div>
+        return `
+          <div class="radar-item">
+            <div class="radar-item-left">
+              <div class="radar-dot ${dotClass}"></div>
+              <div style="min-width:0; flex:1;">
+                <div class="radar-name">${escapeHtml(displayName)}</div>
+                ${subText ? `<div class="radar-subtext" title="${escapeHtml(subText)}">${escapeHtml(subText)}</div>` : ''}
+              </div>
             </div>
-            <div>
-                <div class="radar-section-title">🚐 ยานพาหนะ</div>
-                <div class="radar-list">${renderList(res.vehicles)}</div>
+            <div class="radar-meta radar-status-${dotClass}" title="${escapeHtml(labelStr)}">
+              ${escapeHtml(labelStr)}
             </div>
+          </div>
         `;
+      }).join('');
+    };
 
-        console.log('[Radar] loaded:', res);
-        console.log('[Radar][drivers]', (res.drivers || []).map(function(x) {
-            return {
-                name: x.name,
-                status: x.status,
-                label: x.label,
-                color: x.color,
-                job: x.job
-            };
-        }));
-        console.log('[Radar][vehicles]', (res.vehicles || []).map(function(x) {
-            return {
-                plate: x.plate,
-                status: x.status,
-                label: x.label,
-                color: x.color,
-                job: x.job
-            };
-        }));
-    } catch (e) {
-        console.error('[Radar] load error:', e);
-        renderRadarMeta({ serverNow: '-', timezone: 'Asia/Bangkok' });
+    content.innerHTML = `
+      <div>
+        <div class="radar-section-title">👤 พนักงานขับรถ</div>
+        <div class="radar-list">${renderList(res.drivers)}</div>
+      </div>
+      <div>
+        <div class="radar-section-title">🚐 ยานพาหนะ</div>
+        <div class="radar-list">${renderList(res.vehicles)}</div>
+      </div>
+    `;
 
-        content.innerHTML = `
-            <div style="padding:15px; background:#fee2e2; color:#991b1b; border-radius:12px; margin:12px 0;">
-                <div style="font-weight:700; margin-bottom:6px;">โหลดเรดาร์ไม่สำเร็จ</div>
-                <div style="font-size:0.92rem; margin-bottom:12px;">${escapeHtml(e.message || 'เกิดข้อผิดพลาด')}</div>
-                <button type="button"
-                        onclick="loadLiveStatusData()"
-                        style="min-height:44px; padding:10px 14px; border:none; border-radius:10px; background:#dc2626; color:#fff; font-weight:700; cursor:pointer;">
-                    ลองใหม่
-                </button>
-            </div>
-        `;
-    } finally {
-        if (fab) fab.disabled = false;
-    }
+    console.log('[Radar] loaded:', res);
+    console.log('[Radar][drivers]', (res.drivers || []).map(function(x) {
+      return {
+        name: x.name,
+        status: x.status,
+        label: x.label,
+        color: x.color,
+        job: x.job
+      };
+    }));
+    console.log('[Radar][vehicles]', (res.vehicles || []).map(function(x) {
+      return {
+        plate: x.plate,
+        status: x.status,
+        label: x.label,
+        color: x.color,
+        job: x.job
+      };
+    }));
+  } catch (e) {
+    console.error('[Radar] load error:', e);
+    renderRadarMeta({ serverNow: '-', timezone: 'Asia/Bangkok' });
+
+    content.innerHTML = `
+      <div style="padding:15px; background:#fee2e2; color:#991b1b; border-radius:12px; margin:12px 0;">
+        <div style="font-weight:700; margin-bottom:6px;">โหลดเรดาร์ไม่สำเร็จ</div>
+        <div style="font-size:0.92rem; margin-bottom:12px;">${escapeHtml(e.message || 'เกิดข้อผิดพลาด')}</div>
+        <button type="button"
+                onclick="loadLiveStatusData()"
+                style="min-height:44px; padding:10px 14px; border:none; border-radius:10px; background:#dc2626; color:#fff; font-weight:700; cursor:pointer;">
+          ลองใหม่
+        </button>
+      </div>
+    `;
+  } finally {
+    if (fab) fab.disabled = false;
+  }
 }
-
 /* ===================== SELF TEST (CLIENT + SERVER) — BERRY FIX ===================== */
+// ANCHOR: selfTest
 window.selfTest = async function (ev) {
-  try { if (ev && ev.preventDefault) ev.preventDefault(); } catch (x) {}
+  try { if (ev && ev.preventDefault) ev.preventDefault(); } catch (_) {}
 
   if (window.__SELFTEST_RUNNING__) {
     console.warn('⚠️ selfTest is already running...');
@@ -8933,6 +9341,15 @@ window.selfTest = async function (ev) {
   const selfTestToken = 'selftest_' + Date.now();
   window.__ACTIVE_SELFTEST_TOKEN__ = selfTestToken;
 
+  const logBufferHtml = [];
+  const logBufferPlain = [];
+
+  const stripHtml_ = (s) => String(s || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '');
+
+  const wait_ = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
   const showBerryReport = (logs) => {
     const modalId = 'berry-test-result';
     let modal = document.getElementById(modalId);
@@ -8942,7 +9359,7 @@ window.selfTest = async function (ev) {
       <div id="${modalId}" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:12000; display:flex; justify-content:center; align-items:center; backdrop-filter:blur(4px);">
         <div style="background:#1e1e1e; width:95%; max-width:820px; max-height:90vh; border-radius:12px; box-shadow:0 20px 50px rgba(0,0,0,0.5); display:flex; flex-direction:column; overflow:hidden; font-family:'Sarabun', sans-serif;">
           <div style="background:linear-gradient(135deg, #10b981, #059669); color:white; padding:15px 20px; font-weight:bold; font-size:1.05rem; display:flex; justify-content:space-between; align-items:center;">
-            <span style="display:flex; align-items:center; gap:8px;">🧪 V-Berry Availability Diagnostics</span>
+            <span style="display:flex; align-items:center; gap:8px;">🧪 V-Berry Early Close + Admin Button Diagnostics</span>
             <button onclick="document.getElementById('${modalId}').remove()" style="background:none; border:none; color:white; font-size:1.8rem; cursor:pointer; line-height:1;">&times;</button>
           </div>
 
@@ -8961,13 +9378,6 @@ window.selfTest = async function (ev) {
     document.body.insertAdjacentHTML('beforeend', html);
   };
 
-  const logBufferHtml = [];
-  const logBufferPlain = [];
-
-  const stripHtml_ = (s) => String(s || '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]*>/g, '');
-
   const addLog = (msg) => {
     let style = 'color:#d1d5db;';
     if (String(msg).includes('✅')) style = 'color:#4ade80; font-weight:bold;';
@@ -8976,7 +9386,6 @@ window.selfTest = async function (ev) {
     if (String(msg).includes('ℹ️')) style = 'color:#60a5fa;';
     if (String(msg).includes('🚀') || String(msg).includes('---')) style = 'color:#a78bfa; font-weight:bold; margin-top:12px; display:block; border-bottom:1px dashed #374151; padding-bottom:4px;';
     if (String(msg).includes('📨')) style = 'color:#14b8a6; font-style:italic; margin-left:20px;';
-    if (String(msg).includes('🧷')) style = 'color:#f9a8d4;';
 
     const htmlLine = `<span style="${style}">${msg}</span>`;
     logBufferHtml.push(htmlLine);
@@ -8987,7 +9396,6 @@ window.selfTest = async function (ev) {
       container.insertAdjacentHTML('beforeend', htmlLine + '<br>');
       container.scrollTop = container.scrollHeight;
     }
-
     console.log(stripHtml_(msg));
   };
 
@@ -9001,9 +9409,7 @@ window.selfTest = async function (ev) {
     addLog('❌ ' + msg);
   };
 
-  const info = (msg) => addLog('ℹ️ ' + msg);
   const warn = (msg) => addLog('⚠️ ' + msg);
-  const resLog = (msg) => addLog('📨 ' + msg);
 
   window.__copyBerryTestResult = async function () {
     try {
@@ -9058,11 +9464,8 @@ window.selfTest = async function (ev) {
         });
 
       try {
-        if (passArg === false) {
-          runner[fnName]();
-        } else {
-          runner[fnName](payload || {});
-        }
+        if (passArg === false) runner[fnName]();
+        else runner[fnName](payload || {});
       } catch (err) {
         resolve({ ok: false, error: String(err && err.message ? err.message : err) });
       }
@@ -9075,11 +9478,8 @@ window.selfTest = async function (ev) {
     const allPass = fail === 0;
 
     addLog('--- 📌 TEST SUMMARY ---');
-    if (allPass) {
-      ok(`สรุปผลรวม: PASS (${pass} ผ่าน, ${fail} ไม่ผ่าน)`);
-    } else {
-      no(`สรุปผลรวม: FAIL (${pass} ผ่าน, ${fail} ไม่ผ่าน)`);
-    }
+    if (allPass) ok(`สรุปผลรวม: PASS (${pass} ผ่าน, ${fail} ไม่ผ่าน)`);
+    else no(`สรุปผลรวม: FAIL (${pass} ผ่าน, ${fail} ไม่ผ่าน)`);
 
     const statusEl = document.getElementById('test-status-text');
     if (statusEl) {
@@ -9097,10 +9497,126 @@ window.selfTest = async function (ev) {
     }
   }
 
+  function findCardButtonTextByName_(container, name) {
+    if (!container) return '';
+    const cards = Array.from(container.querySelectorAll('.cyber-card'));
+    const targetCard = cards.find((card) => {
+      const nameEl = card.querySelector('.cyber-name');
+      return nameEl && String(nameEl.textContent || '').trim() === String(name || '').trim();
+    });
+    if (!targetCard) return '';
+    const btnTextEl = targetCard.querySelector('.cyber-status-badge .text');
+    return String(btnTextEl ? btnTextEl.textContent : '').trim();
+  }
+
+// ANCHOR: verifyAdminButtons_
+function verifyAdminButtons_(drivers, vehicles) {
+  const driverContainer = document.getElementById('admin-drivers-list');
+  const vehicleContainer = document.getElementById('admin-vehicles-list');
+
+  if (!driverContainer) {
+    no('ไม่พบ #admin-drivers-list สำหรับตรวจปุ่มพนักงานขับรถ');
+    return;
+  }
+  if (!vehicleContainer) {
+    no('ไม่พบ #admin-vehicles-list สำหรับตรวจปุ่มรถ');
+    return;
+  }
+
+  if (typeof renderAdminDrivers !== 'function') {
+    no('ไม่พบ renderAdminDrivers');
+    return;
+  }
+  if (typeof renderAdminVehicles !== 'function') {
+    no('ไม่พบ renderAdminVehicles');
+    return;
+  }
+
+  renderAdminDrivers(drivers || []);
+  renderAdminVehicles(vehicles || []);
+
+  const suspendedDrivers = (drivers || []).filter(d => d && d.active === false);
+  const activeDrivers = (drivers || []).filter(d => d && d.active !== false);
+  const suspendedVehicles = (vehicles || []).filter(v => v && v.active === false);
+  const activeVehicles = (vehicles || []).filter(v => v && v.active !== false);
+
+  ok(`Render Admin Panel สำเร็จ: drivers=${(drivers || []).length}, vehicles=${(vehicles || []).length}`);
+
+  if (suspendedDrivers.length === 0) {
+    warn('ไม่มีตัวอย่างพนักงานขับรถ active=false จากข้อมูลจริง → ใช้ mock test แทน');
+    const mockDrivers = [
+      { name: 'MOCK-DRIVER-ACTIVE', active: true, isBusy: false, busyBadge: '' },
+      { name: 'MOCK-DRIVER-SUSPEND', active: false, isBusy: false, busyBadge: '' }
+    ];
+    renderAdminDrivers(mockDrivers);
+
+    const activeText = findCardButtonTextByName_(driverContainer, 'MOCK-DRIVER-ACTIVE');
+    const suspendText = findCardButtonTextByName_(driverContainer, 'MOCK-DRIVER-SUSPEND');
+
+    if (activeText.indexOf('ทำงาน') >= 0) ok(`Mock พนักงาน active=true แสดง "${activeText}" ถูกต้อง`);
+    else no(`Mock พนักงาน active=true ควรเป็น "ทำงานอยู่" แต่พบ "${activeText || '-'}"`);
+
+    if (suspendText.indexOf('พัก') >= 0) ok(`Mock พนักงาน active=false แสดง "${suspendText}" ถูกต้อง`);
+    else no(`Mock พนักงาน active=false ควรเป็น "พักงาน" แต่พบ "${suspendText || '-'}"`);
+
+    renderAdminDrivers(drivers || []);
+  } else {
+    suspendedDrivers.forEach((d) => {
+      const text = findCardButtonTextByName_(driverContainer, d.name);
+      if (text.indexOf('พัก') >= 0) ok(`ปุ่มพนักงาน "${d.name}" แสดง "${text}" ถูกต้อง`);
+      else no(`ปุ่มพนักงาน "${d.name}" ควรเป็น "พักงาน" แต่พบ "${text || '-'}"`);
+    });
+  }
+
+  if (activeDrivers.length === 0) {
+    warn('ไม่มีตัวอย่างพนักงานขับรถ active=true สำหรับเช็คปุ่ม "ทำงานอยู่"');
+  } else {
+    const d = activeDrivers[0];
+    const text = findCardButtonTextByName_(driverContainer, d.name);
+    if (text.indexOf('ทำงาน') >= 0) ok(`ปุ่มพนักงาน active "${d.name}" แสดง "${text}" ถูกต้อง`);
+    else no(`ปุ่มพนักงาน active "${d.name}" ควรเป็น "ทำงานอยู่" แต่พบ "${text || '-'}"`);
+  }
+
+  if (suspendedVehicles.length === 0) {
+    warn('ไม่มีตัวอย่างรถ active=false จากข้อมูลจริง → ใช้ mock test แทน');
+    const mockVehicles = [
+      { plate: 'MOCK-CAR-ACTIVE', active: true, available: true, badge: '', type: 'รถตู้ 1' },
+      { plate: 'MOCK-CAR-MAINT', active: false, available: false, badge: 'ซ่อมบำรุง', type: 'รถตู้ 1' }
+    ];
+    renderAdminVehicles(mockVehicles);
+
+    const activeText = findCardButtonTextByName_(vehicleContainer, 'MOCK-CAR-ACTIVE');
+    const maintText = findCardButtonTextByName_(vehicleContainer, 'MOCK-CAR-MAINT');
+
+    if (activeText.indexOf('พร้อม') >= 0) ok(`Mock รถ active=true แสดง "${activeText}" ถูกต้อง`);
+    else no(`Mock รถ active=true ควรเป็น "พร้อมใช้" แต่พบ "${activeText || '-'}"`);
+
+    if (maintText.indexOf('ซ่อม') >= 0) ok(`Mock รถ active=false แสดง "${maintText}" ถูกต้อง`);
+    else no(`Mock รถ active=false ควรเป็น "ซ่อมบำรุง" แต่พบ "${maintText || '-'}"`);
+
+    renderAdminVehicles(vehicles || []);
+  } else {
+    suspendedVehicles.forEach((v) => {
+      const text = findCardButtonTextByName_(vehicleContainer, v.plate);
+      if (text.indexOf('ซ่อม') >= 0) ok(`ปุ่มรถ "${v.plate}" แสดง "${text}" ถูกต้อง`);
+      else no(`ปุ่มรถ "${v.plate}" ควรเป็น "ซ่อมบำรุง" แต่พบ "${text || '-'}"`);
+    });
+  }
+
+  if (activeVehicles.length === 0) {
+    warn('ไม่มีตัวอย่างรถ active=true สำหรับเช็คปุ่ม "พร้อมใช้"');
+  } else {
+    const v = activeVehicles[0];
+    const text = findCardButtonTextByName_(vehicleContainer, v.plate);
+    if (text.indexOf('พร้อม') >= 0) ok(`ปุ่มรถ active "${v.plate}" แสดง "${text}" ถูกต้อง`);
+    else no(`ปุ่มรถ active "${v.plate}" ควรเป็น "พร้อมใช้" แต่พบ "${text || '-'}"`);
+  }
+}
+
   try { if (typeof showLoading === 'function') showLoading(); } catch (_) {}
 
   showBerryReport([
-    `<span style="color:#a78bfa; font-weight:bold;">🚀 STARTING AVAILABILITY DIAGNOSTICS [${new Date().toLocaleTimeString()}]</span>`
+    `<span style="color:#a78bfa; font-weight:bold;">🚀 STARTING EARLY CLOSE + ADMIN BUTTON DIAGNOSTICS [${new Date().toLocaleTimeString()}]</span>`
   ]);
 
   try {
@@ -9125,44 +9641,63 @@ window.selfTest = async function (ev) {
       return;
     }
 
-    addLog('--- [PHASE 3] ตรวจสอบ Availability Engine ---');
-    info('กำลังเรียก selfTestAvailabilityEngineAdvanced() ...');
+    addLog('--- [PHASE 3] ตรวจสอบ Early Close Flow ---');
+    const earlyRes = await gasCall_('selfTestEarlyClose_All', null, false);
 
-    const engineRes = await gasCall_('selfTestAvailabilityEngineAdvanced', null, false);
-
-    if (!engineRes.ok || !engineRes.res) {
-      no(`เรียก selfTestAvailabilityEngineAdvanced ไม่สำเร็จ: ${engineRes.error || 'No Response'}`);
+    if (!earlyRes.ok || !earlyRes.res) {
+      no(`เรียก selfTestEarlyClose_All ไม่สำเร็จ: ${earlyRes.error || 'No Response'}`);
       finalizeStatus_();
       return;
     }
 
-    const result = engineRes.res;
+    const result = earlyRes.res;
+    (result.logs || []).forEach((line) => addLog(line));
 
     if (result.ok) {
-      ok(`Availability Engine: ${result.status} (${result.passed}/${result.total})`);
+      ok(`Server Early Close Test: ${result.status} (${result.passed}/${result.total})`);
     } else {
-      no(`Availability Engine: ${result.status} (${result.passed}/${result.total})`);
+      no(`Server Early Close Test: ${result.status} (${result.passed}/${result.total})`);
     }
 
-    (result.logs || []).forEach((item) => {
-      const line = `${item.name} | ${item.detail || '-'} | result=${item.resultStatus || '-'}${item.reason ? ' | reason=' + item.reason : ''}`;
-      if (item.pass) ok(line);
-      else no(line);
-    });
+    addLog('--- [PHASE 4] ตรวจสอบปุ่มใน Admin Panel ---');
 
-    addLog('--- [PHASE 4] ตรวจสอบขอบเขตการทดสอบ ---');
-    ok('ทดสอบรถและพนักงานขับรถแยกกันครบ');
-    ok('ทดสอบ boundary time 08:30 และ 16:30 ครบ');
-    ok('ทดสอบ overlap booking + block ครบ');
-    ok('ทดสอบ permanent lock ครบ');
-    ok('Self Test เวอร์ชันนี้ไม่สร้าง/แก้ไข/ลบข้อมูลจริง');
+    try {
+      if (typeof openAdminPanel === 'function') {
+        openAdminPanel();
+        await wait_(250);
+      }
+    } catch (e) {
+      warn('เปิด Admin Panel อัตโนมัติไม่สำเร็จ: ' + e.message);
+    }
+
+    const adminRes = await gasCall_('apiGetAdminPanelData', {}, true);
+    if (!adminRes.ok || !adminRes.res || !adminRes.res.ok) {
+      no(`เรียก apiGetAdminPanelData ไม่สำเร็จ: ${(adminRes.res && adminRes.res.error) || adminRes.error || 'No Response'}`);
+      finalizeStatus_();
+      return;
+    }
+
+    const adminData = adminRes.res;
+    const drivers = Array.isArray(adminData.drivers) ? adminData.drivers : [];
+    const vehicles = Array.isArray(adminData.vehicles) ? adminData.vehicles : [];
+
+    ok(`โหลด Admin Panel Data สำเร็จ: drivers=${drivers.length}, vehicles=${vehicles.length}`);
+
+    await wait_(50);
+    verifyAdminButtons_(drivers, vehicles);
+
+    addLog('--- [PHASE 5] ตรวจสอบขอบเขตการทดสอบ ---');
+    ok('ทดสอบ flow ปิดงานก่อนเวลา');
+    ok('ทดสอบปุ่มพนักงานขับรถตาม active state');
+    ok('ทดสอบปุ่มรถตาม active state');
+    ok('ไม่มีการยิง toggle จริงระหว่าง self test');
 
     addLog('--- 🏁 DIAGNOSTICS COMPLETE ---');
     finalizeStatus_();
 
   } catch (e) {
     no('เกิดข้อผิดพลาดร้ายแรงระหว่างรันการทดสอบ: ' + e.message);
-    if (e && e.stack) resLog('stack: ' + e.stack);
+    if (e && e.stack) addLog('📨 stack: ' + e.stack);
     finalizeStatus_();
   } finally {
     window.__BERRY_LAST_TEST_PLAIN__ = logBufferPlain.slice();
@@ -9175,13 +9710,12 @@ window.selfTest = async function (ev) {
 };
 
 window.runSelfTest = window.selfTest;
-
 // Initializer (คงเดิมไว้)
 (function runBoot_(){
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeApp); 
+    document.addEventListener('DOMContentLoaded', initializeApp);
   } else {
-    if(typeof initializeApp === 'function') initializeApp();
+    // Initialization will be handled by DOMContentLoaded listener.
   }
 })();
 

@@ -175,6 +175,8 @@
         <div class="stat-label">ยกเลิก</div>
     </div>
     
+
+
     <div class="stat-card stat-primary filter-active" data-status="all" role="button" tabindex="0" id="filter-all-card">
         <div class="stat-icon">📦</div>
         <div class="stat-number" id="total-bookings-badge">0</div>
@@ -251,6 +253,7 @@
           <input type="date" id="bf-end-date" class="bf-input">
           <input type="time" id="bf-end-time" class="bf-input" value="23:59">
         </div>
+
       </div>
       
       <!-- Actions -->
@@ -1039,7 +1042,11 @@
             <span class="icon">⛔</span><span class="btn-text">ไม่อนุมัติ</span>
           </button>
           
-          <div class="footer-btn-group">
+          <div class="footer-btn-group" style="display:flex; gap:8px;">
+            <!-- 🍓 BERRY FIX: ปุ่มปิดงานก่อนเวลา -->
+            <button type="button" id="assignment-close-job-btn" class="btn btn-warning" style="display:none; color:white; border-radius:10px;" onclick="handleAssignmentEarlyClose()">
+              <span class="icon">🏁</span><span class="btn-text" style="color:#000; font-weight:bold;">ปิดงานก่อนเวลา</span>
+            </button>
             <button type="button" class="btn bx-btn-close" style="background:#334155; color:white; border-radius:10px;" onclick="closeModalA11y('assignment-modal')">
              <span class="btn-text">ปิด</span>
             </button>

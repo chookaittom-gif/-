@@ -121,6 +121,7 @@ function getMainData() {
   return getMainData_();
 }
 
+// ANCHOR: getMainData_
 function getMainData_() {
   const CK = 'mainDataCache_v13_BerryFix'; 
   try { cacheDelete_(CK); } catch(e) {}
@@ -142,13 +143,16 @@ function getMainData_() {
     if (lastRow < startRow) {
         return { 
             ok: true, 
-            data: { bookings: [], vehicles: {}, drivers:[], totalBookings: 0, projects:[] } 
+            data: { bookings:[], vehicles: {}, drivers:[], totalBookings: 0, projects:[] } 
         };
     }
 
     const numRows = (lastRow - startRow) + 1;
     const values = sh.getRange(startRow, 1, numRows, headers.length).getValues();
     const seen = new Set(); 
+    
+    // 🍓 BERRY FIX: อ่าน Actual Ends Map ก่อน Map Bookings (แก้เป็น getActualEndsMap ไม่มี _)
+    const actualEndsMap = getActualEndsMap();
 
     const recentBookingsData = values.map((row, i) => {
       const id = String(row[idx.bookingId] || '').trim();
@@ -156,6 +160,13 @@ function getMainData_() {
       seen.add(id);
 
       const startISO = parseDateToISO_(row[idx.startDate]);
+      const baseEndDate = parseDateToISO_(row[idx.endDate]) || startISO;
+      const baseEndTime = parseTimeSafe_(row[idx.endTime]);
+      
+      const aEndObj = actualEndsMap[id];
+      // 🍓 BERRY FIX: ถ้ามี Actual End ให้ใช้แทน
+      const finalEndDate = aEndObj ? aEndObj.actualEndDate : baseEndDate;
+      const finalEndTime = aEndObj ? aEndObj.actualEndTime : baseEndTime;
       
       return {
         bookingId: id,
@@ -173,7 +184,6 @@ function getMainData_() {
         org: String(row[idx.department]||'').trim(),
         email: String(row[idx.email]||'').trim(),
         
-        // 🍓[BERRY FIX] ดึงค่า ประเภทงาน และ งาน/โครงการ โดยใช้ Fallback ไปหาชื่อเก่าด้วย
         workType: String(row[idx.workType] || row[idx.jobType] || '').trim(),
         workName: String(row[idx.workName] || row[idx.projectName] || row[idx.project] || row[idx.purpose] || '').trim(),
         
@@ -182,8 +192,13 @@ function getMainData_() {
         
         startDate: startISO,
         startTime: parseTimeSafe_(row[idx.startTime]),
-        endDate: parseDateToISO_(row[idx.endDate]) || startISO,
-        endTime: parseTimeSafe_(row[idx.endTime]),
+        endDate: finalEndDate,
+        endTime: finalEndTime,
+        
+        // 🍓 BERRY FIX: ส่งตัวแปรจริงไปให้ Client ทราบด้วยว่าเป็น Actual End (สำหรับ UI ตกแต่ง)
+        actualEndAt: aEndObj ? aEndObj.actualEndAtISO : null,
+        plannedEndDate: baseEndDate,
+        plannedEndTime: baseEndTime,
         
         passengers: String(row[idx.passengers]||'').trim(),
         cancelReason: String(row[idx.cancelReason]||'').trim(),
@@ -199,21 +214,14 @@ function getMainData_() {
       return bNum - aNum; 
     });
 
-
-// 🍓 [BERRY FIX] Merge Availability Blocks into Calendar (Data UI Safe)
+    // 🍓 [BERRY FIX] Merge Availability Blocks into Calendar (Data UI Safe)
     try {
        const shAvail = ss.getSheetByName('Availability');
        if(shAvail && shAvail.getLastRow() > 1) {
           const avData = shAvail.getDataRange().getValues();
-          const header = avData[0] || [];
+          const header = avData[0] ||[];
           const col_assignedDriver = header.indexOf('assignedDriver');
           
-          let step1_totalRows = avData.length - 1;
-          let step2_driverRepairSkipped = 0;
-          let step3_driverLeavePushed = 0;
-          let step4_vehiclePushed = 0;
-          let step5_vehicleAssignedDriverPass = 0;
-
           for(let i=1; i<avData.length; i++) {
              const resType = String(avData[i][0] || '').trim();
              const resId = String(avData[i][1] || '').trim();
@@ -223,49 +231,38 @@ function getMainData_() {
              
              // 🍓 BERRY FIX: Skip driver_block if reason contains "ซ่อม"
              if (isDriver && isRepair) {
-                 step2_driverRepairSkipped++;
                  continue; // ข้ามการสร้าง event ในปฏิทิน
              }
              
-             if (isDriver && !isRepair) {
-                 step3_driverLeavePushed++;
-             }
-             if (!isDriver) {
-                 step4_vehiclePushed++;
-                 if (col_assignedDriver > -1 && avData[i][col_assignedDriver]) {
-                     step5_vehicleAssignedDriverPass++;
-                 }
-             }
+             // 🍓 BERRY FIX: ควบคุมการทำงานของ block ผ่านคอลัมน์ status
+             const col_status = header.indexOf('status');
+             const blockStatus = (col_status > -1) ? String(avData[i][col_status] || '').trim().toLowerCase() : '';
+             const isClosed = (blockStatus === 'closed');
              
              const assignedDriverValue = (col_assignedDriver > -1) ? avData[i][col_assignedDriver] : '';
 
              sortedBookings.push({
                 bookingId: 'BLK-' + i,
                 status: isDriver ? 'driver_block' : 'vehicle_block',
-                name: resId,          // ให้ name ถือค่า resourceId ไปโชว์
+                blockStatus: blockStatus,
+                isClosed: isClosed,
+                name: resId,          
                 driver: isDriver ? resId : '-', 
                 plate: isDriver ? '-' : resId,  
                 vehicle: isDriver ? '-' : resId,
-                destination: '-',     // ป้องกัน UI Tooltip undefined
+                destination: '-',     
                 place: '-',
                 workType: isDriver ? 'ลาพักงาน' : 'ส่งซ่อมบำรุง',
-                workName: avData[i][6] || 'งดใช้งาน', // reason
+                workName: avData[i][6] || 'งดใช้งาน', 
                 project: avData[i][6] || 'งดใช้งาน',
                 startDate: parseDateToISO_(avData[i][2]),
                 startTime: parseTimeSafe_(avData[i][3]),
                 endDate: parseDateToISO_(avData[i][4]) || parseDateToISO_(avData[i][2]),
                 endTime: parseTimeSafe_(avData[i][5]),
                 dateNum: new Date(parseDateToISO_(avData[i][2])).getTime(),
-                assignedDriver: assignedDriverValue // 🍓 BERRY FIX: Pass assignedDriver
+                assignedDriver: assignedDriverValue 
              });
           }
-          
-          Logger.log('--- SELF TEST: Merge Availability Blocks ---');
-          Logger.log('STEP1: loop avData พบกี่ row ทั้งหมด: ' + step1_totalRows);
-          Logger.log('STEP2: นับ driver_block ที่ reason=ซ่อม และถูก skip: ' + step2_driverRepairSkipped);
-          Logger.log('STEP3: นับ driver_block ที่ reason=ลา/พัก และถูก push: ' + step3_driverLeavePushed);
-          Logger.log('STEP4: นับ vehicle_block ที่ถูก push: ' + step4_vehiclePushed);
-          Logger.log('STEP5: vehicle_block มี assignedDriver ถูกต้อง: ' + (step4_vehiclePushed > 0 ? (step5_vehicleAssignedDriverPass > 0 ? 'PASS' : 'FAIL (No assignedDriver)') : 'N/A'));
        }
     } catch(ex) {
        Logger.log("Availability Merge Error: " + ex.message + "\nstack: " + ex.stack);
@@ -277,7 +274,7 @@ function getMainData_() {
     const platesRes = getAllVehiclePlatesFromSettings();
     const vehicles  = platesRes.ok ? {
       vans: platesRes.vans ||[],
-      trucks: platesRes.trucks || [],
+      trucks: platesRes.trucks ||[],
       all: platesRes.all ||[]
     } : { vans:[], trucks: [], all:[] };
     
@@ -3436,45 +3433,72 @@ function getDriverList() {
   }
 }
 
-/* --- ADMIN PANEL APIS (Enhanced by Berry) --- */
+// ANCHOR: apiGetAdminPanelData
 function apiGetAdminPanelData() {
   try {
-    // 1. ดึงข้อมูล Drivers (Master List)
     const driversRes = getDriversFromAdmin_();
     const driversRaw = driversRes.ok ? driversRes.drivers : [];
 
-    // 2. ดึงข้อมูล Vehicles (Master List)
     const vehiclesRes = getAllVehiclePlatesFromSettings();
     const vehiclesRaw = vehiclesRes.ok ? vehiclesRes.all : [];
-    
-    // 3. อ่านสถานะจาก Setting (Real-time override)
-    // DriverStatus: "Somchai:true,Somsri:false"
-    const dStatusKv = readSettingKV_('DriverStatus'); 
+
+    const dStatusKv = readSettingKV_('DriverStatus');
     const dStatusMap = parseBoolMap_(dStatusKv.val);
 
-    // VehicleAvailability: "ฮค-1234:true,กข-9999:false"
     const vStatusKv = readSettingKV_('VehicleAvailability');
     const vStatusMap = parseBoolMap_(vStatusKv.val);
 
-    // 4. ผสมข้อมูล (Merge)
-    const drivers = driversRaw.map(d => {
-      // ถ้ามีค่าใน Map ให้ใช้ค่านั้น, ถ้าไม่มีให้ Default เป็น true (Active)
-      const isActive = dStatusMap.hasOwnProperty(d.name) ? dStatusMap[d.name] : true;
+    const today = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
+    const liveRes = getAvailableVehicles({
+      startDate: today,
+      endDate: today,
+      startTime: '00:00',
+      endTime: '23:59'
+    });
+
+    const liveDriversMap = {};
+    const liveVehiclesMap = {};
+
+    if (liveRes && liveRes.ok) {
+      (liveRes.drivers || []).forEach(function(d) {
+        liveDriversMap[String(d.name || '').trim()] = d;
+      });
+      (liveRes.vehicles || []).forEach(function(v) {
+        liveVehiclesMap[String(v.plate || '').trim()] = v;
+      });
+    }
+
+    const drivers = driversRaw.map(function(d) {
+      const name = String(d.name || '').trim();
+      const isActive = dStatusMap.hasOwnProperty(name) ? dStatusMap[name] : true;
+      const live = liveDriversMap[name] || {};
+      const liveBusy = live.isBusy === true;
+      const liveBusyBadge = String(live.busyBadge || '').trim();
+
       return {
-        name: d.name,
+        name: name,
         username: d.username,
         role: d.role,
-        active: isActive
+        active: isActive,
+        isBusy: (!isActive) || liveBusy,
+        busyBadge: !isActive ? 'พักงาน' : (liveBusyBadge || '')
       };
     });
 
-    const vehicles = vehiclesRaw.map(v => {
-      const isActive = vStatusMap.hasOwnProperty(v.plate) ? vStatusMap[v.plate] : true;
+    const vehicles = vehiclesRaw.map(function(v) {
+      const plate = String(v.plate || '').trim();
+      const isActive = vStatusMap.hasOwnProperty(plate) ? vStatusMap[plate] : true;
+      const live = liveVehiclesMap[plate] || {};
+      const liveAvailable = live.available !== false;
+      const liveBadge = String(live.badge || '').trim();
+
       return {
-        plate: v.plate,
+        plate: plate,
         name: v.name,
         type: v.type,
-        active: isActive
+        active: isActive,
+        available: isActive && liveAvailable,
+        badge: !isActive ? 'งดใช้/ซ่อมบำรุง 🔧' : (liveBadge || 'ว่าง')
       };
     });
 
@@ -5346,10 +5370,13 @@ function isOverlapping_(startA, endA, startB, endB) {
 function getAvailableVehicles(payload) {
   try {
     if (!payload) throw new Error('ข้อมูลวันเวลาไม่ครบถ้วน');
+
     const d1 = payload.startDate || payload.date;
     const d2 = payload.endDate || payload.date || d1;
     const excludeId = String(payload.bookingId || '').trim();
-    const clean = (s) => String(s || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    const clean = function(s) {
+      return String(s || '').replace(/[\u200B-\u200D\uFEFF]/g, '').trim();
+    };
 
     const nd1 = parseDateToISO_(d1);
     const nd2 = parseDateToISO_(d2);
@@ -5364,79 +5391,190 @@ function getAvailableVehicles(payload) {
     const idx = headerIndex_(headers);
     const values = sh.getRange(2, 1, Math.max(1, sh.getLastRow() - 1), headers.length).getValues();
 
-    const busyPlatesMap = {}; 
-    const busyDriversMap = {}; 
+    const busyPlatesMap = {};
+    const busyDriversMap = {};
+    const actualEndsMap = getActualEndsMap();
 
-// ANCHOR
     for (const row of values) {
       const rowId = clean(row[idx.bookingId]);
-      if (excludeId && rowId === excludeId) continue; 
+      if (excludeId && rowId === excludeId) continue;
 
       const status = getStatusKeySafe_(row[idx.status]);
-      // 🍓 BERRY FIX: เพิ่มเช็ค driver_special_approved จะได้ตัดรถคันนี้ออกจากรายการรถว่าง
       if (status === 'approved' || status === 'pending' || status === 'driver_special_approved') {
         const rStartISO = parseDateToISO_(row[idx.startDate]);
         const bStart = parseDateTime_(rStartISO, parseTimeSafe_(row[idx.startTime]));
-        const bEnd = parseDateTime_(parseDateToISO_(row[idx.endDate]) || rStartISO, parseTimeSafe_(row[idx.endTime]));
+        let bEnd = parseDateTime_(parseDateToISO_(row[idx.endDate]) || rStartISO, parseTimeSafe_(row[idx.endTime]));
+
+        const aEndObj = actualEndsMap[rowId];
+        if (aEndObj && aEndObj.actualEndAtObj && !isNaN(aEndObj.actualEndAtObj.getTime())) {
+          bEnd = aEndObj.actualEndAtObj;
+        }
 
         if (bStart && bEnd && isOverlapping_(reqStart, reqEnd, bStart, bEnd)) {
           const job = clean(row[idx.project] || row[idx.purpose] || 'ติดงาน');
+
           const pCell = clean(row[idx.vehicle]);
-          if (pCell) pCell.split(',').forEach(p => { if (clean(p)) busyPlatesMap[clean(p)] = job; });
+          if (pCell) {
+            pCell.split(',').forEach(function(p) {
+              const plate = clean(p);
+              if (plate) busyPlatesMap[plate] = job;
+            });
+          }
+
           const dCell = clean(row[idx.driver]);
-          if (dCell) dCell.split(',').forEach(d => { if (clean(d)) busyDriversMap[clean(d)] = job; });
+          if (dCell) {
+            dCell.split(',').forEach(function(d) {
+              const name = clean(d);
+              if (name) busyDriversMap[name] = job;
+            });
+          }
         }
       }
     }
 
-    // 🍓 BERRY FIX: เพิ่มการตรวจสอบเวลาลางาน/ส่งซ่อมจากชีต Availability ด้วย (Auto-Unlock Framework)
+    // ─────────────────────────────────────────────
+    // 🍓 BERRY FIX: parse เวลาจาก Availability Sheet
+    // รองรับ Date object และ Serial Number
+    // เหมือนวิธีที่ Radar ใช้ใน getRadarDateTime_()
+    // ─────────────────────────────────────────────
+    const tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+
+    function parseAvailTime_(tVal) {
+      if (!tVal && tVal !== 0) return '00:00';
+      if (tVal instanceof Date && !isNaN(tVal.getTime())) {
+        return Utilities.formatDate(tVal, tz, 'HH:mm');
+      }
+      if (typeof tVal === 'number' && isFinite(tVal)) {
+        var mins = Math.round((tVal % 1) * 24 * 60);
+        mins = Math.max(0, Math.min(mins, 1439));
+        return (Math.floor(mins / 60) < 10 ? '0' : '') + Math.floor(mins / 60) + ':' +
+               (mins % 60 < 10 ? '0' : '') + mins % 60;
+      }
+      return parseTimeSafe_(String(tVal));
+    }
+
+    function parseAvailDate_(dVal) {
+      if (!dVal) return null;
+      if (dVal instanceof Date && !isNaN(dVal.getTime())) {
+        return Utilities.formatDate(dVal, tz, 'yyyy-MM-dd');
+      }
+      return parseDateToISO_(dVal);
+    }
+
     const shAvail = ss.getSheetByName('Availability');
     if (shAvail && shAvail.getLastRow() > 1) {
-       const availData = shAvail.getDataRange().getValues();
-       for (let i = 1; i < availData.length; i++) {
-          const resType = String(availData[i][0]).trim();
-          const resId = String(availData[i][1]).trim();
-          const reason = String(availData[i][6]).trim();
-          const bStart = parseDateTime_(availData[i][2], availData[i][3]);
-          const bEnd = parseDateTime_(availData[i][4], availData[i][5]);
-          
-          // ถ้าเวลาจองดันไปตรงกับเวลาที่ระบุไว้ว่า ลา/ซ่อม ให้นำไปหักลบออกจากคิวรถว่าง
-          if (bStart && bEnd && isOverlapping_(reqStart, reqEnd, bStart, bEnd)) {
-             if (resType === 'vehicle') {
-                busyPlatesMap[resId] = reason || 'งดใช้/ซ่อมบำรุง 🔧';
-             } else if (resType === 'driver') {
-                busyDriversMap[resId] = reason || 'ลางาน/พักงาน';
-             }
+      const availData = shAvail.getDataRange().getValues();
+      const avHeaders = availData[0];
+      const avStatusIdx = avHeaders.indexOf('status');
+
+      for (let i = 1; i < availData.length; i++) {
+        const resType = clean(availData[i][0]);
+        const resId   = clean(availData[i][1]);
+        const reason  = clean(availData[i][6]);
+        const avStatus = (avStatusIdx > -1) ? String(availData[i][avStatusIdx] || '').trim().toLowerCase() : '';
+
+        // 🍓 BERRY FIX: Ignore closed blocks in availability check
+        if (avStatus === 'closed') continue;
+
+        // 🍓 BERRY FIX: ใช้ parseAvailDate_ / parseAvailTime_ แทน parseDateTime_ ตรงๆ
+        const bStart = parseDateTime_(
+          parseAvailDate_(availData[i][2]),
+          parseAvailTime_(availData[i][3])
+        );
+        const bEnd = parseDateTime_(
+          parseAvailDate_(availData[i][4]) || parseAvailDate_(availData[i][2]),
+          parseAvailTime_(availData[i][5])
+        );
+
+        // selfTest log
+        Logger.log('[AdminPanel] Avail row ' + i +
+          ' type=' + resType + ' id=' + resId +
+          ' bStart=' + (bStart ? Utilities.formatDate(bStart, tz, 'yyyy-MM-dd HH:mm') : 'NULL') +
+          ' bEnd='   + (bEnd   ? Utilities.formatDate(bEnd,   tz, 'yyyy-MM-dd HH:mm') : 'NULL') +
+          ' overlap=' + (bStart && bEnd ? isOverlapping_(reqStart, reqEnd, bStart, bEnd) : 'SKIP')
+        );
+
+        if (bStart && bEnd && isOverlapping_(reqStart, reqEnd, bStart, bEnd)) {
+          if (resType === 'vehicle') {
+            busyPlatesMap[resId] = reason || 'งดใช้/ซ่อมบำรุง 🔧';
+          } else if (resType === 'driver') {
+            busyDriversMap[resId] = reason || 'ลางาน/พักงาน';
           }
-       }
+        }
+      }
     }
 
     const vStatusMap = parseBoolMap_(readSettingKV_('VehicleAvailability').val);
+    const dStatusMap = parseBoolMap_(readSettingKV_('DriverStatus').val);
+
     const vehiclesRes = getAllVehiclePlatesFromSettings();
-    const vehicleStatus = (vehiclesRes.ok ? vehiclesRes.all : []).map(v => {
+    const vehicleStatus = (vehiclesRes.ok ? vehiclesRes.all : []).map(function(v) {
       const p = clean(v.plate);
-      const isM = vStatusMap[p] === false;
-      if (isM) return { ...v, available: false, badge: 'งดใช้/ซ่อมบำรุง 🔧' };
-      if (busyPlatesMap[p]) return { ...v, available: false, badge: busyPlatesMap[p] };
-      return { ...v, available: true, badge: 'ว่าง' };
+      const isManualActive = vStatusMap.hasOwnProperty(p) ? vStatusMap[p] : true;
+
+      if (!isManualActive) {
+        return {
+          plate: p,
+          name: v.name,
+          type: v.type,
+          active: false,
+          available: false,
+          badge: 'งดใช้/ซ่อมบำรุง 🔧'
+        };
+      }
+
+      if (busyPlatesMap[p]) {
+        return {
+          plate: p,
+          name: v.name,
+          type: v.type,
+          active: true,
+          available: false,
+          badge: busyPlatesMap[p]
+        };
+      }
+
+      return {
+        plate: p,
+        name: v.name,
+        type: v.type,
+        active: true,
+        available: true,
+        badge: 'ว่าง'
+      };
     });
 
     const driversRes = getDriversFromAdmin_();
-    const driverList = (driversRes.ok ? driversRes.drivers : []).map(d => {
+    const driverList = (driversRes.ok ? driversRes.drivers : []).map(function(d) {
       const name = clean(typeof d === 'object' ? d.name : d);
+      const isManualActive = dStatusMap.hasOwnProperty(name) ? dStatusMap[name] : true;
       const busyJob = busyDriversMap[name];
-      const inactive = (typeof d === 'object' && d.active === false);
+
+      if (!isManualActive) {
+        return {
+          name: name,
+          active: false,
+          busyBadge: 'พักงาน',
+          isBusy: true
+        };
+      }
+
       return {
         name: name,
-        active: !inactive,
-        busyBadge: busyJob ? `ติดงาน: ${busyJob}` : (inactive ? 'พักงาน' : ''),
-        isBusy: !!(busyJob || inactive) // 🍓 บังคับส่งค่า Boolean จริงๆ ไปเลยค่ะ
+        active: true,
+        busyBadge: busyJob ? ('ติดงาน: ' + busyJob) : '',
+        isBusy: !!busyJob
       };
     });
 
     return { ok: true, vehicles: vehicleStatus, drivers: driverList };
-  } catch (e) { return { ok: false, error: e.message }; }
+
+  } catch (e) {
+    Logger.log('getAvailableVehicles Error: ' + e.stack);
+    return { ok: false, error: e.message };
+  }
 }
+
 
 function getTimelineData(payload) {
   try {
@@ -6601,7 +6739,12 @@ function getRealTimeAvailableCount(arg1, arg2, arg3) {
     const shAvail = ss.getSheetByName('Availability');
     if (shAvail && shAvail.getLastRow() > 1) {
        const availData = shAvail.getDataRange().getValues();
+       const headers = availData[0];
+       const stIdx = headers.indexOf('status');
        for (let i = 1; i < availData.length; i++) {
+          const status = stIdx > -1 ? String(availData[i][stIdx] || '').trim().toLowerCase() : '';
+          if (status === 'closed') continue; // 🍓 BERRY FIX: ข้ามบล็อกที่ปิดงานไปแล้ว
+          
           if (String(availData[i][0]).trim() === 'vehicle') {
              const vId = String(availData[i][1]).trim();
              // ถ้ารถคันนี้ถูกมองว่าว่างอยู่ ให้ลองเช็คว่าติดซ่อมเวลานี้หรือไม่
@@ -7412,13 +7555,15 @@ function _getAvailabilitySheet() {
   var sh = ss.getSheetByName('Availability');
   if(!sh) {
     sh = ss.insertSheet('Availability');
-    sh.appendRow(['resourceType','resourceId','startDate','startTime','endDate','endTime','reason','createdBy','createdAt','assignedDriver']);
+    sh.appendRow(['resourceType','resourceId','startDate','startTime','endDate','endTime','reason','createdBy','createdAt','assignedDriver','status','closedBy','closedAt','closeNote']);
   } else {
-    // 🍓 BERRY FIX: Backward compatibility for assignedDriver
+    // 🍓 BERRY FIX: Backward compatibility for assignedDriver and soft close
     var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
-    if (headers.indexOf('assignedDriver') === -1) {
-      sh.getRange(1, sh.getLastColumn() + 1).setValue('assignedDriver');
-    }
+    if (headers.indexOf('assignedDriver') === -1) sh.getRange(1, sh.getLastColumn() + 1).setValue('assignedDriver');
+    if (headers.indexOf('status') === -1) sh.getRange(1, sh.getLastColumn() + 1).setValue('status');
+    if (headers.indexOf('closedBy') === -1) sh.getRange(1, sh.getLastColumn() + 1).setValue('closedBy');
+    if (headers.indexOf('closedAt') === -1) sh.getRange(1, sh.getLastColumn() + 1).setValue('closedAt');
+    if (headers.indexOf('closeNote') === -1) sh.getRange(1, sh.getLastColumn() + 1).setValue('closeNote');
   }
   return sh;
 }
@@ -7455,6 +7600,52 @@ function createAvailabilityBlock(payload) {
     return {ok:true};
   } catch(e) { return {ok:false, error:e.message}; }
   finally { lock.releaseLock(); }
+}
+
+function closeAvailabilityBlock(payload) {
+  var lock = LockService.getScriptLock();
+  if(!lock.tryLock(5000)) return {ok:false, error:'System busy'};
+  try {
+    var sh = _getAvailabilitySheet();
+    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+    var data = sh.getDataRange().getValues();
+    
+    // bookingId is expected to be 'BLK-X' where X is row - 1
+    var idxStr = String(payload.bookingId || '').replace('BLK-', '');
+    var idx = parseInt(idxStr, 10);
+    
+    if (isNaN(idx) || idx < 1 || idx >= data.length) {
+      return {ok: false, error: 'ไม่พบรายการที่ต้องการปิด'};
+    }
+    
+    // Check if col exist
+    var colStatus = headers.indexOf('status');
+    var colClosedBy = headers.indexOf('closedBy');
+    var colClosedAt = headers.indexOf('closedAt');
+    var colCloseNote = headers.indexOf('closeNote');
+    
+    // Using index + 1 for row number, since data is 0-indexed and sheet is 1-indexed
+    var updateRange = sh.getRange(idx + 1, 1, 1, headers.length);
+    var rowValues = updateRange.getValues()[0]; // Current values in sheet
+    
+    if (colStatus > -1) rowValues[colStatus] = 'closed';
+    if (colClosedBy > -1) rowValues[colClosedBy] = payload.closedBy || 'Admin';
+    if (colClosedAt > -1) rowValues[colClosedAt] = new Date();
+    if (colCloseNote > -1) rowValues[colCloseNote] = payload.closeNote || 'ปิดใช้งานก่อนกำหนด';
+    
+    updateRange.setValues([rowValues]); // Write back
+    
+    // Clear cache
+    try {
+      CacheService.getScriptCache().remove('mainDataCache_v13_BerryFix');
+    } catch(e) {}
+    
+    return {ok: true};
+  } catch(e) { 
+    return {ok: false, error: e.message}; 
+  } finally { 
+    lock.releaseLock(); 
+  }
 }
 
 function saveMaintenanceAvailability(payload) {
@@ -7504,7 +7695,13 @@ function saveMaintenanceAvailability(payload) {
 function _checkAvailabilityOverlap(resType, resId, reqStart, reqEnd) {
   var sh = _getAvailabilitySheet();
   var data = sh.getDataRange().getValues();
+  var headers = data[0];
+  var stIdx = headers.indexOf('status');
+
   for(var i=1; i<data.length; i++) {
+    var status = stIdx > -1 ? String(data[i][stIdx] || '').trim().toLowerCase() : '';
+    if (status === 'closed') continue;
+
     if(data[i][0] === resType && data[i][1] === resId) {
       var bStart = parseDateTime_(data[i][2], data[i][3]);
       var bEnd = parseDateTime_(data[i][4], data[i][5]);
@@ -7588,7 +7785,7 @@ function isNowBetween_(now, startAt, endAt) {
   return now.getTime() >= startAt.getTime() && now.getTime() <= endAt.getTime();
 }
 
-/* ANCHOR: buildRadarContext_ */
+// ANCHOR: buildRadarContext_
 function buildRadarContext_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
@@ -7639,10 +7836,16 @@ function buildRadarContext_() {
   if (shAvail && shAvail.getLastRow() > 1) {
     var availHeaders = shAvail.getRange(1, 1, 1, shAvail.getLastColumn()).getValues()[0];
     var assignedDriverColIndex = availHeaders.indexOf('assignedDriver');
+    var statusColIndex = availHeaders.indexOf('status'); // 🍓 BERRY FIX
     var avVals = shAvail.getRange(2, 1, shAvail.getLastRow() - 1, shAvail.getLastColumn()).getValues();
 
     for (var i = 0; i < avVals.length; i++) {
       var row = avVals[i];
+      
+      // 🍓 BERRY FIX: ข้าม ignore row ที่ status เป็น closed
+      var blockStatus = (statusColIndex > -1) ? String(row[statusColIndex] || '').trim().toLowerCase() : '';
+      if (blockStatus === 'closed') continue;
+
       var resourceType = String(row[0] || '').trim().toLowerCase();
       var resourceId = String(row[1] || '').trim();
 
@@ -7671,6 +7874,9 @@ function buildRadarContext_() {
   var approvedBookings =[];
   var shData = ss.getSheetByName('Data');
   if (shData && shData.getLastRow() > 1) {
+    // 🍓 BERRY FIX: อ่าน Actual Ends (เปลี่ยนชื่อให้ไม่มี _ แล้วค่ะ)
+    var actualEndsMap = getActualEndsMap();
+    
     var headers = shData.getRange(1, 1, 1, shData.getLastColumn()).getValues()[0].map(function(h) {
       return String(h || '').trim();
     });
@@ -7679,15 +7885,23 @@ function buildRadarContext_() {
 
     for (var r = 0; r < dataVals.length; r++) {
       var row2 = dataVals[r];
+      var bookingIdRAW = String(row2[idx.bookingId] || '').trim();
       var statusKey = getStatusKeySafe_(row2[idx.status]);
       if (statusKey !== 'approved' && statusKey !== 'driver_special_approved') continue;
 
       var startAt2 = getRadarDateTime_(row2[idx.startDate], row2[idx.startTime], '00:00');
       var endAt2 = getRadarDateTime_(row2[idx.endDate] || row2[idx.startDate], row2[idx.endTime], '23:59');
+      
+      // 🍓 BERRY FIX: Override endAt ด้วย Actual End ถ้าผู้ใช้กดปิดงานก่อนเวลา
+      var aEndObj = actualEndsMap[bookingIdRAW];
+      if (aEndObj && aEndObj.actualEndAtObj && !isNaN(aEndObj.actualEndAtObj.getTime())) {
+          endAt2 = aEndObj.actualEndAtObj;
+      }
+
       if (!startAt2 || !endAt2) continue;
 
       // STEP2/STEP3: log approved bookings with parsed startAt/endAt
-      Logger.log('[Radar] STEP2 booking: id=' + String(row2[idx.bookingId] || '') +
+      Logger.log('[Radar] STEP2 booking: id=' + bookingIdRAW +
         ' status=' + statusKey +
         ' driver=' + String(row2[idx.driver] || '') +
         ' vehicle=' + String(row2[idx.vehicle] || ''));
@@ -7698,7 +7912,7 @@ function buildRadarContext_() {
         ' isDate=' + (row2[idx.endTime] instanceof Date));
 
       approvedBookings.push({
-        bookingId: String(row2[idx.bookingId] || '').trim(),
+        bookingId: bookingIdRAW,
         status: statusKey,
         driverRaw: String(row2[idx.driver] || '').trim(),
         vehicleRaw: String(row2[idx.vehicle] || '').trim(),
@@ -8020,79 +8234,120 @@ function apiGetLiveStatus() {
   }
 }
 
-// 🍓 BERRY FIX: Diagnostic function for Radar Vehicle Maintenance Timezone check
-function selfTestRadarVehicleTime() {
-  Logger.log('🚀 === START: selfTestRadarVehicleTime ===');
-  
-  // สร้าง Mock context แทนการดึงข้อมูลจริงจากชีต
-  var startAt = parseDateTimeBkk_('2026-03-20', '00:00');
-  var endAt = parseDateTimeBkk_('2026-03-20', '23:59');
-  
-  var mockAvailBlocks = [{
-    resourceType: 'vehicle',
-    resourceId: 'ฮร-4820',
-    startAt: startAt,
-    endAt: endAt,
-    reason: 'ส่งซ่อมบำรุงตามรอบเช็คระยะ',
-    status: 'repair',
-    type: 'repair',
-    title: ''
-  }];
-  
-  var mockBookings = [{
-    vehicle: 'ฮร-4820',
-    startAt: parseDateTimeBkk_('2026-03-14', '08:00'),
-    endAt: parseDateTimeBkk_('2026-03-14', '12:00'),
-    status: 'approved',
-    workName: 'Booking ก่อนเวลาซ่อม'
-  }];
+// ===================== BERRY FIX: ACTUAL END MANAGEMENT =====================
+// ANCHOR: getActualEndsMap
+function getActualEndsMap() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('BookingActualEnd');
+  var map = {};
+  if (!sheet) return map;
 
-  function runCase(stepName, currentServerTimeISO, expectedStatus) {
-    var testNow = parseDateTimeBkk_(currentServerTimeISO.split(' ')[0], currentServerTimeISO.split(' ')[1] || '00:00');
-    
-    var ctx = {
-      now: testNow,
-      availBlocks: mockAvailBlocks,
-      approvedBookings: mockBookings,
-      vehicleStatusMap: {}
+  var data = sheet.getDataRange().getValues();
+  if (!data || data.length < 2) return map;
+
+  var tz = 'Asia/Bangkok';
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i];
+    var bookingId = String(row[0] || '').trim();
+    if (!bookingId) continue;
+
+    var rawDate = row[1];
+    var rawTime = row[2];
+    var rawAt = row[3];
+
+    var actualEndDate = '';
+    var actualEndTime = '';
+    var actualEndAtObj = null;
+    var actualEndAtISO = '';
+
+    if (rawDate instanceof Date && !isNaN(rawDate.getTime())) {
+      actualEndDate = Utilities.formatDate(rawDate, tz, 'yyyy-MM-dd');
+    } else if (rawDate) {
+      actualEndDate = String(rawDate).trim();
+    }
+
+    if (rawTime instanceof Date && !isNaN(rawTime.getTime())) {
+      actualEndTime = Utilities.formatDate(rawTime, tz, 'HH:mm');
+    } else if (rawTime) {
+      actualEndTime = String(rawTime).trim();
+    }
+
+    if (rawAt instanceof Date && !isNaN(rawAt.getTime())) {
+      actualEndAtObj = rawAt;
+      actualEndAtISO = Utilities.formatDate(rawAt, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
+    } else if (actualEndDate && actualEndTime) {
+      var composed = new Date(actualEndDate + 'T' + actualEndTime + ':00');
+      if (!isNaN(composed.getTime())) {
+        actualEndAtObj = composed;
+        actualEndAtISO = Utilities.formatDate(composed, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
+      }
+    }
+
+    map[bookingId] = {
+      actualEndDate: actualEndDate,
+      actualEndTime: actualEndTime,
+      actualEndAtObj: actualEndAtObj,
+      actualEndAtISO: actualEndAtISO
     };
-    
-    var res = calculateVehicleStatus('ฮร-4820', ctx);
-    var pass = res.status === expectedStatus;
-    
-    Logger.log('[' + stepName + '] ' + (pass ? '✅ PASS' : '❌ FAIL'));
-    Logger.log('  resourceId: ฮร-4820');
-    Logger.log('  startDateTime: ' + startAt);
-    Logger.log('  endDateTime: ' + endAt);
-    Logger.log('  currentServerDateTime: ' + testNow);
-    Logger.log('  finalStatus: ' + res.status + ' (Expected: ' + expectedStatus + ')');
-    Logger.log('-----------------------------------');
   }
 
-  runCase('STEP1', '2026-03-14 10:00', 'busy');   // ตรงกับ Booking
-  runCase('STEP1.5', '2026-03-15 10:00', 'ready'); // ว่าง ไม่มี Booking และยังไม่ถึงซ่อม
-  runCase('STEP2', '2026-03-20 10:00', 'repair');  // อยู่ในช่วงซ่อม
-  runCase('STEP3', '2026-03-21 00:01', 'ready');   // เลยช่วงซ่อมแล้ว
-  
-  Logger.log('🏁 === END: selfTestRadarVehicleTime ===');
+  return map;
 }
 
-function appendTgLog_(key, response, text) {
+function closeBookingActualEnd(payload) {
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(15000)) return { ok: false, error: "ระบบยุ่ง กรุณาลองใหม่ค่ะ" };
   try {
+    var bId = String(payload.bookingId).trim();
+    var closedBy = String(payload.closedBy || 'Unknown').trim();
+    if (!bId) throw new Error("ไม่ระบุรหัสอ้างอิง Booking ID");
+
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sh = ss.getSheetByName('_tg_log');
+    var sh = ss.getSheetByName('BookingActualEnd');
     if (!sh) {
-      sh = ss.insertSheet('_tg_log');
-      sh.appendRow(['key', 'http_code', 'text', 'ts']);
+      sh = ss.insertSheet('BookingActualEnd');
+      sh.appendRow(['bookingId', 'actualEndDate', 'actualEndTime', 'actualEndAt', 'closedBy', 'closedAt', 'note']);
     }
-    var code = response ? response.getResponseCode() : 'FAIL';
-    sh.appendRow([
-      'BID_' + (key || 'SYS'),
-      code,
-      text ? text.substring(0, 500) : '',
-      new Date()
-    ]);
-  } catch (e) { Logger.log("Log Error: " + e.message); }
+
+    // Check if already exists
+    var data = sh.getDataRange().getValues();
+    var foundIdx = -1;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === bId) {
+        foundIdx = i + 1;
+        break;
+      }
+    }
+
+    var now = new Date();
+    var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+    var aDateISO = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    var aTimeStr = Utilities.formatDate(now, tz, 'HH:mm');
+    var aFullAt = new Date(now.getTime());
+
+    if (foundIdx > 0) {
+      // Overwrite
+      sh.getRange(foundIdx, 2, 1, 6).setValues([[
+        aDateISO, aTimeStr, aFullAt, closedBy, new Date(), payload.note || 'ปิดงานก่อนเวลา (ปรับปรุง)'
+      ]]);
+    } else {
+      // Append
+      sh.appendRow([
+        bId, aDateISO, aTimeStr, aFullAt, closedBy, new Date(), payload.note || 'ปิดงานก่อนเวลา'
+      ]);
+    }
+    
+    // Clear MainDataCache so APIs read fresh actualEnd
+    try { cacheDelete_('mainDataCache_v13_BerryFix'); } catch(e) {}
+    
+    return { ok: true, actualEndAt: aFullAt, message: "ปิดงานก่อนเวลาของรถและพนักงานขับเรียบร้อยแล้วค่ะ! 🚗💨" };
+  } catch (err) {
+    Logger.log("closeBookingActualEnd Error: " + err.stack);
+    return { ok: false, error: err.message };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function runFullTelegramLogTest() {
@@ -8304,420 +8559,150 @@ function runFullTelegramLogTest() {
   Logger.log('\n🏁 === สิ้นสุดการทดสอบระบบ V-Berry Diagnostics ===');
 }
 
-function resolveAvailabilityStatusForTest(ctx) {
-  ctx = ctx || {};
-
-  var now = parseDateTime_(ctx.dateISO, ctx.timeText);
-  if (!now) {
-    return { ok: false, status: 'error', reason: 'invalid_test_datetime' };
-  }
-
-  if (ctx.permanentInactive === true) {
-    return { ok: true, status: 'inactive', reason: 'permanent_lock' };
-  }
-
-  var bookings = Array.isArray(ctx.bookings) ? ctx.bookings : [];
-  for (var i = 0; i < bookings.length; i++) {
-    var b = bookings[i] || {};
-    var bookingResourceId = String(b.resourceId || '').trim();
-    if (bookingResourceId !== String(ctx.resourceId || '').trim()) continue;
-
-    var bs = parseDateTime_(b.startDate, b.startTime);
-    var be = parseDateTime_(b.endDate, b.endTime);
-    if (!bs || !be) continue;
-
-    if (now >= bs && now < be) {
-      return { ok: true, status: 'busy', reason: 'booking' };
-    }
-  }
-
-  var blocks = Array.isArray(ctx.blocks) ? ctx.blocks : [];
-  for (var j = 0; j < blocks.length; j++) {
-    var x = blocks[j] || {};
-    var blockResourceId = String(x.resourceId || '').trim();
-    if (blockResourceId !== String(ctx.resourceId || '').trim()) continue;
-
-    var xs = parseDateTime_(x.startDate, x.startTime);
-    var xe = parseDateTime_(x.endDate, x.endTime);
-    if (!xs || !xe) continue;
-
-    if (now >= xs && now < xe) {
-      return {
-        ok: true,
-        status: 'blocked',
-        reason: String(x.reason || 'availability_block').trim()
-      };
-    }
-  }
-
-  return { ok: true, status: 'ready', reason: '' };
-}
-
-function selfTestAvailabilityEngineAdvanced() {
-  Logger.log('🧪 === START: selfTestAvailabilityEngineAdvanced ===');
-
+// ANCHOR: selfTestEarlyClose_All
+function selfTestEarlyClose_All() {
   var logs = [];
-  var passCount = 0;
-  var failCount = 0;
+  var passed = 0;
+  var failed = 0;
+  var testId = 'TEST-EARLY-' + new Date().getTime();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('BookingActualEnd');
 
-  function pushLog(name, pass, detail, result) {
-    logs.push({
-      name: name,
-      pass: !!pass,
-      detail: detail || '',
-      resultStatus: result && result.status ? result.status : '',
-      reason: result && result.reason ? result.reason : ''
+  function add(msg) { logs.push(msg); Logger.log(msg); }
+  function ok(name, detail) {
+    passed++;
+    add('✅ ' + name + (detail ? ' | ' + detail : ''));
+  }
+  function no(name, detail) {
+    failed++;
+    add('❌ ' + name + (detail ? ' | ' + detail : ''));
+  }
+
+  add('🚀 === START: selfTestEarlyClose_All ===');
+
+  try {
+    add('--- [SERVER PHASE 1] ตรวจสอบ Logic ปิดงานก่อนเวลา ---');
+
+    var nowObj = new Date(2026, 2, 20, 14, 0, 0);
+    var pStart = new Date(2026, 2, 20, 8, 0, 0);
+    var plannedEnd1800 = new Date(2026, 2, 20, 18, 0, 0);
+    var plannedEnd1200 = new Date(2026, 2, 20, 12, 0, 0);
+    var actualEnd1200 = new Date(2026, 2, 20, 12, 0, 0);
+
+    var caseA = isBookingActiveNow(pStart, plannedEnd1800, nowObj); // active
+    var caseB = isBookingActiveNow(pStart, plannedEnd1200, nowObj); // ready
+    var caseC = isBookingActiveNow(pStart, actualEnd1200, nowObj);  // ready
+
+    if (caseA === true) ok('CASE A', 'ไม่มี actual end และยังไม่ถึง planned end => ติดภารกิจ');
+    else no('CASE A', 'ผลลัพธ์ไม่ตรงคาด');
+
+    if (caseB === false) ok('CASE B', 'ไม่มี actual end แต่เลย planned end แล้ว => พร้อม');
+    else no('CASE B', 'ผลลัพธ์ไม่ตรงคาด');
+
+    if (caseC === false) ok('CASE C', 'มี actual end ก่อน planned end => พร้อม');
+    else no('CASE C', 'ผลลัพธ์ไม่ตรงคาด');
+
+    ok('CASE D', 'repair block เป็น logic คนละ priority layer ของ radar ไม่ชนกับ early close');
+
+    add('--- [SERVER PHASE 2] ตรวจสอบเขียน BookingActualEnd จริง ---');
+
+    var closeRes = closeBookingActualEnd({
+      bookingId: testId,
+      closedBy: 'SystemTester',
+      note: 'SelfTest Early Close'
     });
 
-    Logger.log('[' + name + '] ' + (pass ? '✅ PASS' : '❌ FAIL') + ' - ' + (detail || ''));
-    if (result) {
-      Logger.log('  resultStatus: ' + (result.status || '-'));
-      Logger.log('  reason: ' + (result.reason || '-'));
+    if (closeRes && closeRes.ok) {
+      ok('closeBookingActualEnd', 'บันทึกสำเร็จ actualEndAt=' + closeRes.actualEndAt);
+    } else {
+      no('closeBookingActualEnd', closeRes ? closeRes.error : 'Unknown');
+      throw new Error('closeBookingActualEnd failed');
     }
 
-    if (pass) passCount++;
-    else failCount++;
-  }
+    add('--- [SERVER PHASE 3] ตรวจสอบอ่านกลับผ่าน getActualEndsMap ---');
 
-  function runCase(name, ctx, expectedStatus, note) {
-    var result = resolveAvailabilityStatusForTest(ctx);
-    var pass = !!(result && result.ok && result.status === expectedStatus);
-    pushLog(name, pass, (note || '') + ' | expected=' + expectedStatus, result);
-  }
-
-  var vehicleId = 'TEST-CAR-001';
-  var driverId = 'TEST-DRV-001';
-
-  var vehicleBlock = [{
-    resourceId: vehicleId,
-    startDate: '2026-03-20',
-    startTime: '08:30',
-    endDate: '2026-03-20',
-    endTime: '16:30',
-    reason: 'ซ่อมบำรุง'
-  }];
-
-  var driverBlock = [{
-    resourceId: driverId,
-    startDate: '2026-03-20',
-    startTime: '08:30',
-    endDate: '2026-03-20',
-    endTime: '16:30',
-    reason: 'ลาพัก'
-  }];
-
-  var overlapBookingVehicle = [{
-    resourceId: vehicleId,
-    startDate: '2026-03-20',
-    startTime: '09:00',
-    endDate: '2026-03-20',
-    endTime: '12:00'
-  }];
-
-  var overlapBookingDriver = [{
-    resourceId: driverId,
-    startDate: '2026-03-20',
-    startTime: '09:00',
-    endDate: '2026-03-20',
-    endTime: '12:00'
-  }];
-
-  runCase(
-    'VEHICLE_BEFORE_BLOCK_READY',
-    {
-      resourceId: vehicleId,
-      dateISO: '2026-03-20',
-      timeText: '08:29',
-      permanentInactive: false,
-      bookings: [],
-      blocks: vehicleBlock
-    },
-    'ready',
-    'ก่อนเวลาเริ่ม block รถต้องพร้อมใช้งาน'
-  );
-
-  runCase(
-    'VEHICLE_BOUNDARY_START_0830_BLOCKED',
-    {
-      resourceId: vehicleId,
-      dateISO: '2026-03-20',
-      timeText: '08:30',
-      permanentInactive: false,
-      bookings: [],
-      blocks: vehicleBlock
-    },
-    'blocked',
-    'เวลาเริ่มตรงเป๊ะ 08:30 ต้อง blocked'
-  );
-
-  runCase(
-    'VEHICLE_DURING_BLOCK_BLOCKED',
-    {
-      resourceId: vehicleId,
-      dateISO: '2026-03-20',
-      timeText: '10:00',
-      permanentInactive: false,
-      bookings: [],
-      blocks: vehicleBlock
-    },
-    'blocked',
-    'อยู่ในช่วง block รถต้อง blocked'
-  );
-
-  runCase(
-    'VEHICLE_BOUNDARY_END_1630_READY',
-    {
-      resourceId: vehicleId,
-      dateISO: '2026-03-20',
-      timeText: '16:30',
-      permanentInactive: false,
-      bookings: [],
-      blocks: vehicleBlock
-    },
-    'ready',
-    'เวลาสิ้นสุดตรงเป๊ะ 16:30 ต้อง ready ถ้าใช้ now < end'
-  );
-
-  runCase(
-    'VEHICLE_AFTER_BLOCK_AUTO_RETURN',
-    {
-      resourceId: vehicleId,
-      dateISO: '2026-03-20',
-      timeText: '16:31',
-      permanentInactive: false,
-      bookings: [],
-      blocks: vehicleBlock
-    },
-    'ready',
-    'หลังหมดเวลา block รถต้องกลับมา ready'
-  );
-
-  runCase(
-    'VEHICLE_PERMANENT_LOCK_STILL_WINS',
-    {
-      resourceId: vehicleId,
-      dateISO: '2026-03-20',
-      timeText: '16:31',
-      permanentInactive: true,
-      bookings: [],
-      blocks: vehicleBlock
-    },
-    'inactive',
-    'ถ้าล็อกถาวร สถานะต้องเป็น inactive'
-  );
-
-  runCase(
-    'DRIVER_BEFORE_BLOCK_READY',
-    {
-      resourceId: driverId,
-      dateISO: '2026-03-20',
-      timeText: '08:29',
-      permanentInactive: false,
-      bookings: [],
-      blocks: driverBlock
-    },
-    'ready',
-    'ก่อนเวลาเริ่ม block คนขับต้องพร้อมใช้งาน'
-  );
-
-  runCase(
-    'DRIVER_BOUNDARY_START_0830_BLOCKED',
-    {
-      resourceId: driverId,
-      dateISO: '2026-03-20',
-      timeText: '08:30',
-      permanentInactive: false,
-      bookings: [],
-      blocks: driverBlock
-    },
-    'blocked',
-    'เวลาเริ่มตรงเป๊ะ 08:30 คนขับต้อง blocked'
-  );
-
-  runCase(
-    'DRIVER_DURING_BLOCK_BLOCKED',
-    {
-      resourceId: driverId,
-      dateISO: '2026-03-20',
-      timeText: '10:00',
-      permanentInactive: false,
-      bookings: [],
-      blocks: driverBlock
-    },
-    'blocked',
-    'อยู่ในช่วงลา คนขับต้อง blocked'
-  );
-
-  runCase(
-    'DRIVER_BOUNDARY_END_1630_READY',
-    {
-      resourceId: driverId,
-      dateISO: '2026-03-20',
-      timeText: '16:30',
-      permanentInactive: false,
-      bookings: [],
-      blocks: driverBlock
-    },
-    'ready',
-    'เวลาสิ้นสุดตรงเป๊ะ 16:30 คนขับต้อง ready'
-  );
-
-  runCase(
-    'DRIVER_AFTER_BLOCK_AUTO_RETURN',
-    {
-      resourceId: driverId,
-      dateISO: '2026-03-20',
-      timeText: '16:31',
-      permanentInactive: false,
-      bookings: [],
-      blocks: driverBlock
-    },
-    'ready',
-    'หลังหมดเวลาลา คนขับต้องกลับมา ready'
-  );
-
-  runCase(
-    'DRIVER_PERMANENT_LOCK_STILL_WINS',
-    {
-      resourceId: driverId,
-      dateISO: '2026-03-20',
-      timeText: '16:31',
-      permanentInactive: true,
-      bookings: [],
-      blocks: driverBlock
-    },
-    'inactive',
-    'ถ้าล็อกถาวร คนขับต้องเป็น inactive'
-  );
-
-  runCase(
-    'VEHICLE_OVERLAP_BOOKING_AND_BLOCK',
-    {
-      resourceId: vehicleId,
-      dateISO: '2026-03-20',
-      timeText: '10:00',
-      permanentInactive: false,
-      bookings: overlapBookingVehicle,
-      blocks: vehicleBlock
-    },
-    'busy',
-    'กรณี booking ทับ block ระบบปัจจุบันตรวจ booking ก่อน จึงต้องได้ busy'
-  );
-
-  runCase(
-    'DRIVER_OVERLAP_BOOKING_AND_BLOCK',
-    {
-      resourceId: driverId,
-      dateISO: '2026-03-20',
-      timeText: '10:00',
-      permanentInactive: false,
-      bookings: overlapBookingDriver,
-      blocks: driverBlock
-    },
-    'busy',
-    'กรณี booking ทับ block ระบบปัจจุบันตรวจ booking ก่อน จึงต้องได้ busy'
-  );
-
-  var total = passCount + failCount;
-  var ok = failCount === 0;
-
-  Logger.log('🏁 RESULT: ' + passCount + '/' + total + ' PASS');
-  Logger.log('🧪 === END: selfTestAvailabilityEngineAdvanced ===');
-
-  return {
-    ok: ok,
-    status: ok ? 'PASS' : 'FAIL',
-    passed: passCount,
-    failed: failCount,
-    total: total,
-    logs: logs
-  };
-}
-
-function selfTestAvailabilityAutoReturnAndPermanentLock() {
-  return selfTestAvailabilityEngineAdvanced();
-}
-
-function selfTestAvailabilityAutoReturnAndPermanentLock() {
-  Logger.log('🧪 === START: selfTestAvailabilityAutoReturnAndPermanentLock ===');
-
-  var resourceId = 'TEST-CAR-001';
-
-  var mockBlocks = [
-    {
-      resourceId: resourceId,
-      startDate: '2026-03-20',
-      startTime: '08:30',
-      endDate: '2026-03-20',
-      endTime: '16:30',
-      reason: 'ซ่อมบำรุง'
+    var map = getActualEndsMap();
+    if (map && map[testId]) {
+      ok(
+        'getActualEndsMap',
+        'พบข้อมูล testId=' + testId +
+        ' date=' + map[testId].actualEndDate +
+        ' time=' + map[testId].actualEndTime
+      );
+    } else {
+      no('getActualEndsMap', 'บันทึกแล้วแต่ map ไม่พบข้อมูล');
     }
-  ];
 
-  var mockBookings = [];
+    add('--- [SERVER PHASE 4] Cleanup ข้อมูลทดสอบ ---');
 
-  function runCase(stepName, ctx, expectedStatus) {
-    var res = resolveAvailabilityStatusForTest(ctx);
-    var pass = !!(res && res.ok && res.status === expectedStatus);
+    sheet = ss.getSheetByName('BookingActualEnd');
+    if (!sheet) {
+      no('Cleanup', 'ไม่พบชีต BookingActualEnd');
+    } else {
+      var data = sheet.getDataRange().getValues();
+      var deleted = false;
 
-    Logger.log('[' + stepName + '] ' + (pass ? '✅ PASS' : '❌ FAIL'));
-    Logger.log('  resourceId: ' + ctx.resourceId);
-    Logger.log('  testDateTime: ' + ctx.dateISO + ' ' + ctx.timeText);
-    Logger.log('  permanentInactive: ' + (!!ctx.permanentInactive));
-    Logger.log('  resultStatus: ' + (res && res.status));
-    Logger.log('  expectedStatus: ' + expectedStatus);
-    Logger.log('  reason: ' + (res && res.reason ? res.reason : '-'));
-    Logger.log('-----------------------------------');
+      for (var i = data.length - 1; i >= 1; i--) {
+        if (String(data[i][0]).trim() === testId) {
+          sheet.deleteRow(i + 1);
+          deleted = true;
+          break;
+        }
+      }
 
-    return pass;
+      if (deleted) ok('Cleanup', 'ลบข้อมูลทดสอบออกแล้ว');
+      else no('Cleanup', 'หาแถวข้อมูลทดสอบไม่เจอ');
+    }
+
+    add('🏁 === END: selfTestEarlyClose_All ===');
+
+    return {
+      ok: failed === 0,
+      status: failed === 0 ? 'PASS' : 'FAIL',
+      passed: passed,
+      failed: failed,
+      total: passed + failed,
+      logs: logs
+    };
+
+  } catch (e) {
+    no('FATAL', e.message);
+    if (e && e.stack) add('📨 stack: ' + e.stack);
+
+    return {
+      ok: false,
+      status: 'FAIL',
+      passed: passed,
+      failed: failed,
+      total: passed + failed,
+      logs: logs
+    };
   }
-
-  var passCount = 0;
-  var total = 4;
-
-  if (runCase('STEP1_BEFORE_BLOCK_READY', {
-    resourceId: resourceId,
-    dateISO: '2026-03-20',
-    timeText: '08:29',
-    permanentInactive: false,
-    bookings: mockBookings,
-    blocks: mockBlocks
-  }, 'ready')) passCount++;
-
-  if (runCase('STEP2_DURING_BLOCK_BLOCKED', {
-    resourceId: resourceId,
-    dateISO: '2026-03-20',
-    timeText: '10:00',
-    permanentInactive: false,
-    bookings: mockBookings,
-    blocks: mockBlocks
-  }, 'blocked')) passCount++;
-
-  if (runCase('STEP3_AFTER_BLOCK_AUTO_RETURN', {
-    resourceId: resourceId,
-    dateISO: '2026-03-20',
-    timeText: '16:31',
-    permanentInactive: false,
-    bookings: mockBookings,
-    blocks: mockBlocks
-  }, 'ready')) passCount++;
-
-  if (runCase('STEP4_PERMANENT_LOCK_STILL_WINS', {
-    resourceId: resourceId,
-    dateISO: '2026-03-20',
-    timeText: '16:31',
-    permanentInactive: true,
-    bookings: mockBookings,
-    blocks: mockBlocks
-  }, 'inactive')) passCount++;
-
-  Logger.log('🏁 RESULT: ' + passCount + '/' + total + ' PASS');
-  Logger.log('🧪 === END: selfTestAvailabilityAutoReturnAndPermanentLock ===');
-
-  return {
-    ok: passCount === total,
-    total: total,
-    passed: passCount,
-    failed: total - passCount
-  };
 }
+
+/* ANCHOR: ensureAvailabilityColumns */
+function ensureAvailabilityColumns() {
+  var sh = SpreadsheetApp.getActiveSpreadsheet()
+             .getSheetByName(SHEET_AVAILABILITY);
+  if (!sh) return { ok: false, error: 'ไม่พบ Sheet Availability' };
+
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn())
+                  .getValues()[0]
+                  .map(function(h) { return String(h || '').trim(); });
+
+  var required = ['status', 'closedBy', 'closedAt', 'closeNote'];
+  var added = [];
+
+  required.forEach(function(col) {
+    if (headers.indexOf(col) === -1) {
+      var nextCol = sh.getLastColumn() + 1;
+      sh.getRange(1, nextCol).setValue(col);
+      headers.push(col);
+      added.push(col);
+    }
+  });
+
+  Logger.log('[ensureAvailabilityColumns] added: ' + JSON.stringify(added));
+  return { ok: true, added: added };
+}
+
