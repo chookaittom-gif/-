@@ -1229,7 +1229,9 @@ function getIntegratedDailyReport(targetDate) {
       endD: h.indexOf('วันสิ้นสุด'),
       startT: h.indexOf('เวลาเริ่มต้น'),
       endT: h.indexOf('เวลาสิ้นสุด'),
-      vehicleCount: h.indexOf('จำนวนรถที่ต้องการ')
+      vehicleCount: h.indexOf('จำนวนรถที่ต้องการ'),
+      actualEndAt: h.indexOf('actualEndAt'),
+      actualEndTime: h.indexOf('เวลาปิดงานจริง')
     };
 
     var groups = {
@@ -1319,57 +1321,41 @@ function getIntegratedDailyReport(targetDate) {
       { k: 'cancelled', label: '🚫 ยกเลิก' }
     ];
 
-    statusConfig.forEach(function(item) {
-      var count = groups[item.k].length;
-      if (count > 0) lines.push(item.label + ' : ' + count);
+    statusConfig.forEach(function(cfg) {
+      lines.push(cfg.label + ': ' + groups[cfg.k].length + ' งาน');
     });
 
+    lines.push('');
     lines.push('──────────────');
 
-    var activeJobs = [].concat(groups.approved, groups.driver_special_approved);
+    function buildTimeRange_(r) {
+      var st = cleanText_(r[idx.startT], '--:--');
+      var et = cleanText_(r[idx.endT], '--:--');
+      return st + ' - ' + et;
+    }
 
-    if (activeJobs.length > 0) {
-      lines.push('📍 <b>รายละเอียดงานวันนี้:</b>');
+    var sectionDefs = [
+      { key: 'pending', title: '⏳ <b>รายการรออนุมัติ</b>', icon: '⏳' },
+      { key: 'approved', title: '✅ <b>รายการอนุมัติแล้ว</b>', icon: '✅' },
+      { key: 'driver_special_approved', title: '⚡ <b>รายการอนุมัติกรณีพิเศษ</b>', icon: '⚡' }
+    ];
 
-      activeJobs.sort(function(a, b) {
-        return String(a[idx.startT] || '').localeCompare(String(b[idx.startT] || ''));
-      });
+    sectionDefs.forEach(function(section) {
+      var rows = groups[section.key] || [];
+      if (!rows.length) return;
 
-      var parseT = function(val) {
-        if (val instanceof Date) return Utilities.formatDate(val, tz, 'HH:mm');
-        if (!val || val === '-') return null;
-        var m = String(val).match(/(\d{1,2})[:.](\d{2})/);
-        return m ? (String(m[1]).padStart(2, '0') + ':' + m[2]) : null;
-      };
+      lines.push(section.title);
 
-      activeJobs.forEach(function(r) {
-        var st = (typeof getStatusKeySafe_ === 'function') ? getStatusKeySafe_(r[idx.status]) : 'approved';
-        var icon = (st === 'driver_special_approved') ? '⚡' : '🔹';
-
-        var tGo = parseT(r[idx.startT]) || '--:--';
-        var tBack = parseT(r[idx.endT]);
-        var sIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.startD]) : '';
-        var eIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.endD]) : sIso;
-
-        var timeRange = '';
-        if (!sIso || sIso === eIso) {
-          timeRange = tBack ? (tGo + ' - ' + tBack + ' น.') : (tGo + ' น.');
-        } else {
-          var sDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(r[idx.startD]) : sIso;
-          var eDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(r[idx.endD]) : eIso;
-          var sDShort = sDateTH !== '-' ? sDateTH.substring(0, 5) : '-';
-          var eDShort = eDateTH !== '-' ? eDateTH.substring(0, 5) : '-';
-          timeRange = 'ข้ามวัน (' + sDShort + ' ' + tGo + ' → ' + eDShort + ' ' + (tBack || '--:--') + ')';
-        }
-
-        var place = String(r[idx.place] || '-').trim() || '-';
-        var name = String(r[idx.name] || '-').trim() || '-';
+      rows.forEach(function(r) {
+        var timeRange = buildTimeRange_(r);
+        var place = cleanText_(r[idx.place], '-');
+        var name = cleanText_(r[idx.name], '-');
         var plateRaw = r[idx.vehicle];
         var driverRaw = r[idx.driver];
         var requestedCount = cleanText_(idx.vehicleCount > -1 ? r[idx.vehicleCount] : '', '');
         var assignedCount = getAssignedCount_(plateRaw, driverRaw);
 
-        lines.push(icon + ' ' + timeRange + ' : ' + place);
+        lines.push(section.icon + ' ' + timeRange + ' : ' + place);
         lines.push('   👤 ' + name);
 
         var assignmentLines = buildAssignmentLines_(plateRaw, driverRaw);
@@ -1381,8 +1367,23 @@ function getIntegratedDailyReport(targetDate) {
           lines.push('   ℹ️ ขอ ' + requestedCount + ' คัน | จัดให้ ' + assignedCount + ' คัน');
         }
 
+        var actualEndVal = '';
+        if (idx.actualEndAt > -1) actualEndVal = cleanText_(r[idx.actualEndAt], '');
+        if (!actualEndVal && idx.actualEndTime > -1) actualEndVal = cleanText_(r[idx.actualEndTime], '');
+
+        if (actualEndVal) {
+          lines.push('   🏁 ปิดงานก่อนเวลา: ' + actualEndVal);
+        }
+
         lines.push('');
       });
+
+      lines.push('──────────────');
+    });
+
+    if (groups.pending.length === 0 && groups.approved.length === 0 && groups.driver_special_approved.length === 0) {
+      lines.push('🍃 วันนี้ไม่มีงานที่ต้องติดตามค่ะ');
+      lines.push('──────────────');
     }
 
     lines.push('🤖 รายงานอัตโนมัติ 05:00 น.');
@@ -1645,21 +1646,43 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   var st = getStatusKeySafe_(statusKey || rowObj.status || rowObj['สถานะ'] || 'pending');
   if (st === 'driver_claimed') st = 'pending';
 
-  var rawNote = String(reasonFromPayload || '').trim();
+  var rawNote = String(
+    reasonFromPayload ||
+    rowObj.Reason ||
+    rowObj.reason ||
+    rowObj.CancelReason ||
+    rowObj.cancelReason ||
+    ''
+  ).trim();
+
+  var noteLc = rawNote.toLowerCase();
   var isUpdate = rawNote && (rawNote.indexOf('อัปเดต') > -1 || rawNote.indexOf('เปลี่ยน') > -1);
+  var isEarlyClose = rawNote && (
+    rawNote.indexOf('ปิดงานก่อนเวลา') > -1 ||
+    rawNote.indexOf('ปิดงานก่อนกำหนด') > -1 ||
+    noteLc.indexOf('early close') > -1
+  );
 
   var headMap = {
     pending: '🚌 ระบบจองยานพาหนะ: แจ้งเตือนการจองใหม่',
-    approved: isUpdate ? '🔄 ระบบจองยานพาหนะ: อัปเดตการมอบหมายงาน' : '✅ ระบบจองยานพาหนะ: อนุมัติรายการ',
-    driver_special_approved: isUpdate ? '🔄 ระบบจองยานพาหนะ: อัปเดตการมอบหมายงาน (ด่วน)' : '⚡ ระบบจองยานพาหนะ: อนุมัติกรณีพิเศษ',
+    approved: isEarlyClose
+      ? '🏁 ระบบจองยานพาหนะ: ปิดงานก่อนเวลา'
+      : (isUpdate ? '🔄 ระบบจองยานพาหนะ: อัปเดตการมอบหมายงาน' : '✅ ระบบจองยานพาหนะ: อนุมัติรายการ'),
+    driver_special_approved: isEarlyClose
+      ? '🏁 ระบบจองยานพาหนะ: ปิดงานก่อนเวลา'
+      : (isUpdate ? '🔄 ระบบจองยานพาหนะ: อัปเดตการมอบหมายงาน (ด่วน)' : '⚡ ระบบจองยานพาหนะ: อนุมัติกรณีพิเศษ'),
     rejected: '⛔ ระบบจองยานพาหนะ: แจ้งผลการพิจารณา',
     cancelled: '🚫 ระบบจองยานพาหนะ: แจ้งยกเลิก'
   };
 
   var statusLabelMap = {
     pending: '⏳ รออนุมัติ',
-    approved: isUpdate ? '🔄 อัปเดตข้อมูลแล้ว' : '✅ อนุมัติ',
-    driver_special_approved: isUpdate ? '🔄 อัปเดตข้อมูลแล้ว' : '⚡ อนุมัติกรณีพิเศษ',
+    approved: isEarlyClose
+      ? '🏁 ปิดงานก่อนเวลาแล้ว'
+      : (isUpdate ? '🔄 อัปเดตข้อมูลแล้ว' : '✅ อนุมัติ'),
+    driver_special_approved: isEarlyClose
+      ? '🏁 ปิดงานก่อนเวลาแล้ว'
+      : (isUpdate ? '🔄 อัปเดตข้อมูลแล้ว' : '⚡ อนุมัติกรณีพิเศษ'),
     rejected: '⛔ ไม่อนุมัติ',
     cancelled: '🚫 ยกเลิก'
   };
@@ -1702,7 +1725,7 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
       return [
         '✅ <b>มอบหมายยานพาหนะ</b>',
         '🚚 จำนวนที่จัดให้: 0 คัน',
-        '1) 🚐 รอระบุทะเบียน | 🧑‍✈️ รอระบุชื่อ'
+        '1) 🚐 รอระบุทะเบียน | 👤 รอระบุชื่อ'
       ];
     }
 
@@ -1714,7 +1737,7 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
     for (var i = 0; i < maxLen; i++) {
       var car = plates[i] || 'รอระบุทะเบียน';
       var drv = drivers[i] || 'รอระบุชื่อ';
-      out.push((i + 1) + ') 🚐 ' + car + ' | 🧑‍✈️ ' + drv);
+      out.push((i + 1) + ') 🚐 ' + car + ' | 👤 ' + drv);
     }
     return out;
   }
@@ -1767,6 +1790,9 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   var sDateShort = sDateTH !== '-' ? sDateTH.substring(0, 5) : '-';
   var eDateShort = eDateTH !== '-' ? eDateTH.substring(0, 5) : '-';
 
+  var actualEndRaw = getV(['actualEndAt', 'actualEndTime', 'Actual End', 'เวลาปิดงานจริง']);
+  var actualEndText = cleanText(actualEndRaw, '');
+
   var timeBlock = [];
   if (!isoStart || isoStart === isoEnd) {
     timeBlock.push('📅 วันที่: ' + sDateTH);
@@ -1812,6 +1838,14 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
 
     if (assignedCount > 0 && String(vCount) !== String(assignedCount)) {
       lines.push('ℹ️ สรุป: ขอ ' + vCount + ' คัน | จัดให้ ' + assignedCount + ' คัน');
+    }
+  }
+
+  if (isEarlyClose) {
+    lines.push('──────────────');
+    lines.push('🏁 <b>สรุปการปิดงานก่อนเวลา</b>');
+    if (actualEndText) {
+      lines.push('🕒 เวลาปิดงานจริง: ' + actualEndText);
     }
   }
 
@@ -7325,6 +7359,17 @@ function sendTelegramNotify(payload, testMode) {
     return String(v == null ? "" : v).trim();
   }
 
+  function firstValue(obj, keys) {
+    obj = obj || {};
+    for (var i = 0; i < keys.length; i++) {
+      var val = obj[keys[i]];
+      if (val != null && String(val).trim() !== "" && String(val).trim() !== "-") {
+        return val;
+      }
+    }
+    return "";
+  }
+
   function normalizeStatus(raw) {
     var s = toStr(raw).toLowerCase();
 
@@ -7345,19 +7390,62 @@ function sendTelegramNotify(payload, testMode) {
   var bookingKey = "SYS";
 
   if (typeof payload === "object" && payload !== null) {
-    var rawStatus = payload.status || payload["สถานะ"] || "pending";
+    var safePayload = Object.assign({}, payload);
+
+    var rawStatus = firstValue(safePayload, ["status", "สถานะ"]) || "pending";
     statusKey = normalizeStatus(rawStatus);
 
-    bookingKey = toStr(payload.bookingId || payload.id || payload["Booking ID"] || "SYS");
+    bookingKey = toStr(firstValue(safePayload, ["bookingId", "id", "Booking ID"]) || "SYS");
 
     var reason = "";
     if (statusKey === "cancelled") {
-      reason = toStr(payload.cancelReason || payload["CancelReason"] || payload.reason || payload["Reason"] || "");
+      reason = toStr(firstValue(safePayload, [
+        "cancelReason",
+        "CancelReason",
+        "reason",
+        "Reason"
+      ]));
     } else {
-      reason = toStr(payload.reason || payload["Reason"] || payload.cancelReason || payload["CancelReason"] || "");
+      reason = toStr(firstValue(safePayload, [
+        "reason",
+        "Reason",
+        "cancelReason",
+        "CancelReason"
+      ]));
     }
 
-    msg = buildBookingStatusMessage(payload, statusKey, reason);
+    var noteLc = reason.toLowerCase();
+    var isEarlyClose = reason && (
+      reason.indexOf("ปิดงานก่อนเวลา") > -1 ||
+      reason.indexOf("ปิดงานก่อนกำหนด") > -1 ||
+      noteLc.indexOf("early close") > -1
+    );
+
+    // เติม actual end แบบ fallback ให้ build message ใช้ได้เสมอ
+    var actualEndAt = toStr(firstValue(safePayload, [
+      "actualEndAt",
+      "actualEndTime",
+      "Actual End",
+      "เวลาปิดงานจริง"
+    ]));
+
+    if (actualEndAt) {
+      safePayload.actualEndAt = actualEndAt;
+      if (!safePayload.actualEndTime) safePayload.actualEndTime = actualEndAt;
+      if (!safePayload["เวลาปิดงานจริง"]) safePayload["เวลาปิดงานจริง"] = actualEndAt;
+      if (!safePayload["Actual End"]) safePayload["Actual End"] = actualEndAt;
+    }
+
+    // ถ้าเป็น early close แต่ไม่มี reason จาก caller ให้ใส่ fallback ที่ตีความได้
+    if (isEarlyClose && !safePayload.Reason && !safePayload.reason) {
+      safePayload.Reason = reason;
+    } else if (!reason && actualEndAt) {
+      // fallback เฉพาะกรณีมี actualEndAt แต่ caller ไม่ได้ส่งข้อความมา
+      reason = "ปิดงานก่อนเวลา";
+      safePayload.Reason = reason;
+    }
+
+    msg = buildBookingStatusMessage(safePayload, statusKey, reason);
   } else {
     msg = toStr(payload || "");
   }
@@ -7372,7 +7460,10 @@ function sendTelegramNotify(payload, testMode) {
     return { ok: true, log: msg };
   }
 
-  var config = (typeof getTelegramConfig === "function") ? getTelegramConfig() : { token: "", chatId: "" };
+  var config = (typeof getTelegramConfig === "function")
+    ? getTelegramConfig()
+    : { token: "", chatId: "" };
+
   var token = config.token;
   var chatId = config.chatId;
 
@@ -7604,47 +7695,89 @@ function createAvailabilityBlock(payload) {
 
 function closeAvailabilityBlock(payload) {
   var lock = LockService.getScriptLock();
-  if(!lock.tryLock(5000)) return {ok:false, error:'System busy'};
+  if (!lock.tryLock(5000)) return { ok: false, error: 'System busy' };
+
   try {
+    payload = payload || {};
+
     var sh = _getAvailabilitySheet();
     var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
     var data = sh.getDataRange().getValues();
-    
-    // bookingId is expected to be 'BLK-X' where X is row - 1
+
     var idxStr = String(payload.bookingId || '').replace('BLK-', '');
     var idx = parseInt(idxStr, 10);
-    
+
     if (isNaN(idx) || idx < 1 || idx >= data.length) {
-      return {ok: false, error: 'ไม่พบรายการที่ต้องการปิด'};
+      return { ok: false, error: 'ไม่พบรายการที่ต้องการปิด' };
     }
-    
-    // Check if col exist
+
     var colStatus = headers.indexOf('status');
     var colClosedBy = headers.indexOf('closedBy');
     var colClosedAt = headers.indexOf('closedAt');
     var colCloseNote = headers.indexOf('closeNote');
-    
-    // Using index + 1 for row number, since data is 0-indexed and sheet is 1-indexed
+
     var updateRange = sh.getRange(idx + 1, 1, 1, headers.length);
-    var rowValues = updateRange.getValues()[0]; // Current values in sheet
-    
+    var rowValues = updateRange.getValues()[0];
+
+    var now = new Date();
+    var closeNote = String(payload.closeNote || 'ปิดใช้งานก่อนกำหนด').trim() || 'ปิดใช้งานก่อนกำหนด';
+    var closedBy = String(payload.closedBy || 'Admin').trim() || 'Admin';
+
     if (colStatus > -1) rowValues[colStatus] = 'closed';
-    if (colClosedBy > -1) rowValues[colClosedBy] = payload.closedBy || 'Admin';
-    if (colClosedAt > -1) rowValues[colClosedAt] = new Date();
-    if (colCloseNote > -1) rowValues[colCloseNote] = payload.closeNote || 'ปิดใช้งานก่อนกำหนด';
-    
-    updateRange.setValues([rowValues]); // Write back
-    
-    // Clear cache
+    if (colClosedBy > -1) rowValues[colClosedBy] = closedBy;
+    if (colClosedAt > -1) rowValues[colClosedAt] = now;
+    if (colCloseNote > -1) rowValues[colCloseNote] = closeNote;
+
+    updateRange.setValues([rowValues]);
+
     try {
       CacheService.getScriptCache().remove('mainDataCache_v13_BerryFix');
-    } catch(e) {}
-    
-    return {ok: true};
-  } catch(e) { 
-    return {ok: false, error: e.message}; 
-  } finally { 
-    lock.releaseLock(); 
+    } catch (e) {}
+
+    var telegramOk = null;
+    var telegramRes = null;
+
+    try {
+      var rowObj = {};
+      for (var c = 0; c < headers.length; c++) {
+        rowObj[String(headers[c] || '').trim()] = rowValues[c];
+      }
+
+      rowObj.bookingId = rowObj.bookingId || rowObj.id || payload.bookingId || ('BLK-' + idx);
+      rowObj.id = rowObj.id || rowObj.bookingId;
+      rowObj.status = rowObj.status || rowObj['สถานะ'] || 'closed';
+      rowObj.closedBy = closedBy;
+      rowObj.closedAt = now;
+      rowObj.closeNote = closeNote;
+      rowObj.reason = closeNote;
+      rowObj.Reason = closeNote;
+
+      if (typeof sendTelegramNotify === 'function') {
+        telegramRes = sendTelegramNotify(rowObj, false);
+        telegramOk = !!(telegramRes && telegramRes.ok);
+        Logger.log('closeAvailabilityBlock Telegram Result: ' + JSON.stringify(telegramRes));
+      } else {
+        telegramOk = false;
+        Logger.log('closeAvailabilityBlock warn: sendTelegramNotify is not defined');
+      }
+    } catch (notifyErr) {
+      telegramOk = false;
+      Logger.log('closeAvailabilityBlock Telegram Error: ' + notifyErr.message);
+    }
+
+    return {
+      ok: true,
+      telegramOk: telegramOk,
+      message: telegramOk === true
+        ? 'ปิดรายการเรียบร้อย และส่ง Telegram แล้ว'
+        : 'ปิดรายการเรียบร้อย',
+      bookingId: payload.bookingId || ('BLK-' + idx)
+    };
+  } catch (e) {
+    Logger.log('closeAvailabilityBlock Error: ' + (e.stack || e.message));
+    return { ok: false, error: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -8298,9 +8431,14 @@ function getActualEndsMap() {
 function closeBookingActualEnd(payload) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) return { ok: false, error: "ระบบยุ่ง กรุณาลองใหม่ค่ะ" };
+
   try {
-    var bId = String(payload.bookingId).trim();
+    payload = payload || {};
+
+    var bId = String(payload.bookingId || "").trim();
     var closedBy = String(payload.closedBy || 'Unknown').trim();
+    var noteText = String(payload.note || '').trim();
+
     if (!bId) throw new Error("ไม่ระบุรหัสอ้างอิง Booking ID");
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -8310,7 +8448,6 @@ function closeBookingActualEnd(payload) {
       sh.appendRow(['bookingId', 'actualEndDate', 'actualEndTime', 'actualEndAt', 'closedBy', 'closedAt', 'note']);
     }
 
-    // Check if already exists
     var data = sh.getDataRange().getValues();
     var foundIdx = -1;
     for (var i = 1; i < data.length; i++) {
@@ -8326,22 +8463,89 @@ function closeBookingActualEnd(payload) {
     var aTimeStr = Utilities.formatDate(now, tz, 'HH:mm');
     var aFullAt = new Date(now.getTime());
 
+    var finalNote = noteText || 'ปิดงานก่อนเวลา เนื่องจากภารกิจเสร็จเร็วกว่ากำหนด';
+
     if (foundIdx > 0) {
-      // Overwrite
       sh.getRange(foundIdx, 2, 1, 6).setValues([[
-        aDateISO, aTimeStr, aFullAt, closedBy, new Date(), payload.note || 'ปิดงานก่อนเวลา (ปรับปรุง)'
+        aDateISO,
+        aTimeStr,
+        aFullAt,
+        closedBy,
+        new Date(),
+        finalNote
       ]]);
     } else {
-      // Append
       sh.appendRow([
-        bId, aDateISO, aTimeStr, aFullAt, closedBy, new Date(), payload.note || 'ปิดงานก่อนเวลา'
+        bId,
+        aDateISO,
+        aTimeStr,
+        aFullAt,
+        closedBy,
+        new Date(),
+        finalNote
       ]);
     }
-    
-    // Clear MainDataCache so APIs read fresh actualEnd
-    try { cacheDelete_('mainDataCache_v13_BerryFix'); } catch(e) {}
-    
-    return { ok: true, actualEndAt: aFullAt, message: "ปิดงานก่อนเวลาของรถและพนักงานขับเรียบร้อยแล้วค่ะ! 🚗💨" };
+
+    try { cacheDelete_('mainDataCache_v13_BerryFix'); } catch (e) {}
+
+    var notifyResult = null;
+    try {
+      var bookingObj = null;
+
+      if (typeof getBookingById === 'function') {
+        var bookingRes = getBookingById(bId);
+        if (bookingRes && bookingRes.ok && bookingRes.data) {
+          bookingObj = bookingRes.data;
+        } else if (bookingRes && !bookingRes.ok) {
+          Logger.log('closeBookingActualEnd warn(getBookingById): ' + JSON.stringify(bookingRes));
+        }
+      }
+
+      if (!bookingObj && typeof getById === 'function') {
+        var fallbackRes = getById(bId);
+        if (fallbackRes && fallbackRes.ok && fallbackRes.data) {
+          bookingObj = fallbackRes.data;
+        } else if (fallbackRes && !fallbackRes.ok) {
+          Logger.log('closeBookingActualEnd warn(getById): ' + JSON.stringify(fallbackRes));
+        }
+      }
+
+      if (!bookingObj) {
+        bookingObj = {
+          bookingId: bId,
+          status: 'approved'
+        };
+      }
+
+      bookingObj.bookingId = bookingObj.bookingId || bookingObj.id || bId;
+      bookingObj.id = bookingObj.id || bId;
+      bookingObj.status = bookingObj.status || bookingObj['สถานะ'] || 'approved';
+      bookingObj.actualEndAt = aFullAt;
+      bookingObj.actualEndTime = aTimeStr;
+      bookingObj['เวลาปิดงานจริง'] = aTimeStr;
+      bookingObj.reason = finalNote;
+      bookingObj.Reason = finalNote;
+      bookingObj.closedBy = closedBy;
+
+      if (typeof sendTelegramNotify === 'function') {
+        notifyResult = sendTelegramNotify(bookingObj, false);
+        Logger.log('closeBookingActualEnd Telegram Result: ' + JSON.stringify(notifyResult));
+      } else {
+        Logger.log('closeBookingActualEnd warn: sendTelegramNotify is not defined');
+      }
+    } catch (notifyErr) {
+      Logger.log('closeBookingActualEnd Telegram Error: ' + notifyErr.message);
+    }
+
+    return {
+      ok: true,
+      actualEndAt: aFullAt,
+      actualEndDate: aDateISO,
+      actualEndTime: aTimeStr,
+      telegramOk: !!(notifyResult && notifyResult.ok),
+      message: "ปิดงานก่อนเวลาของรถและพนักงานขับเรียบร้อยแล้วค่ะ! 🚗💨"
+    };
+
   } catch (err) {
     Logger.log("closeBookingActualEnd Error: " + err.stack);
     return { ok: false, error: err.message };
@@ -8371,7 +8575,8 @@ function runFullTelegramLogTest() {
     'เลขทะเบียนรถ': '',
     'พนักงานขับรถ': '',
     'Reason': '',
-    'CancelReason': ''
+    'CancelReason': '',
+    'actualEndAt': ''
   };
 
   function logDivider() {
@@ -8415,7 +8620,7 @@ function runFullTelegramLogTest() {
   }
 
   function runDailyCase(caseTitle, rows, targetDate) {
-    Logger.log('📋[' + caseTitle + ']');
+    Logger.log('📋 [' + caseTitle + ']');
 
     var originalGetActive = SpreadsheetApp.getActiveSpreadsheet;
     try {
@@ -8451,7 +8656,7 @@ function runFullTelegramLogTest() {
       'พนักงานขับรถ': ''
     });
 
-    runIndividualCase('2. [SPECIAL TEST] อนุมัติกรณีพิเศษ - ได้ครบ 2 คัน', 'driver_special_approved', {
+    runIndividualCase('2. อนุมัติกรณีพิเศษ - ได้ครบ 2 คัน', 'driver_special_approved', {
       'เลขทะเบียนรถ': 'นข-9999|ฮค-8888',
       'พนักงานขับรถ': 'นายสมชาย|นายวิทยา'
     });
@@ -8475,17 +8680,27 @@ function runFullTelegramLogTest() {
       'พนักงานขับรถ': 'พี่ต้น|พี่หนึ่ง'
     });
 
-    runIndividualCase('5. [RE-ASSIGN] เปลี่ยนรถ/คนขับ', 'approved', {
+    runIndividualCase('5. เปลี่ยนรถ/คนขับ', 'approved', {
       'เลขทะเบียนรถ': 'กท-5555|นข-7777',
       'พนักงานขับรถ': 'นายเอกชัย|นายธนา',
       'Reason': 'อัปเดตการมอบหมายรถ/คนขับใหม่'
     });
 
-    runIndividualCase('6. ไม่อนุมัติ', 'rejected', {
+    runIndividualCase('6. ปิดงานก่อนเวลา', 'approved', {
+      'Booking ID': 'TEST-EARLY-01',
+      'ชื่อ-สกุล': 'เจ้าหน้าที่ทดสอบปิดงานก่อนเวลา',
+      'ตำแหน่ง': 'เจ้าหน้าที่',
+      'เลขทะเบียนรถ': 'ฮค-4964',
+      'พนักงานขับรถ': 'ประเสริฐ หน่อแก้ว',
+      'Reason': 'ปิดงานก่อนเวลา เนื่องจากภารกิจเสร็จเร็วกว่ากำหนด',
+      'actualEndAt': '2026-03-12 14:10'
+    });
+
+    runIndividualCase('7. ไม่อนุมัติ', 'rejected', {
       'Reason': 'รถติดภารกิจ'
     });
 
-    runIndividualCase('7. ยกเลิกการจอง', 'cancelled', {
+    runIndividualCase('8. ยกเลิกการจอง', 'cancelled', {
       'CancelReason': 'ยกเลิกโครงการ'
     });
 
@@ -8502,51 +8717,61 @@ function runFullTelegramLogTest() {
       'เวลาเริ่มต้น',
       'วันสิ้นสุด',
       'เวลาสิ้นสุด',
-      'จำนวนรถที่ต้องการ'
+      'จำนวนรถที่ต้องการ',
+      'actualEndAt'
     ];
 
     runDailyCase(
-      '8. รายงานสรุปประจำวัน (Daily Summary: มีงาน 1 คัน - 05:00 AM)',
+      '9. รายงานสรุปประจำวัน (มีงาน 1 คัน)',
       [
         mockHeaders,
-        ['BK-001', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-4964', 'ประเสริฐ', '2026-03-12', '09:00', '2026-03-12', '12:00', '1'],
-        ['BK-002', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00', '1']
+        ['BK-001', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-4964', 'ประเสริฐ', '2026-03-12', '09:00', '2026-03-12', '12:00', '1', ''],
+        ['BK-002', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00', '1', '']
       ],
       new Date(2026, 2, 12)
     );
 
     runDailyCase(
-      '9. รายงานสรุปประจำวัน (Daily Summary: หลายคันใน 1 งาน - 05:00 AM)',
+      '10. รายงานสรุปประจำวัน (หลายคันใน 1 งาน)',
       [
         mockHeaders,
-        ['BK-010', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-1234|กท-4567', 'พี่ยอด|พี่เอก', '2026-03-12', '09:00', '2026-03-12', '12:00', '2'],
-        ['BK-011', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับแขก', 'สนามบิน', 'นข-1111|ฮค-7777', 'พี่ยอด|นายสมชาย', '2026-03-12', '14:00', '2026-03-12', '16:00', '2'],
-        ['BK-012', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00', '1']
+        ['BK-010', 'approved', 'สมชาย จองจริง', 'ประชุม', 'งานแผน', 'ศูนย์ฯ ลำปาง', 'ฮค-1234|กท-4567', 'พี่ยอด|พี่เอก', '2026-03-12', '09:00', '2026-03-12', '12:00', '2', ''],
+        ['BK-011', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับแขก', 'สนามบิน', 'นข-1111|ฮค-7777', 'พี่ยอด|นายสมชาย', '2026-03-12', '14:00', '2026-03-12', '16:00', '2', ''],
+        ['BK-012', 'pending', 'สมหญิง พึ่งพา', 'อบรม', 'โครงการ A', 'กทม.', '', '', '2026-03-12', '07:00', '2026-03-14', '17:00', '1', '']
       ],
       new Date(2026, 2, 12)
     );
 
     runDailyCase(
-      '10. รายงานสรุปประจำวัน (Daily Summary: ขอ 3 ได้ 2 - 05:00 AM)',
+      '11. รายงานสรุปประจำวัน (ขอ 3 ได้ 2)',
       [
         mockHeaders,
-        ['BK-020', 'approved', 'ดร.ทดสอบ ขอสามได้สอง', 'สัมมนา', 'โครงการทดสอบหลายคัน', 'ศูนย์การประชุมฯ', 'ฮค-2222|กท-3333', 'พี่ต้น|พี่หนึ่ง', '2026-03-12', '08:30', '2026-03-12', '16:30', '3']
+        ['BK-020', 'approved', 'ดร.ทดสอบ ขอสามได้สอง', 'สัมมนา', 'โครงการทดสอบหลายคัน', 'ศูนย์การประชุมฯ', 'ฮค-2222|กท-3333', 'พี่ต้น|พี่หนึ่ง', '2026-03-12', '08:30', '2026-03-12', '16:30', '3', '']
       ],
       new Date(2026, 2, 12)
     );
 
     runDailyCase(
-      '11. รายงานสรุปประจำวัน (Daily Summary: งานข้ามวัน - 05:00 AM)',
+      '12. รายงานสรุปประจำวัน (งานข้ามวัน)',
       [
         mockHeaders,
-        ['BK-030', 'approved', 'ผศ.ดร.นพพร แพทย์รัตน์', 'อบรม', 'อบรมเชิงปฏิบัติการ', 'มหาวิทยาลัยสวนดุสิต กรุงเทพมหานคร', 'นข-5000', 'นายสมชาย', '2026-03-08', '09:00', '2026-03-10', '17:00', '1'],
-        ['BK-031', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับคณะดูงาน', 'สนามบินดอนเมือง', 'ฮค-9000|กท-1111', 'พี่ยอด|พี่เอก', '2026-03-10', '06:00', '2026-03-12', '20:00', '2']
+        ['BK-030', 'approved', 'ผศ.ดร.นพพร แพทย์รัตน์', 'อบรม', 'อบรมเชิงปฏิบัติการ', 'มหาวิทยาลัยสวนดุสิต กรุงเทพมหานคร', 'นข-5000', 'นายสมชาย', '2026-03-08', '09:00', '2026-03-10', '17:00', '1', ''],
+        ['BK-031', 'driver_special_approved', 'ผอ.ศูนย์', 'รับรอง', 'ต้อนรับคณะดูงาน', 'สนามบินดอนเมือง', 'ฮค-9000|กท-1111', 'พี่ยอด|พี่เอก', '2026-03-10', '06:00', '2026-03-12', '20:00', '2', '']
       ],
       new Date(2026, 2, 10)
     );
 
     runDailyCase(
-      '12. รายงานสรุปประจำวัน (Daily Summary: ไม่มีงาน - 05:00 AM)',
+      '13. รายงานสรุปประจำวัน (มีงานปิดก่อนเวลา)',
+      [
+        mockHeaders,
+        ['BK-040', 'approved', 'เจ้าหน้าที่ทดสอบปิดงาน', 'ติดตั้ง', 'งานระบบ', 'อาคาร A', 'ฮค-4964', 'ประเสริฐ', '2026-03-12', '09:00', '2026-03-12', '17:00', '1', '2026-03-12 14:10']
+      ],
+      new Date(2026, 2, 12)
+    );
+
+    runDailyCase(
+      '14. รายงานสรุปประจำวัน (ไม่มีงาน)',
       [mockHeaders],
       new Date(2026, 2, 12)
     );

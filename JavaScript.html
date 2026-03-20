@@ -1544,36 +1544,6 @@ async function loadMaintenanceData() {
     }
 }
 
-    async function loadMaintenanceData() {
-        const tbody = document.getElementById('maintenance-table-body');
-        if (!tbody) return;
-        
-        tbody.innerHTML = '<tr><td colspan="4" class="text-center">กำลังโหลดข้อมูล...</td></tr>';
-        
-        try {
-            const res = await googleScriptRun('apiGetMaintenanceHistory');
-            if (!res.ok) throw new Error(res.error);
-            
-            if (res.data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">ยังไม่มีประวัติการซ่อม</td></tr>';
-                return;
-            }
-            
-            const html = res.data.map(item => `
-                <tr>
-                    <td>${item.date}</td>
-                    <td>${escapeHtml(item.plate)}</td>
-                    <td>${escapeHtml(item.topic)}</td>
-                    <td class="text-right">${item.cost}</td>
-                </tr>
-            `).join('');
-            
-            tbody.innerHTML = html;
-        } catch (err) {
-            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger">โหลดข้อมูลไม่สำเร็จ: ${err.message}</td></tr>`;
-        }
-    }
-
 // 1. สร้างฟังก์ชัน "ไส้ใน" ขึ้นมาก่อน (Logic การบันทึก)
 // =========================================
 
@@ -3016,10 +2986,17 @@ function syncAllThaiDateInputs() {
 }
 
 function wireAvailabilityListeners() {
+  if (window.__vbAvailabilityWired) return;
+  window.__vbAvailabilityWired = true;
+
   const ids = ['booking-date', 'booking-start', 'booking-end', 'return-date'];
   ids.forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.addEventListener('change', () => typeof loadAvailableVehicles === 'function' && loadAvailableVehicles(false));
+    if (!el) return;
+
+    el.addEventListener('change', () => {
+      if (typeof loadAvailableVehicles === 'function') loadAvailableVehicles(false);
+    });
   });
 }
 
@@ -4829,146 +4806,110 @@ function showCalendarEventDetail(ev, event) {
     try { event.stopPropagation(); } catch (_) {}
   }
 
-window.closeAvailBlock = async function(bookingId) {
-    if (!bookingId || !bookingId.startsWith('BLK-')) return;
-    if (!confirm('ยืนยันปิดรายการ (Soft Close) ใช่หรือไม่?\n\nรถ/คนขับจะกลับมาว่าง และสามารถจองได้ทันที')) return;
-    
-    try {
-        Swal.fire({
-            title: 'กำลังปิดรายการ...',
-            allowOutsideClick: false,
-            didOpen: () => Swal.showLoading()
-        });
-        
-        const closeNote = prompt('ระบุหมายเหตุการปิด (ถ้ามี):', 'ปิดใช้งานก่อนกำหนด') || 'ปิดใช้งานก่อนกำหนด';
-        const adminName = typeof getAdminName === 'function' ? getAdminName() : 'Admin';
-        
-        const res = await runner('closeAvailabilityBlock', { 
-            bookingId: bookingId,
-            closedBy: adminName,
-            closeNote: closeNote
-        });
-        
-        if (res && res.ok) {
-            Swal.fire({
-                title: 'สำเร็จ',
-                text: 'ปิดรายการเรียบร้อยแล้ว',
-                icon: 'success',
-                timer: 1500,
-                showConfirmButton: false
-            });
-            if (typeof loadAllData === 'function') setTimeout(() => loadAllData(), 500);
-        } else {
-            Swal.fire('ผิดพลาด', res?.error || 'เกิดข้อผิดพลาดในการปิดรายการ', 'error');
-        }
-    } catch (e) {
-        Swal.fire('ข้อผิดพลาด', e.message, 'error');
-    }
-};
+const modal = document.getElementById('activity-modal');
+const header = document.getElementById('activity-modal-header');
+const title = document.getElementById('activity-title');
+const details = document.getElementById('activity-details');
+const footer = document.getElementById('activity-modal-footer');
 
-  const modal = document.getElementById('activity-modal');
-  const header = document.getElementById('activity-modal-header');
-  const title = document.getElementById('activity-title');
-  const details = document.getElementById('activity-details');
-  const footer = document.getElementById('activity-modal-footer');
+if (!modal || !title || !details || !footer) return;
 
-  if (!modal || !title || !details || !footer) return;
+const statusKey = String(
+  typeof normalizeClientStatus === 'function'
+    ? normalizeClientStatus(ev?.status || 'pending')
+    : (ev?.status || 'pending')
+).toLowerCase().trim();
 
-  const statusKey = String(
-    typeof normalizeClientStatus === 'function'
-      ? normalizeClientStatus(ev?.status || 'pending')
-      : (ev?.status || 'pending')
-  ).toLowerCase().trim();
+const isDriverBlock = statusKey === 'driver_block';
+const isVehicleBlock = statusKey === 'vehicle_block';
 
-  const isDriverBlock = statusKey === 'driver_block';
-  const isVehicleBlock = statusKey === 'vehicle_block';
+if (header) {
+  header.className = 'modal-header ' + (isDriverBlock || isVehicleBlock ? 'modal-header-warning' : 'modal-header-primary');
+}
 
-  if (header) {
-    header.className = 'modal-header ' + (isDriverBlock || isVehicleBlock ? 'modal-header-warning' : 'modal-header-primary');
-  }
+title.innerHTML = isDriverBlock
+  ? '👤 รายละเอียดการลาพนักงานขับรถ'
+  : isVehicleBlock
+    ? '🛠️ รายละเอียดการส่งรถซ่อม/ปิดใช้งาน'
+    : '📋 รายละเอียดกิจกรรม';
 
-  title.innerHTML = isDriverBlock
-    ? '👨‍✈️ รายละเอียดการลาพนักงานขับรถ'
-    : isVehicleBlock
-      ? '🛠️ รายละเอียดการส่งรถซ่อม/ปิดใช้งาน'
-      : '📋 รายละเอียดกิจกรรม';
+const safe = (v) => escapeHtml(String(v || '-'));
+const startDate = ev?.startDate || ev?.date || '-';
+const endDate = ev?.endDate || ev?.date || '-';
+const startTime = ev?.startTime || '-';
+const endTime = ev?.endTime || '-';
 
-  const safe = (v) => escapeHtml(String(v || '-'));
-  const startDate = ev?.startDate || ev?.date || '-';
-  const endDate = ev?.endDate || ev?.date || '-';
-  const startTime = ev?.startTime || '-';
-  const endTime = ev?.endTime || '-';
+const displayName = isDriverBlock
+  ? (ev?.blockName || ev?.driver || ev?.name || '-')
+  : (ev?.plate || ev?.vehicle || ev?.name || '-');
 
-  const displayName = isDriverBlock
-    ? (ev?.blockName || ev?.driver || ev?.name || '-')
-    : (ev?.plate || ev?.vehicle || ev?.name || '-');
+const reasonText = ev?.proj || ev?.project || ev?.workName || ev?.reason || ev?.note || 'งดใช้งาน';
 
-  const reasonText = ev?.proj || ev?.project || ev?.workName || ev?.reason || ev?.note || 'งดใช้งาน';
-
-  details.innerHTML = `
-    <div class="detail-container">
-      <div class="info-grid">
-        <div class="info-item">
-          <div class="info-label">ประเภท</div>
-          <div class="info-value">${safe(ev?.type || ev?.purpose || ev?.workType || '-')}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">สถานะ</div>
-          <div class="info-value">${safe(typeof getStatusText === 'function' ? getStatusText(statusKey) : statusKey)}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">วันที่</div>
-          <div class="info-value">${safe(typeof formatDate === 'function' ? formatDate(startDate) : startDate)}${endDate !== startDate ? ' - ' + safe(typeof formatDate === 'function' ? formatDate(endDate) : endDate) : ''}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">เวลา</div>
-          <div class="info-value">${safe(startTime)} - ${safe(endTime)}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">${isDriverBlock ? 'พนักงานขับรถ' : 'รถ/ทะเบียน'}</div>
-          <div class="info-value">${safe(displayName)}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">สถานที่</div>
-          <div class="info-value">${safe(ev?.place || ev?.destination || '-')}</div>
-        </div>
-        <div class="info-item info-item-full">
-          <div class="info-label">รายละเอียด</div>
-          <div class="info-value">${safe(reasonText)}</div>
-        </div>
+details.innerHTML = `
+  <div class="detail-container">
+    <div class="info-grid">
+      <div class="info-item">
+        <div class="info-label">ประเภท</div>
+        <div class="info-value">${safe(ev?.type || ev?.purpose || ev?.workType || '-')}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">สถานะ</div>
+        <div class="info-value">${safe(typeof getStatusText === 'function' ? getStatusText(statusKey) : statusKey)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">วันที่</div>
+        <div class="info-value">${safe(typeof formatDate === 'function' ? formatDate(startDate) : startDate)}${endDate !== startDate ? ' - ' + safe(typeof formatDate === 'function' ? formatDate(endDate) : endDate) : ''}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">เวลา</div>
+        <div class="info-value">${safe(startTime)} - ${safe(endTime)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">${isDriverBlock ? 'พนักงานขับรถ' : 'รถ/ทะเบียน'}</div>
+        <div class="info-value">${safe(displayName)}</div>
+      </div>
+      <div class="info-item">
+        <div class="info-label">สถานที่</div>
+        <div class="info-value">${safe(ev?.place || ev?.destination || '-')}</div>
+      </div>
+      <div class="info-item info-item-full">
+        <div class="info-label">รายละเอียด</div>
+        <div class="info-value">${safe(reasonText)}</div>
       </div>
     </div>
+  </div>
+`;
+
+if (isDriverBlock) {
+  const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
+  footer.innerHTML = `
+    <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
+    ${!isClosed ? `
+      <button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('driver', '${safe(displayName)}', null);">เพิ่มวันลา</button>
+      <button type="button" class="btn btn-danger" onclick="closeActivityModal(); window.closeAvailBlock('${ev?.bookingId}');">ปิดงาน (Soft Close)</button>
+    ` : ''}
   `;
+} else if (isVehicleBlock) {
+  const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
+  footer.innerHTML = `
+    <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
+    ${!isClosed ? `
+      <button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('vehicle', '${safe(displayName)}', null);">เพิ่มส่งซ่อม</button>
+      <button type="button" class="btn btn-danger" onclick="closeActivityModal(); window.closeAvailBlock('${ev?.bookingId}');">ปิดงาน (Soft Close)</button>
+    ` : ''}
+  `;
+} else {
+  footer.innerHTML = `
+    <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
+  `;
+}
 
-  if (isDriverBlock) {
-    // 🍓 BERRY FIX: Add Soft Close button, but only show if it's not already closed
-    // ใช้วิธีดึง isClosed จาก ev
-    const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
-    footer.innerHTML = `
-      <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
-      ${!isClosed ? `<button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('driver', '${safe(displayName)}', null);">เพิ่มวันลา</button>
-      <button type="button" class="btn btn-danger" onclick="closeActivityModal(); window.closeAvailBlock('${ev?.bookingId}');">ปิดงาน (Soft Close)</button>` : ''}
-    `;
-  } else if (isVehicleBlock) {
-    // 🍓 BERRY FIX: Add Soft Close button, but only show if it's not already closed
-    const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
-    footer.innerHTML = `
-      <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
-      ${!isClosed ? `<button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('vehicle', '${safe(displayName)}', null);">เพิ่มส่งซ่อม</button>
-      <button type="button" class="btn btn-danger" onclick="closeActivityModal(); window.closeAvailBlock('${ev?.bookingId}');">ปิดงาน (Soft Close)</button>` : ''}
-    `;
-  } else {
-    footer.innerHTML = `
-      <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
-    `;
-  }
-
-  if (typeof openModalA11y === 'function') {
-    openModalA11y('activity-modal');
-  } else {
-    modal.classList.add('active');
-    modal.style.display = 'flex';
-  }
+if (typeof openModalA11y === 'function') {
+  openModalA11y('activity-modal');
+} else {
+  modal.classList.add('active');
+  modal.style.display = 'flex';
+}
 }
 
 async function showActivityDetails(bookingId, event) {
@@ -6466,53 +6407,81 @@ window.handleAssignmentSave = async function () {
   }
 };
 
-// 🍓 BERRY FIX: ฟังก์ชันปิดงานก่อนเวลา
 window.handleAssignmentEarlyClose = async function () {
   if (!window.__ASSIGN_CTX__) return;
-  
-  const bId = window.__ASSIGN_CTX__.bookingId;
-  const isConfirm = confirm("🚨 ยืนยันที่จะ 'ปิดงานก่อนเวลา' หรือไม่?\n\nรถและพนักงานขับทั้งหมดในงานนี้จะถูกตั้งค่าสถานะเป็น 'พร้อม' ทันทีครับ");
-  if (!isConfirm) return;
+
+  const bId = String(window.__ASSIGN_CTX__.bookingId || '').trim();
+  if (!bId) {
+    if (typeof showToast === 'function') showToast('ไม่พบ Booking ID', 'error');
+    return;
+  }
 
   const btn = document.getElementById('assignment-close-job-btn');
-  const txt = btn ? btn.innerHTML : '';
+  if (btn && btn.disabled) return;
+
+  const isConfirm = confirm(
+    "🚨 ยืนยันที่จะ 'ปิดงานก่อนเวลา' หรือไม่?\n\nรถและพนักงานขับทั้งหมดในงานนี้จะถูกตั้งค่าสถานะเป็น 'พร้อม' ทันทีครับ"
+  );
+  if (!isConfirm) return;
+
+  const runner = (typeof window.googleScriptRunLimited !== 'undefined')
+    ? window.googleScriptRunLimited
+    : window.googleScriptRun;
+
+  const oldHtml = btn ? btn.innerHTML : '';
+  const reqToken = 'earlyclose_' + Date.now();
+  window.__EARLY_CLOSE_REQ_TOKEN__ = reqToken;
+
   if (btn) {
-      btn.disabled = true;
-      btn.innerHTML = '⏳ กำลังบันทึก...';
+    btn.disabled = true;
+    btn.innerHTML = '⏳ กำลังบันทึก...';
   }
 
   try {
-     const runner = (typeof window.googleScriptRunLimited !== 'undefined') ? window.googleScriptRunLimited : window.googleScriptRun;
-     
-     // ปิดงาน
-     const res = await runner('closeBookingActualEnd', { 
-         bookingId: bId, 
-         note: 'ปิดผ่าน Modal ทันที', 
-         closedBy: typeof getAdminName === 'function' ? getAdminName() : 'Admin' 
-     });
-     
-     if (!res || !res.ok) throw new Error(res?.error || 'Server Error');
+    const res = await runner('closeBookingActualEnd', {
+      bookingId: bId,
+      note: 'ปิดงานก่อนเวลา เนื่องจากภารกิจเสร็จเร็วกว่ากำหนด',
+      closedBy: (typeof getAdminName === 'function' ? getAdminName() : 'Admin')
+    });
 
-     if (typeof showToast === 'function') showToast(res.message || 'ปิดงานก่อนเวลาเรียบร้อย', 'success');
-     if (typeof closeModalA11y === 'function') closeModalA11y('assignment-modal');
-     
-     // Refresh UI
-     if (typeof loadBookingsView === 'function') loadBookingsView();
-     if (typeof updateCounters === 'function') updateCounters();
-     
-     // Refresh Radar
-     if (typeof window.renderRadarContext === 'function') {
-         // Radar has auto refresh but we can trigger it fast
-         if (typeof fetchLiveStatus === 'function') fetchLiveStatus();
-     }
-  } catch(e) {
-     console.error('❌ Early Close Error:', e.message);
-     if (typeof showToast === 'function') showToast('เกิดข้อผิดพลาด: ' + e.message, 'error');
+    if (window.__EARLY_CLOSE_REQ_TOKEN__ !== reqToken) return;
+    if (!res || !res.ok) throw new Error((res && res.error) || 'Server Error');
+
+    if (typeof showToast === 'function') {
+      if (res.telegramOk === true) {
+        showToast(res.message || 'ปิดงานก่อนเวลาและส่ง Telegram เรียบร้อยแล้ว', 'success');
+      } else if (res.telegramOk === false) {
+        showToast('ปิดงานก่อนเวลาเรียบร้อย แต่แจ้ง Telegram ไม่สำเร็จ', 'warning');
+      } else {
+        showToast(res.message || 'ปิดงานก่อนเวลาเรียบร้อย', 'success');
+      }
+    }
+
+    if (typeof closeModalA11y === 'function') {
+      closeModalA11y('assignment-modal');
+    }
+
+    if (typeof loadBookingsView === 'function') loadBookingsView();
+    if (typeof updateCounters === 'function') updateCounters();
+
+    if (typeof loadLiveStatusData === 'function') {
+      loadLiveStatusData();
+    } else if (typeof fetchLiveStatus === 'function') {
+      fetchLiveStatus();
+    }
+  } catch (e) {
+    console.error('❌ Early Close Error:', e && e.message ? e.message : e);
+    if (window.__EARLY_CLOSE_REQ_TOKEN__ === reqToken && typeof showToast === 'function') {
+      showToast('เกิดข้อผิดพลาด: ' + (e && e.message ? e.message : 'Unknown Error'), 'error');
+    }
   } finally {
-     if (btn) {
+    if (window.__EARLY_CLOSE_REQ_TOKEN__ === reqToken) {
+      window.__EARLY_CLOSE_REQ_TOKEN__ = null;
+      if (btn) {
         btn.disabled = false;
-        btn.innerHTML = txt;
-     }
+        btn.innerHTML = oldHtml;
+      }
+    }
   }
 };
 
@@ -9259,7 +9228,6 @@ function loadInsuranceList() {
         .listInsuranceRecords();
 }
 
-/*[ANCHOR: loadMaintenanceList] */
 function loadMaintenanceList() {
     const containerId = 'maintenance-list-container';
     const container = document.getElementById(containerId);
@@ -9268,17 +9236,16 @@ function loadMaintenanceList() {
     google.script.run
         .withSuccessHandler((res) => {
             if (res && res.ok) {
-                PAGINATION_STATE.maintenance.data = res.data ||[];
+                PAGINATION_STATE.maintenance.data = res.data || [];
                 PAGINATION_STATE.maintenance.page = 1;
                 renderTablePage('maintenance', containerId);
             } else {
-                // 🍓 BERRY FIX: แจ้งเตือนสาเหตุที่แท้จริงหาก res เป็น null
                 const errMsg = res ? (res.message || res.error || 'Unknown Error') : 'ข้อมูลวันที่ในชีตทำให้ระบบแครช (Date Serialization Error)';
-                if(container) container.innerHTML = `<tr><td colspan="8" class="text-center text-danger">เกิดข้อผิดพลาด: ${errMsg}</td></tr>`;
+                if (container) container.innerHTML = `<tr><td colspan="8" class="text-center text-danger">เกิดข้อผิดพลาด: ${errMsg}</td></tr>`;
             }
         })
         .withFailureHandler((err) => {
-            if(container) container.innerHTML = `<tr><td colspan="8" class="text-center text-danger">เชื่อมต่อ Server ล้มเหลว: ${err.message || err}</td></tr>`;
+            if (container) container.innerHTML = `<tr><td colspan="8" class="text-center text-danger">เชื่อมต่อ Server ล้มเหลว: ${err.message || err}</td></tr>`;
         })
         .listMaintenanceRecords();
 }
@@ -10154,32 +10121,26 @@ window.selfTestFuelReceiptUpload = async function() {
     };
 
     try {
-        // STEP 1: หาฟอร์มและปุ่ม และ input file
         const fp = document.getElementById('fuel-file-upload');
         if (!fp) throw new Error("ไม่พบ input#fuel-file-upload");
         logRes("STEP 1", "ตรวจพบ input file ของ fuel form", true);
 
-        // STEP 2: ลองเอาไฟล์จำลองมายัดเพื่อชิมลาง reader หรือ check onchange handler
         const hasOnChange = fp.getAttribute('onchange') && fp.getAttribute('onchange').includes('handleFileSelect');
         if (!hasOnChange) throw new Error("input ขาด onchange='handleFileSelect(...)' ทำให้อ่านไฟล์เข้าระบบไม่ได้");
         if (typeof window.handleFileSelect !== 'function') throw new Error("ยังไม่มีการนิยาม handleFileSelect เลย");
         logRes("STEP 2", "ฟังก์ชันอ่านไฟล์จาก client (handleFileSelect) ผูกไว้กับ input เรียบร้อยแล้ว", true);
 
-        // STEP 3: เช็คโครงสร้าง Payload
         const dummyPayload = { mimeType: 'image/png', fileData: 'abc...', plate: '1', workType: '2', project: '3', driver: '4' };
         if (!dummyPayload.fileData || !dummyPayload.mimeType) throw new Error("ตัวแปรเก็บไฟล์ใน Payload (fileData หรือ mimeType) ขาดหาย");
         logRes("STEP 3", "Payload ในการ submit มีโครงสร้าง fileData, fileName, mimeType ถูกต้อง", true);
 
-        // STEP 4: Server Upload Check function call status
         if (!google.script || !google.script.run || !google.script.run.apiSaveFuel) {
              throw new Error("local Env ไม่เจอ apiSaveFuel");
         }
         logRes("STEP 4", "Server endpoint `apiSaveFuel` ลอจิก upload ไฟล์พร้อมทำงานใน G-Drive", true);
 
-        // STEP 5: ตรวจจับ Col: N (13) mapping index ของ Receipt URL
         logRes("STEP 5", "apiSaveFuel มีการ Return fileUrl กลับมาและเขียนลงคอลัมน์ N สำเร็จเรียบร้อย", true);
 
-        // STEP 6 & 7: Test Render
         let testFileUrl = "https://drive.google.com/test";
         let renderedHtml = '<span class="text-muted">-</span>';
         if (testFileUrl && testFileUrl.includes('http')) {
@@ -10188,7 +10149,6 @@ window.selfTestFuelReceiptUpload = async function() {
         if (renderedHtml.indexOf("href") === -1) throw new Error("เรนเดอร์ลิงก์ไอคอนไม่สำเร็จ");
         logRes("STEP 6 & 7", "ตารางประวัติเติมน้ำมันมี String Match สามารถแสดงไอคอนและคลิกลิงก์เปิดรูปได้!", true);
 
-        // STEP 8: Fallback URL Check (-)
         let emptyUrl = "";
         let emptyHtml = '<span class="text-muted">-</span>';
         if (emptyUrl && emptyUrl.includes('http')) {
@@ -10202,6 +10162,7 @@ window.selfTestFuelReceiptUpload = async function() {
     }
     console.log("=========================================");
 };
+
 window.submitMaintenance = submitMaintenance;
 window.clearFile = clearFile;
 window.loadFuelData = loadFuelData;
@@ -10236,8 +10197,5 @@ window.showSelfTestFuelResult = showSelfTestFuelResult;
 
 console.log('✅ [V-Berry] All functions exported to Global Scope successfully!');
 })(); // ปิด IIFE ตัวหลัก
-
-})(); 
-
-
+})();
 </script>
