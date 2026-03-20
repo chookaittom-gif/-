@@ -3244,12 +3244,12 @@ footer.footer .developer {
     background: #f8fafc !important;
   }
 
-  /* ทลายกล่อง div ที่ครอบปุ่มยกเลิก/อนุมัติ เพื่อให้ Grid ทำงาน */
+  /* ทลายกล่อง div ที่ครอบปุ่มยกเลิก/อนุมัติ เพื่อให้ Grid ทำงานรวมกันได้ */
   #assignment-modal .footer-btn-group {
     display: contents !important; 
   }
 
-  /* ปรับปุ่มทุกปุ่มให้เต็มพื้นที่ Grid และสูงพอให้ทัชง่าย */
+  /* ปรับปุ่มทุกปุ่มให้กว้างเต็ม Grid 1 ช่อง (span 1) และสูงพอให้ทัชง่าย */
   #assignment-modal .modal-footer .btn {
     width: 100% !important;
     margin: 0 !important;
@@ -3257,30 +3257,31 @@ footer.footer .developer {
     padding: 8px !important;
     border-radius: 10px !important;
     justify-content: center !important;
-  }
-
-  /* จัดตำแหน่งปุ่ม */
-  #assignment-modal .modal-footer > button#assignment-reject-btn {
-    grid-column: 1 / 2 !important; /* ซ้ายบน */
-    grid-row: 1 !important;
-  }
-
-  #assignment-modal .footer-btn-group .btn:not(#assignment-save-btn) {
-    grid-column: 2 / 3 !important; /* ขวาบน (ปุ่มปิด) */
-    grid-row: 1 !important;
-  }
-
-  #assignment-modal .footer-btn-group #assignment-save-btn {
-    grid-column: 1 / 3 !important; /* แถวล่าง เต็มความกว้าง */
-    grid-row: 2 !important;
-    min-height: 48px !important; 
-    font-size: 15px !important;
+    grid-column: span 1 !important; /* 🍓 บังคับ 1 คอลัมน์เป็นค่าเริ่มต้น */
   }
 
   #assignment-modal .modal-footer .btn .btn-text {
     font-size: 14px !important;
     font-weight: 700 !important;
     white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* 🍓 BERRY FIX: จัดลำดับปุ่มด้วย Order รองรับกรณี 3 หรือ 4 ปุ่มไม่ให้ทับกัน */
+  #assignment-modal #assignment-reject-btn { order: 1 !important; }
+  #assignment-modal .bx-btn-close { order: 2 !important; }
+  #assignment-modal #assignment-close-job-btn { order: 3 !important; }
+  #assignment-modal #assignment-save-btn {
+    order: 4 !important;
+    min-height: 48px !important; 
+    font-size: 15px !important;
+  }
+
+  /* 🍓 BERRY MAGIC: ถ้าปุ่ม "ปิดงานก่อนเวลา" ถูกซ่อน ให้ปุ่ม "อนุมัติ" กางเต็ม 2 คอลัมน์อัตโนมัติ */
+  #assignment-modal #assignment-close-job-btn[style*="display: none"] ~ #assignment-save-btn,
+  #assignment-modal #assignment-close-job-btn[style*="display:none"] ~ #assignment-save-btn {
+    grid-column: 1 / 3 !important;
   }
 }
 
@@ -3298,17 +3299,17 @@ footer.footer .developer {
     border-top: 1px solid #e2e8f0 !important;
   }
 
-  /* จัดกลุ่มปุ่ม [ ปิด ] กับ [ อนุมัติ ] ให้อยู่ใกล้กัน */
+  /* จัดกลุ่มปุ่ม [ ปิด ] [ ปิดงานก่อนเวลา ] กับ [ อนุมัติ ] ให้อยู่ใกล้กัน */
   #assignment-modal .footer-btn-group {
     display: flex !important;
     align-items: center !important;
     gap: 12px !important; 
   }
 
-  /* ควบคุมขนาดปุ่มให้สมมาตร */
+  /* ควบคุมขนาดปุ่มให้สมมาตร ทัชง่าย สวยงาม */
   #assignment-modal .modal-footer .btn {
     width: auto !important;          
-    min-width: 110px !important;     /* บังคับขั้นต่ำเพื่อไม่ให้ปุ่มคำว่า "ปิด" หดเล็กเกินไป */
+    min-width: 110px !important;     
     height: 44px !important;         
     padding: 0 20px !important;
     border-radius: 8px !important;
