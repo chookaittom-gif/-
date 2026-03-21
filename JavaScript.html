@@ -144,6 +144,7 @@ function setupFuelProjectSelectOptions() {
     const sel = document.getElementById('fuel-project-select');
     const otherWrap = document.getElementById('fuel-project-other-wrap');
     const otherInput = document.getElementById('fuel-project-other');
+
     if (!sel) return;
 
     const purposes = [
@@ -157,48 +158,76 @@ function setupFuelProjectSelectOptions() {
         "ส่งเอกสาร/พัสดุ"
     ];
 
+    // render options
     sel.innerHTML =
-           '<option value="">-- เลือกงาน/โครงการ --</option>' +
-        purposes.map(p => '<option value="' + p.replace(/"/g, '&quot;') + '">' + p + '</option>').join('') +
+        '<option value="">-- เลือกงาน/โครงการ --</option>' +
+        purposes.map(p => `<option value="${p.replace(/"/g, '&quot;')}">${p}</option>`).join('') +
         '<option value="other">อื่นๆ (ระบุ)</option>';
 
     const lastProject = (typeof vbGet === 'function') ? vbGet('vb.fuel.project', '') : '';
-    const isInList = purposes.indexOf(lastProject) >= 0;
+    const isInList = purposes.includes(lastProject);
 
+    // restore state
     if (lastProject) {
         if (isInList) {
             sel.value = lastProject;
-            if (otherWrap) otherWrap.classList.add('hidden');
-            if (otherInput) { otherInput.value = ''; otherInput.required = false; }
+            otherWrap?.classList.add('hidden');
+            if (otherInput) {
+                otherInput.value = '';
+                otherInput.required = false;
+            }
         } else {
             sel.value = 'other';
-            if (otherWrap) otherWrap.classList.remove('hidden');
-            if (otherInput) { otherInput.value = lastProject; otherInput.required = true; }
+            otherWrap?.classList.remove('hidden');
+            if (otherInput) {
+                otherInput.value = lastProject;
+                otherInput.required = true;
+            }
         }
     } else {
-        if (otherWrap) otherWrap.classList.add('hidden');
-        if (otherInput) { otherInput.value = ''; otherInput.required = false; }
+        otherWrap?.classList.add('hidden');
+        if (otherInput) {
+            otherInput.value = '';
+            otherInput.required = false;
+        }
     }
 
+    // change handler
     sel.onchange = function () {
         const v = sel.value || '';
+
         if (v === 'other') {
-            if (otherWrap) otherWrap.classList.remove('hidden');
-            if (otherInput) { otherInput.required = true; otherInput.focus(); }
+            otherWrap?.classList.remove('hidden');
+            if (otherInput) {
+                otherInput.required = true;
+                otherInput.focus();
+            }
         } else {
-            if (otherWrap) otherWrap.classList.add('hidden');
-            if (otherInput) { otherInput.value = ''; otherInput.required = false; }
+            otherWrap?.classList.add('hidden');
+            if (otherInput) {
+                otherInput.value = '';
+                otherInput.required = false;
+            }
         }
-        if (typeof vbSet === 'function') vbSet('vb.fuel.project', v === 'other' ? (otherInput ? (otherInput.value || '') : '') : v);
+
+        if (typeof vbSet === 'function') {
+            vbSet('vb.fuel.project',
+                v === 'other'
+                    ? (otherInput?.value || '')
+                    : v
+            );
+        }
     };
 
+    // input handler
     if (otherInput) {
         otherInput.oninput = function () {
-            if (sel.value === 'other' && typeof vbSet === 'function') vbSet('vb.fuel.project', otherInput.value || '');
+            if (sel.value === 'other' && typeof vbSet === 'function') {
+                vbSet('vb.fuel.project', otherInput.value || '');
+            }
         };
     }
 }
-
 
    /* ================== V-Berry Core System - Complete Fixed Version ================== */
 (function() {
@@ -784,7 +813,8 @@ window.openSuspendModal = function(type, id, btn) {
     openModalA11y('suspend-modal');
 };
 
-// ANCHOR: availability submit validation
+// ANCHOR: submitSuspend
+// แทนที่ฟังก์ชัน submitSuspend เดิมด้วยเวอร์ชันนี้
 window.submitSuspend = async function(e) {
     e.preventDefault();
     const type = document.getElementById('suspend-type').value;
@@ -802,12 +832,6 @@ window.submitSuspend = async function(e) {
     let endTime = etEl ? etEl.value : '';
 
     if ((startTime && !endTime) || (!startTime && endTime)) {
-        const target = !startTime ? stEl : etEl;
-        if (target) {
-            target.classList.add('shake');
-            target.style.borderColor = '#dc2626';
-            setTimeout(() => { target.classList.remove('shake'); target.style.borderColor = '#cbd5e1'; }, 500);
-        }
         if (typeof showToast === 'function') showToast('กรุณาระบุเวลาให้ครบทั้งเวลาเริ่มและเวลาสิ้นสุดค่ะ', 'error');
         return;
     }
@@ -852,23 +876,28 @@ window.submitSuspend = async function(e) {
         
         if (!blockRes || !blockRes.ok) throw new Error(blockRes ? blockRes.error : 'Failed to create block');
 
-        if (activeSuspendBtn) {
-             const originalHtml = activeSuspendBtn.innerHTML;
-             activeSuspendBtn.innerHTML = '<span class="icon">⏳</span><span class="text">บันทึกเวลาแล้ว</span>';
-             setTimeout(() => { activeSuspendBtn.innerHTML = originalHtml; }, 2500);
-        }
-
         closeModalA11y('suspend-modal');
-        if (typeof showToast === 'function') showToast('บันทึกข้อมูลการระงับใช้งานตามช่วงเวลาเรียบร้อยแล้วค่ะ 🗓️', 'success');
+        if (typeof showToast === 'function') showToast('บันทึกข้อมูลเรียบร้อยค่ะ 🗓️', 'success');
         
+        // 🍓 BERRY FIX: ดาวน์โหลดข้อมูลมาอัปเดต RAM ฝั่ง Client ด่วน เพื่อวาดปฏิทินทันที
+        try {
+            const initData = await googleScriptRunLimited('getWebAppInitialData');
+            if (initData && initData.ok && initData.data) {
+                window.allBookingsData = initData.data.bookings ||[];
+                if (typeof reindexBookings === 'function') reindexBookings(window.allBookingsData);
+            }
+        } catch(e) { console.warn('Background sync failed', e); }
+
         await googleScriptRun('apiRefreshDashboard'); 
+        
         if (typeof loadCalendarView === 'function' && window.calendarState) {
             loadCalendarView(window.calendarState.currentYear, window.calendarState.currentMonth);
         }
-        // 🍓 BERRY FIX: บังคับให้อัปเดตหน้าต่าง Day Off UI ทันที
         if (typeof loadAdminPanelData === 'function') {
             await loadAdminPanelData();
         }
+        // 🍓 รีเฟรชเรดาร์
+        if (typeof window.loadLiveStatusData === 'function') window.loadLiveStatusData();
     } catch (err) {
         if (typeof showToast === 'function') showToast('Error: ' + err.message, 'error');
     } finally {
@@ -1150,51 +1179,64 @@ window.toggleVehicleStatus = function(btn, plate, currentDisplayOff) {
   }
 }
 
-
+// ANCHOR: clearFile
     function clearFile(a, b, c) {
-  try {
-    // รองรับการเรียกแบบ: clearFile(inputId, chosenId, previewId)
-    if (b || c) {
-      const inputId = a;
-      const chosenId = b;
-      const previewId = c;
+      try {
+        // รองรับการเรียกแบบ: clearFile(inputId, chosenId, previewId)
+        if (b || c) {
+          const inputId = a;
+          const chosenId = b; // wrapper
+          const previewId = c; // wrapper
 
-      const input = document.getElementById(inputId);
-      if (input) {
-        input.value = '';
-        input.__fileData = null;
+          const input = document.getElementById(inputId);
+          if (input) {
+            input.value = '';
+            input.__fileData = null;
+            input.__fileName = null;
+            input.__fileMime = null;
+          }
+
+          const chosenWrap = chosenId ? document.getElementById(chosenId) : null;
+          if (chosenWrap) {
+            chosenWrap.classList.add('hidden');
+            // รีเซ็ตเฉพาะข้อความใน span โดยไม่ทำลาย DOM ของปุ่มลบ
+            const span = chosenWrap.querySelector('span');
+            if (span) span.textContent = 'ยังไม่ได้เลือกไฟล์';
+          }
+
+          const previewWrap = previewId ? document.getElementById(previewId) : null;
+          if (previewWrap) {
+            previewWrap.classList.add('hidden');
+            const img = previewWrap.querySelector('img');
+            if (img) img.src = '';
+          }
+
+          return;
+        }
+
+        // รองรับการเรียกแบบเดิม: clearFile(targetName)
+        const targetName = a;
+        const hidden = document.querySelector('input[type="hidden"][name="' + targetName + '"]');
+        const input = document.querySelector(
+          'input[type="file"][data-upload-target="' + targetName + '"],' +
+          'input[type="file"][name="' + targetName + '"]'
+        );
+        const wrapper = input ? input.closest('.file-input-wrapper') : null;
+        const label = wrapper ? wrapper.querySelector('.file-name') : null;
+
+        if (hidden) hidden.value = '';
+        if (input) {
+          input.value = '';
+          input.__fileData = null;
+          input.__fileName = null;
+          input.__fileMime = null;
+        }
+        if (label) label.textContent = 'ยังไม่ได้เลือกไฟล์';
+      } catch (e) {
+        console.warn('clearFile error:', e);
       }
-
-      const chosen = chosenId ? document.getElementById(chosenId) : null;
-      if (chosen) chosen.textContent = 'ยังไม่ได้เลือกไฟล์';
-
-      const preview = previewId ? document.getElementById(previewId) : null;
-      if (preview) preview.innerHTML = '';
-
-      return;
     }
-
-    // รองรับการเรียกแบบเดิม: clearFile(targetName)
-    const targetName = a;
-    const hidden = document.querySelector('input[type="hidden"][name="' + targetName + '"]');
-    const input = document.querySelector(
-      'input[type="file"][data-upload-target="' + targetName + '"],' +
-      'input[type="file"][name="' + targetName + '"]'
-    );
-    const wrapper = input ? input.closest('.file-input-wrapper') : null;
-    const label = wrapper ? wrapper.querySelector('.file-name') : null;
-
-    if (hidden) hidden.value = '';
-    if (input) {
-      input.value = '';
-      input.__fileData = null;
-    }
-    if (label) label.textContent = 'ยังไม่ได้เลือกไฟล์';
-  } catch (e) {
-    console.warn('clearFile error:', e);
-  }
-}
-
+ 
 
     // ตัวนี้คือฟังก์ชันที่ tab handler เรียกใช้
     function ensureUploadButtonsLive() {
@@ -1546,64 +1588,89 @@ async function loadMaintenanceData() {
 
 // 1. สร้างฟังก์ชัน "ไส้ใน" ขึ้นมาก่อน (Logic การบันทึก)
 // =========================================
-
 async function handleInsuranceSubmit(e) {
+    e.preventDefault();
+
     const form = e.target;
     const btn = form.querySelector('button[type="submit"]');
     const originalText = btn ? btn.innerText : 'บันทึก';
 
-    // UI Loading
-    if (btn) { btn.disabled = true; btn.innerText = '⏳ กำลังบันทึก...'; }
+    if (btn && (btn.disabled || btn.dataset.busy === '1')) return;
 
-    // Prepare Data
-    const formData = new FormData(form);
-    const formObj = {};
-    formData.forEach((value, key) => { formObj[key] = value });
-
-    // Call Server
-    google.script.run
-        .withSuccessHandler((res) => {
-            if (btn) { btn.disabled = false; btn.innerText = originalText; }
-            if (res.ok) {
-                form.reset();
-                alert("✅ " + res.message);
-                if (typeof loadInsuranceList === 'function') loadInsuranceList();
-            } else {
-                alert("❌ " + res.message);
-            }
-        })
-        .withFailureHandler((err) => {
-            if (btn) { btn.disabled = false; btn.innerText = originalText; }
-            alert("Error: " + err);
-        })
-        .saveInsuranceRecord(formObj);
-}
-
-// [ANCHOR: Maintenance Submit Handler with File Upload]
-async function handleMaintenanceSubmit(e) {
-    const form = e.target;
-    const btn = form.querySelector('button[type="submit"]');
-    const originalText = btn ? btn.innerText : 'บันทึก';
-
-    // 1. UI Loading
-    if (btn) { btn.disabled = true; btn.innerText = '⏳ กำลังอัปโหลด...'; }
+    if (btn) {
+        btn.disabled = true;
+        btn.dataset.busy = '1';
+        btn.innerText = 'กำลังบันทึก...';
+    }
 
     try {
-        // 2. Prepare Form Data
         const formData = new FormData(form);
         const formObj = {};
-        
-        // วนลูปเก็บค่า แต่ "ข้าม" ไฟล์ไปก่อน (กัน Error illegal value)
-        formData.forEach((value, key) => { 
+        formData.forEach((value, key) => { formObj[key] = value; });
+
+        const res = await new Promise((resolve, reject) => {
+            google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(reject)
+                .saveInsuranceRecord(formObj);
+        });
+
+        if (!res || !res.ok) {
+            throw new Error((res && (res.message || res.error)) || 'บันทึกข้อมูลประกันภัยไม่สำเร็จ');
+        }
+
+        form.reset();
+
+        if (typeof showToast === 'function') {
+            showToast("บันทึกข้อมูลประกันภัยเรียบร้อยแล้วค่ะ 🛡️", "success");
+        }
+
+        if (typeof loadInsuranceList === 'function') {
+            loadInsuranceList();
+        }
+
+    } catch (err) {
+        console.error('handleInsuranceSubmit error:', err);
+        if (typeof showToast === 'function') {
+            showToast('เกิดข้อผิดพลาด: ' + (err.message || err), 'error');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.dataset.busy = '0';
+            btn.innerText = originalText;
+        }
+    }
+}
+
+async function handleMaintenanceSubmit(e) {
+    e.preventDefault();
+
+    const form = e.target;
+    const btn = form.querySelector('button[type="submit"]');
+    const originalText = btn ? btn.innerText : 'บันทึก';
+
+    if (btn && (btn.disabled || btn.dataset.busy === '1')) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.dataset.busy = '1';
+        btn.innerText = 'กำลังอัปโหลด...';
+    }
+
+    try {
+        const formData = new FormData(form);
+        const formObj = {};
+
+        formData.forEach((value, key) => {
             if (!(value instanceof File)) {
                 formObj[key] = value;
             }
         });
 
-        // 3. Prepare File (ค้นหา input file ในฟอร์มนี้)
         const fileInput = form.querySelector('input[type="file"]');
         let fileObj = null;
-        
+
         if (fileInput && fileInput.__fileData) {
             fileObj = {
                 data: fileInput.__fileData,
@@ -1612,34 +1679,44 @@ async function handleMaintenanceSubmit(e) {
             };
         }
 
-        // 4. Call Server (ส่ง formObj และ fileObj แยกกัน)
-        google.script.run
-            .withSuccessHandler((res) => {
-                if (btn) { btn.disabled = false; btn.innerText = originalText; }
-                if (res.ok) {
-                    form.reset();
-                    // Reset File Preview UI (ถ้ามี)
-                    const preview = document.getElementById('maintenance-file-preview');
-                    if (preview) preview.classList.add('hidden');
-                    
-                    alert("✅ " + res.message);
-                    if (typeof loadMaintenanceList === 'function') loadMaintenanceList();
-                } else {
-                    alert("❌ " + res.message);
-                }
-            })
-            .withFailureHandler((err) => {
-                if (btn) { btn.disabled = false; btn.innerText = originalText; }
-                alert("Server Error: " + err);
-            })
-            .saveMaintenanceRecord(formObj, fileObj); // ✅ ส่ง 2 ค่า
+        const res = await new Promise((resolve, reject) => {
+            google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(reject)
+                .saveMaintenanceRecord(formObj, fileObj);
+        });
 
-    } catch (error) {
-        console.error(error);
-        alert("Client Error: " + error.message);
-        if (btn) { btn.disabled = false; btn.innerText = originalText; }
+        if (!res || !res.ok) {
+            throw new Error((res && (res.message || res.error)) || 'บันทึกข้อมูลซ่อมบำรุงไม่สำเร็จ');
+        }
+
+        form.reset();
+
+        const preview = document.getElementById('maintenance-file-preview');
+        if (preview) preview.classList.add('hidden');
+
+        if (typeof showToast === 'function') {
+            showToast("บันทึกข้อมูลซ่อมบำรุงเรียบร้อยแล้วค่ะ 🔧", "success");
+        }
+
+        if (typeof loadMaintenanceList === 'function') {
+            loadMaintenanceList();
+        }
+
+    } catch (err) {
+        console.error('handleMaintenanceSubmit error:', err);
+        if (typeof showToast === 'function') {
+            showToast('เกิดข้อผิดพลาด: ' + (err.message || err), 'error');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.dataset.busy = '0';
+            btn.innerText = originalText;
+        }
     }
 }
+
 
 // 2. ฟังก์ชันตัวกลาง (Wiring Function)
 // =========================================
@@ -2793,22 +2870,15 @@ async function loadMaintenanceTabOptions() {
         return map[val] || '#calendar-tab';
     }
 
-      function openInitialTab() {     
-        // 1. เคลียร์ค่าหน้าเดิมทิ้ง (ถ้าต้องการรีเซ็ตจริงๆ)
-        try { localStorage.removeItem('lastTab'); } catch(e) {}
-        
-        // 2. กำหนดให้เปิดหน้า Calendar
-        const initial = '#calendar-tab';
-        console.log('📅 Forcing initial tab to Calendar:', initial);
-        
-        // 🍓 BERRY FIX: บังคับ Render ปฏิทินแบบ Synchronous ทันที 
-        // ทำให้ข้อมูลถูกวาดลง DOM เสร็จสมบูรณ์ "ก่อน" ที่ Loading Screen จะหายไป
-        if (typeof renderCalendar === 'function' && window.calendarState) {
-            renderCalendar(window.calendarState.currentYear, window.calendarState.currentMonth);
-        }
-        
-        showTab(initial);
-    }
+    
+    function openInitialTab() {
+    try { localStorage.removeItem('lastTab'); } catch(e) {}
+
+    const initial = '#calendar-tab';
+    console.log('📅 Forcing initial tab to Calendar:', initial);
+
+    showTab(initial);
+}
 
     function openModalA11y(id) {
     const modal = document.getElementById(id);
@@ -2867,21 +2937,39 @@ function closeModalA11y(id) {
 /**
  * [SECTION 1] Initializer - ตัวควบคุมการเริ่มต้นระบบ (Berry Optimized v2)
  */
-// ANCHOR: initUiComponents
 function initUiComponents() {
   if (window.vberryUiWired) {
     console.log('⚠️ initUiComponents(): Already wired. Refreshing essential listeners...');
-    if (typeof setupDateInputs === 'function') {
-      window.vberryDateSetup = false;
-      setupDateInputs();
+    try {
+      if (typeof setupDateInputs === 'function') setupDateInputs();
+      if (typeof syncReturnDateMin === 'function') syncReturnDateMin();
+    } catch (e) {
+      console.warn('refresh essential listeners error:', e);
     }
     return;
   }
+
   window.vberryUiWired = true;
+
+  const resolveFn = (fnName) => {
+    try {
+      if (typeof fnName !== 'string' || !fnName) return null;
+
+      if (typeof window[fnName] === 'function') return window[fnName];
+
+      try {
+        if (typeof eval(fnName) === 'function') return eval(fnName);
+      } catch (_) {}
+
+      return null;
+    } catch (_) {
+      return null;
+    }
+  };
 
   const safeCall = (fnName, label) => {
     try {
-      const fn = window[fnName];
+      const fn = resolveFn(fnName);
       if (typeof fn === 'function') {
         fn();
         console.log('✅ ' + label);
@@ -2907,12 +2995,15 @@ function initUiComponents() {
   safeCall('wireMonthButtons', 'Calendar Month Controls');
   safeCall('wireStatusFilters', 'Status Filters');
 
-  if (typeof forceShowFooter === 'function') forceShowFooter();
+  if (typeof forceShowFooter === 'function') {
+    try { forceShowFooter(); } catch (e) { console.warn('forceShowFooter error:', e); }
+  }
 
   const deferWiring = () => {
     console.log('🧪 initUiComponents(): Starting deferred wiring...');
 
     safeCall('setupDateInputs', 'Thai Date System');
+    safeCall('syncReturnDateMin', 'Return Date Sync');
     safeCall('wireBookingFormSubmit', 'Submit Logic (With Locking)');
     safeCall('wireFormSubmissions', 'Fuel/Insurance/Maintenance Submit Wiring');
     safeCall('installVehicleLoaderOnce', 'Vehicle Loader');
@@ -3011,6 +3102,28 @@ function wireMonthButtons() {
     const next = document.getElementById('next-month-btn');
     if (prev) prev.onclick = () => typeof changeMonth === 'function' && changeMonth(-1);
     if (next) next.onclick = () => typeof changeMonth === 'function' && changeMonth(1);
+}
+
+function syncReturnDateMin() {
+  const startEl = document.getElementById('booking-date');
+  const returnEl = document.getElementById('return-date');
+  if (!startEl || !returnEl) return;
+
+  const startIso = String(startEl.dataset.iso || startEl.value || '').trim();
+  if (!startIso) return;
+
+  returnEl.min = startIso;
+  returnEl.dataset.min = startIso;
+
+  const returnIso = String(returnEl.dataset.iso || returnEl.value || '').trim();
+  if (returnIso && returnIso < startIso) {
+    returnEl.dataset.iso = startIso;
+    returnEl.value = startIso;
+  }
+
+  if (typeof syncAllThaiDateInputs === 'function') {
+    syncAllThaiDateInputs();
+  }
 }
 
 // ANCHOR: setupDateInputs
@@ -3117,27 +3230,26 @@ function setupDateInputs() {
 }
 
 
-function syncReturnDateMin() {
-  const startEl = document.getElementById('booking-date');
-  const endEl = document.getElementById('return-date');
-  if (!startEl || !endEl) return;
-  const startISO = String(startEl.dataset.iso || '').trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startISO)) return;
-  endEl.dataset.min = startISO;
-  if (endEl.dataset.iso && endEl.dataset.iso < startISO) { endEl.value = ''; endEl.dataset.iso = ''; }
+function syncReturnDateWithStartDate() {
+  if (typeof syncReturnDateMin === 'function') {
+    syncReturnDateMin();
+  }
 }
 
-// ANCHOR: syncAllThaiDateInputs
 function syncAllThaiDateInputs() {
-  // 🍓 BERRY FIX: เพิ่ม insStart และ insEnd
-  const ids =['booking-date', 'return-date', 'startDate', 'endDate', 'maintStart', 'maintDone', 'maintNext', 'suspend-start', 'suspend-end', 'insStart', 'insEnd'];
+  const ids = ['booking-date', 'return-date', 'startDate', 'endDate', 'maintStart', 'maintDone', 'maintNext', 'suspend-start', 'suspend-end', 'insStart', 'insEnd'];
+
   ids.forEach(id => {
     const el = document.getElementById(id);
-    if (el && el.value && /^\d{4}-\d{2}-\d{2}$/.test(el.value)) {
-      el.dataset.iso = el.value;
-      const [y, m, d] = el.value.split("-");
-      el.type = 'text'; el.value = `${d}/${m}/${parseInt(y) + 543}`;
-    }
+    if (!el) return;
+
+    const iso = String(el.dataset.iso || el.value || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+
+    el.dataset.iso = iso;
+    const [y, m, d] = iso.split('-');
+    el.type = 'text';
+    el.value = `${d}/${m}/${parseInt(y, 10) + 543}`;
   });
 }
 
@@ -3151,7 +3263,10 @@ function wireAvailabilityListeners() {
     if (!el) return;
 
     el.addEventListener('change', () => {
-      if (typeof loadAvailableVehicles === 'function') loadAvailableVehicles(false);
+      if (window.__vbAvailabilityTimer) clearTimeout(window.__vbAvailabilityTimer);
+      window.__vbAvailabilityTimer = setTimeout(() => {
+        if (typeof loadAvailableVehicles === 'function') loadAvailableVehicles(false);
+      }, 120);
     });
   });
 }
@@ -3163,71 +3278,64 @@ function wireBookingFormSubmit() {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
-    // 🍓 BERRY GUARD: ล็อกทันทีถ้ากำลังส่งอยู่
+
     if (form.dataset.vbIsProcessing === 'true') {
       console.warn('🚫 Double submit blocked.');
       return;
     }
 
-    if (!form.checkValidity()) { form.reportValidity(); return; }
+    if (!form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
 
-    // 🍓 BERRY FIX: Time Validation (ป้องกันเวลาขัดแย้งกันในวันเดียวกัน)
-    const startDateVal = document.getElementById('booking-date')?.dataset?.iso || document.getElementById('booking-date')?.value || "";
-    const endDateVal   = document.getElementById('return-date')?.dataset?.iso || document.getElementById('return-date')?.value || "";
-    const startTimeVal = document.getElementById('booking-start')?.value || "";
-    const endTimeVal   = document.getElementById('booking-end')?.value || "";
+    const startDateVal = document.getElementById('booking-date')?.dataset?.iso || document.getElementById('booking-date')?.value || '';
+    const endDateVal   = document.getElementById('return-date')?.dataset?.iso || document.getElementById('return-date')?.value || '';
+    const startTimeVal = document.getElementById('booking-start')?.value || '';
+    const endTimeVal   = document.getElementById('booking-end')?.value || '';
 
     if (startDateVal && endDateVal && startDateVal === endDateVal && startTimeVal && endTimeVal) {
       if (endTimeVal <= startTimeVal) {
-        if (typeof showToast === 'function') showToast('เวลา "กลับ" ต้องมากกว่าเวลา "ไป" (สำหรับการเดินทางวันเดียวกัน)', 'error');
+        if (typeof showToast === 'function') {
+          showToast('เวลา "กลับ" ต้องมากกว่าเวลา "ไป" (สำหรับการเดินทางวันเดียวกัน)', 'error');
+        }
         return;
       }
     }
 
-    const submitBtn = document.querySelector('button[form="booking-form"]') || form.querySelector('button[type="submit"]');
-    
-    // ตรวจสอบประเภทรถ
-    const carTypeVal = document.getElementById('carType')?.value || "";
-    const typesChecked = form.querySelectorAll('input[name="carTypeSelect"]:checked').length;
-    if (typesChecked === 0 && !carTypeVal) {
-      if (typeof showToast === 'function') showToast('กรุณาเลือกประเภทรถก่อนค่ะ', 'error');
-      return;
-    }
-
-    // เริ่มโหมดประมวลผล (Lock UI)
     form.dataset.vbIsProcessing = 'true';
-    if (submitBtn) submitBtn.disabled = true;
-    if (typeof setBtnLoading === 'function') setBtnLoading(submitBtn, true);
 
     try {
-      if (typeof prepareBookingPayload !== 'function') throw new Error('System error: prepareBookingPayload missing');
-      const payload = prepareBookingPayload(form);
-      
-      // ส่งข้อมูลไป Server
-      const res = await googleScriptRunLimited('createBookingAndBroadcast', payload);
-
-      if (res && res.ok) {
-        if (typeof showToast === 'function') showToast('จองเรียบร้อย! ID: ' + res.id, 'success');
-        if (typeof closeBookingForm === 'function') closeBookingForm();
-        if (typeof loadBookingsView === 'function') loadBookingsView();
-      } else {
-        throw new Error(res?.error || 'บันทึกไม่สำเร็จ');
+      if (typeof submitBooking !== 'function') {
+        throw new Error('submitBooking not found');
       }
+
+      await submitBooking(e);
     } catch (err) {
-      if (typeof showToast === 'function') showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+      console.error('❌ wireBookingFormSubmit error:', err);
+      if (typeof showToast === 'function') {
+        showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+      }
     } finally {
-      // 🍓 BERRY UNLOCK: ปลดล็อกฟอร์มและปุ่มเสมอ เพื่อให้พร้อมรับการจองครั้งต่อไป
       form.dataset.vbIsProcessing = 'false';
-      if (submitBtn) submitBtn.disabled = false;
-      if (typeof setBtnLoading === 'function') setBtnLoading(submitBtn, false);
     }
   });
 }
 
 function wireVehicleCountClamp() {
-  const inp = document.getElementById('booking-vehicle-count');
-  if (inp) inp.addEventListener('change', () => { let v = parseInt(inp.value); if(v>5) inp.value=5; if(v<1) inp.value=1; });
+  const inp = getVehicleCountEl();
+  if (!inp || inp.dataset.vbClampWired === 'true') return;
+
+  inp.dataset.vbClampWired = 'true';
+
+  const runClamp = () => {
+    if (typeof clampVehicleCountNow === 'function') {
+      clampVehicleCountNow('wireVehicleCountClamp');
+    }
+  };
+
+  inp.addEventListener('input', runClamp);
+  inp.addEventListener('change', runClamp);
 }
 
 function wireStatusFilters() {
@@ -3271,26 +3379,35 @@ function wireStatusFilters() {
  * [SECTION 5] Global Master Exports - หัวใจสำคัญของการแก้ Error
  */
 const berryExports = {
-    initUiComponents,
-    wireHeaderButtons,
-    wireTabRouter,
-    wireMonthButtons,
-    setupDateInputs,
-    wireBookingFormSubmit,
-    wireFormSubmissions,
-    installVehicleLoaderOnce,
-    wireAvailabilityListeners,
-    wireVehicleCountClamp,
-    wireStatusFilters,
-    installSelfTestFloatingButton,
-    syncReturnDateMin,
-    syncAllThaiDateInputs,
-    wireDashboardButtons,
-    forceShowFooter
+  initUiComponents: typeof initUiComponents === 'function' ? initUiComponents : undefined,
+  wireHeaderButtons: typeof wireHeaderButtons === 'function' ? wireHeaderButtons : undefined,
+  wireTabRouter: typeof wireTabRouter === 'function' ? wireTabRouter : undefined,
+  wireMonthButtons: typeof wireMonthButtons === 'function' ? wireMonthButtons : undefined,
+  setupDateInputs: typeof setupDateInputs === 'function' ? setupDateInputs : undefined,
+  wireBookingFormSubmit: typeof wireBookingFormSubmit === 'function' ? wireBookingFormSubmit : undefined,
+  wireFormSubmissions: typeof wireFormSubmissions === 'function' ? wireFormSubmissions : undefined,
+  wireAvailabilityListeners: typeof wireAvailabilityListeners === 'function' ? wireAvailabilityListeners : undefined,
+  wireVehicleCountClamp: typeof wireVehicleCountClamp === 'function' ? wireVehicleCountClamp : undefined,
+  wireStatusFilters: typeof wireStatusFilters === 'function' ? wireStatusFilters : undefined,
+  syncReturnDateMin: typeof syncReturnDateMin === 'function' ? syncReturnDateMin : undefined,
+  syncAllThaiDateInputs: typeof syncAllThaiDateInputs === 'function' ? syncAllThaiDateInputs : undefined,
+  wireDashboardButtons: typeof wireDashboardButtons === 'function' ? wireDashboardButtons : undefined
 };
 
-Object.entries(berryExports).forEach(([name, fn]) => {
-    window[name] = fn;
+if (typeof installVehicleLoaderOnce === 'function') {
+  berryExports.installVehicleLoaderOnce = installVehicleLoaderOnce;
+}
+if (typeof installSelfTestFloatingButton === 'function') {
+  berryExports.installSelfTestFloatingButton = installSelfTestFloatingButton;
+}
+if (typeof forceShowFooter === 'function') {
+  berryExports.forceShowFooter = forceShowFooter;
+}
+
+Object.keys(berryExports).forEach((name) => {
+  if (typeof berryExports[name] === 'function') {
+    window[name] = berryExports[name];
+  }
 });
 
 console.log('✅ [V-Berry] Complete UI Wiring System Exported!');
@@ -4460,13 +4577,18 @@ function showBookingForm(initialData) {
   // 7. ✅ โหลดรายการรถว่างล่าสุด (Force Load)
   if (typeof loadAvailableVehicles === 'function') {
     try {
-      loadAvailableVehicles(true);
+      const startIso = document.getElementById('booking-date')?.dataset?.iso || '';
+      const startTime = document.getElementById('booking-start')?.value || '';
+      const endTime = document.getElementById('booking-end')?.value || '';
+
+      if (startIso && startTime && endTime) {
+        loadAvailableVehicles(true);
+      }
     } catch (e) {
       console.error('loadAvailableVehicles trigger error:', e);
     }
   }
 }
-
 
 
     function closeBookingForm() {
@@ -4974,110 +5096,118 @@ function showCalendarEventDetail(ev, event) {
     try { event.stopPropagation(); } catch (_) {}
   }
 
-const modal = document.getElementById('activity-modal');
-const header = document.getElementById('activity-modal-header');
-const title = document.getElementById('activity-title');
-const details = document.getElementById('activity-details');
-const footer = document.getElementById('activity-modal-footer');
+  const modal = document.getElementById('activity-modal');
+  const header = document.getElementById('activity-modal-header');
+  const title = document.getElementById('activity-title');
+  const details = document.getElementById('activity-details');
+  const footer = document.getElementById('activity-modal-footer');
 
-if (!modal || !title || !details || !footer) return;
+  if (!modal || !title || !details || !footer) return;
 
-const statusKey = String(
-  typeof normalizeClientStatus === 'function'
-    ? normalizeClientStatus(ev?.status || 'pending')
-    : (ev?.status || 'pending')
-).toLowerCase().trim();
+  const statusKey = String(
+    typeof normalizeClientStatus === 'function'
+      ? normalizeClientStatus(ev?.status || 'pending')
+      : (ev?.status || 'pending')
+  ).toLowerCase().trim();
 
-const isDriverBlock = statusKey === 'driver_block';
-const isVehicleBlock = statusKey === 'vehicle_block';
+  const isDriverBlock = statusKey === 'driver_block';
+  const isVehicleBlock = statusKey === 'vehicle_block';
 
-if (header) {
-  header.className = 'modal-header ' + (isDriverBlock || isVehicleBlock ? 'modal-header-warning' : 'modal-header-primary');
-}
+  if (header) {
+    header.className = 'modal-header ' + (isDriverBlock || isVehicleBlock ? 'modal-header-warning' : 'modal-header-primary');
+  }
 
-title.innerHTML = isDriverBlock
-  ? '👤 รายละเอียดการลาพนักงานขับรถ'
-  : isVehicleBlock
-    ? '🛠️ รายละเอียดการส่งรถซ่อม/ปิดใช้งาน'
-    : '📋 รายละเอียดกิจกรรม';
+  title.innerHTML = isDriverBlock
+    ? '👤 รายละเอียดการลาพนักงานขับรถ'
+    : isVehicleBlock
+      ? '🛠️ รายละเอียดการส่งรถซ่อม/ปิดใช้งาน'
+      : '📋 รายละเอียดกิจกรรม';
 
-const safe = (v) => escapeHtml(String(v || '-'));
-const startDate = ev?.startDate || ev?.date || '-';
-const endDate = ev?.endDate || ev?.date || '-';
-const startTime = ev?.startTime || '-';
-const endTime = ev?.endTime || '-';
+  const safe = (v) => escapeHtml(String(v || '-'));
+  const startDate = ev?.startDate || ev?.date || '-';
+  const endDate = ev?.endDate || ev?.date || '-';
+  const startTime = ev?.startTime || '-';
+  const endTime = ev?.endTime || '-';
 
-const displayName = isDriverBlock
-  ? (ev?.blockName || ev?.driver || ev?.name || '-')
-  : (ev?.plate || ev?.vehicle || ev?.name || '-');
+  const displayName = isDriverBlock
+    ? (ev?.blockName || ev?.driver || ev?.name || '-')
+    : (ev?.plate || ev?.vehicle || ev?.name || '-');
 
-const reasonText = ev?.proj || ev?.project || ev?.workName || ev?.reason || ev?.note || 'งดใช้งาน';
+  const reasonText = ev?.proj || ev?.project || ev?.workName || ev?.reason || ev?.note || 'งดใช้งาน';
 
-details.innerHTML = `
-  <div class="detail-container">
-    <div class="info-grid">
-      <div class="info-item">
-        <div class="info-label">ประเภท</div>
-        <div class="info-value">${safe(ev?.type || ev?.purpose || ev?.workType || '-')}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">สถานะ</div>
-        <div class="info-value">${safe(typeof getStatusText === 'function' ? getStatusText(statusKey) : statusKey)}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">วันที่</div>
-        <div class="info-value">${safe(typeof formatDate === 'function' ? formatDate(startDate) : startDate)}${endDate !== startDate ? ' - ' + safe(typeof formatDate === 'function' ? formatDate(endDate) : endDate) : ''}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">เวลา</div>
-        <div class="info-value">${safe(startTime)} - ${safe(endTime)}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">${isDriverBlock ? 'พนักงานขับรถ' : 'รถ/ทะเบียน'}</div>
-        <div class="info-value">${safe(displayName)}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">สถานที่</div>
-        <div class="info-value">${safe(ev?.place || ev?.destination || '-')}</div>
-      </div>
-      <div class="info-item info-item-full">
-        <div class="info-label">รายละเอียด</div>
-        <div class="info-value">${safe(reasonText)}</div>
+  details.innerHTML = `
+    <div class="detail-container">
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">ประเภท</div>
+          <div class="info-value">${safe(ev?.type || ev?.purpose || ev?.workType || '-')}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">สถานะ</div>
+          <div class="info-value">${safe(typeof getStatusText === 'function' ? getStatusText(statusKey) : statusKey)}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">วันที่</div>
+          <div class="info-value">${safe(typeof formatDate === 'function' ? formatDate(startDate) : startDate)}${endDate !== startDate ? ' - ' + safe(typeof formatDate === 'function' ? formatDate(endDate) : endDate) : ''}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">เวลา</div>
+          <div class="info-value">${safe(startTime)} - ${safe(endTime)}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">${isDriverBlock ? 'พนักงานขับรถ' : 'รถ/ทะเบียน'}</div>
+          <div class="info-value">${safe(displayName)}</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">สถานที่</div>
+          <div class="info-value">${safe(ev?.place || ev?.destination || '-')}</div>
+        </div>
+        <div class="info-item info-item-full">
+          <div class="info-label">รายละเอียด</div>
+          <div class="info-value">${safe(reasonText)}</div>
+        </div>
       </div>
     </div>
-  </div>
-`;
+  `;
 
-if (isDriverBlock) {
-  const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
-  footer.innerHTML = `
-    <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
-    ${!isClosed ? `
-      <button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('driver', '${safe(displayName)}', null);">เพิ่มวันลา</button>
-      <button type="button" class="btn btn-danger" onclick="closeActivityModal(); window.closeAvailBlock('${ev?.bookingId}');">ปิดงาน (Soft Close)</button>
-    ` : ''}
-  `;
-} else if (isVehicleBlock) {
-  const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
-  footer.innerHTML = `
-    <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
-    ${!isClosed ? `
-      <button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('vehicle', '${safe(displayName)}', null);">เพิ่มส่งซ่อม</button>
-      <button type="button" class="btn btn-danger" onclick="closeActivityModal(); window.closeAvailBlock('${ev?.bookingId}');">ปิดงาน (Soft Close)</button>
-    ` : ''}
-  `;
-} else {
-  footer.innerHTML = `
-    <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
-  `;
-}
+  if (isDriverBlock) {
+    const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
+    footer.innerHTML = `
+      <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
+      ${!isClosed ? `
+        <button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('driver', '${safe(displayName)}', null);">เพิ่มวันลา</button>
+        <button type="button"
+                class="btn bx-btn-early-close"
+                onclick="window.closeAvailBlock('${ev?.bookingId}', event, this)">
+          🏁 ยืนยันปิดงานก่อนเวลา
+        </button>
+      ` : ''}
+    `;
+  } else if (isVehicleBlock) {
+    const isClosed = ev?.isClosed || String(ev?.blockStatus || '').toLowerCase() === 'closed';
+    footer.innerHTML = `
+      <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
+      ${!isClosed ? `
+        <button type="button" class="btn btn-warning" onclick="closeActivityModal(); window.openSuspendModal && window.openSuspendModal('vehicle', '${safe(displayName)}', null);">เพิ่มส่งซ่อม</button>
+        <button type="button"
+                class="btn bx-btn-early-close"
+                onclick="window.closeAvailBlock('${ev?.bookingId}', event, this)">
+          🏁 ยืนยันปิดงานก่อนเวลา
+        </button>
+      ` : ''}
+    `;
+  } else {
+    footer.innerHTML = `
+      <button type="button" class="btn btn-secondary" onclick="closeActivityModal()">ปิด</button>
+    `;
+  }
 
-if (typeof openModalA11y === 'function') {
-  openModalA11y('activity-modal');
-} else {
-  modal.classList.add('active');
-  modal.style.display = 'flex';
-}
+  if (typeof openModalA11y === 'function') {
+    openModalA11y('activity-modal');
+  } else {
+    modal.classList.add('active');
+    modal.style.display = 'flex';
+  }
 }
 
 async function showActivityDetails(bookingId, event) {
@@ -5360,17 +5490,20 @@ async function showActivityDetails(bookingId, event) {
   const isQuickApprovable = ['admindriver', 'driver'].includes(roleLc);
   const isGuest = !user.isLoggedIn;
 
-  let btns = '';
+   let btns = '';
   const isBlockEvent = (statusKey === 'driver_block' || statusKey === 'vehicle_block');
 
   if (isBlockEvent && isAdminLevel) {
-    if (statusKey === 'vehicle_block') {
-      btns += `<button class="btn bx-btn" style="flex:1 1 auto; background:#16a34a; color:white; border:none;" onclick="closeAvailBlock('${id}', event)">✅ ปิดงานซ่อม</button>`;
-    } else if (statusKey === 'driver_block') {
-      btns += `<button class="btn bx-btn" style="flex:1 1 auto; background:#16a34a; color:white; border:none;" onclick="closeAvailBlock('${id}', event)">✅ ปิดการลา</button>`;
+    // 🍓 BERRY FIX: เช็คว่ารายการลา/ซ่อมนี้ ถูกกดปิดไปแล้วหรือยัง ถ้าปิดแล้วซ่อนปุ่มไปเลย
+    const isClosed = b.isClosed === true || String(b.blockStatus || '').toLowerCase() === 'closed';
+    
+    if (!isClosed) {
+      // 🍓 BERRY FIX: เปลี่ยนข้อความเป็น "ปิดงาน" ให้สั้นกระชับ พอดีจอมือถือ และปุ่มกดง่ายขึ้น
+      btns += `<button type="button" class="btn btn-danger" style="flex:1 1 auto; min-height:44px; font-size:0.95rem; font-weight:700; display:flex; align-items:center; justify-content:center; gap:6px; white-space:nowrap; padding:8px 12px; border:none; border-radius:10px; outline:none; box-shadow:0 4px 6px rgba(220,38,38,0.2);" onclick="closeAvailBlock('${id}', event, this)"><span style="font-size:1.15em;">🏁</span> ปิดงาน</button>`;
     }
   }
 
+ 
   if (!isBlockEvent) {
     if (statusKey === 'pending') {
       if (isQuickApprovable) {
@@ -5452,47 +5585,195 @@ window.showCustomConfirm = function(title, text, confirmText = 'ยืนยั�
     });
 };
 
-// 🍓 BERRY FIX: เพิ่มฟังก์ชัน closeAvailBlock สำหรับกดให้คน/รถ กลับมาทำงาน ย้ายมาใช้ Async/Await UI Confirm
-window.closeAvailBlock = async function(id, event) {
-  if (event) event.stopPropagation();
-  
+// ANCHOR: closeAvailBlock
+// แทนที่ทั้งฟังก์ชันเดิมด้วยตัวนี้
+window.closeAvailBlock = async function(id, event, btnEl) {
+  let loadingTimer = null;
+  let shouldHideLoading = false;
+
+  try {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+  } catch (_) {}
+
+  var bookingId = String(id || '').trim();
+  if (!bookingId) {
+    if (typeof showToast === 'function') showToast('ไม่พบ Booking ID', 'error');
+    return;
+  }
+
+  if (window.__berryEarlyCloseBusy === true) {
+    console.warn('[EarlyClose] blocked duplicate submit');
+    return;
+  }
+
+  var btn = btnEl || (event && event.currentTarget ? event.currentTarget : null);
+  var oldHtml = btn ? btn.innerHTML : '';
+  var oldDisabled = btn ? btn.disabled : false;
+  var adminName = (window.currentUser && window.currentUser.name) ? window.currentUser.name : 'Admin';
+
   const isConfirmed = await showCustomConfirm(
-      'ยืนยันการตั้งค่าสถานะ', 
-      'ยืนยันหน้างานจริง: ปิดงาน และอัปเดตให้รถ/คนขับ กลับมารับงานในระบบได้ทันที ใช่หรือไม่?',
-      '✅ ยืนยัน',
-      'ยกเลิก',
-      '#16a34a'
+    'ยืนยันปิดงานก่อนเวลา',
+    'เมื่อยืนยันแล้ว ระบบจะ soft close งานนี้ทันที และรถ/พนักงานขับรถจะกลับมาใช้งานได้ตามจริง โดยไม่ส่ง Telegram สำหรับ flow นี้',
+    '🏁 ยืนยันปิดงาน',
+    'ยกเลิก',
+    '#dc2626'
   );
-  
+
   if (!isConfirmed) return;
-  
-  if (typeof showLoading === 'function') showLoading();
-  const adminName = (window.currentUser && window.currentUser.name) ? window.currentUser.name : 'Admin';
-  
-  googleScriptRun('closeAvailabilityBlock', {
-    bookingId: id,
-    closedBy: adminName,
-    closeNote: 'ปิดงานจากปฏิทิน'
-  }).then(res => {
-    if (typeof hideLoading === 'function') hideLoading();
-    if (res && res.ok) {
-      if (typeof showToast === 'function') showToast('ปิดงานเรียบร้อย อัปเดตคิวพร้อมทำงานทันที', 'success');
-      closeModalA11y('activity-modal');
-      
-      // Refresh Data & Calendar
-      if (typeof loadAdminPanelData === 'function') loadAdminPanelData();
-      
-      const y = (window.calendarState && window.calendarState.currentYear) ? window.calendarState.currentYear : new Date().getFullYear();
-      const m = (window.calendarState && window.calendarState.currentMonth) ? window.calendarState.currentMonth : new Date().getMonth() + 1;
-      if (typeof renderCalendar === 'function') renderCalendar(y, m);
-    } else {
-      if (typeof showToast === 'function') showToast('เกิดข้อผิดพลาด: ' + (res ? res.error : 'Unknown err'), 'error');
+
+  window.__berryEarlyCloseBusy = true;
+  const reqToken = 'earlyclose_' + bookingId + '_' + Date.now();
+  window.__berryEarlyCloseToken = reqToken;
+
+  try {
+    console.log('[EarlyClose] before submit bookingId=', bookingId);
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '⏳ กำลังบันทึก...';
+      btn.setAttribute('aria-busy', 'true');
     }
-  }).catch(err => {
-    if (typeof hideLoading === 'function') hideLoading();
-    console.error('closeAvailBlock Error:', err);
-    if (typeof showToast === 'function') showToast('ข้อผิดพลาดเครือข่าย', 'error');
-  });
+
+    loadingTimer = setTimeout(function() {
+      if (window.__berryEarlyCloseToken !== reqToken) return;
+      shouldHideLoading = true;
+      if (typeof showLoading === 'function') showLoading();
+    }, 300);
+
+    var res = await googleScriptRun('closeAvailabilityBlock', {
+      bookingId: bookingId,
+      closedBy: adminName,
+      closeNote: 'ปิดงานก่อนเวลา เนื่องจากภารกิจเสร็จเร็วกว่ากำหนด',
+      noTelegram: true
+    });
+
+    if (window.__berryEarlyCloseToken !== reqToken) {
+      console.warn('[EarlyClose] stale response ignored');
+      return;
+    }
+
+    if (!res || !res.ok) {
+      throw new Error(res && res.error ? res.error : 'บันทึกไม่สำเร็จ');
+    }
+
+    console.log('[EarlyClose] success bookingId=', bookingId, 'closedAt=', res.closedAtText);
+
+    if (typeof closeModalA11y === 'function') {
+      closeModalA11y('activity-modal');
+    }
+
+    if (typeof showToast === 'function') {
+      showToast('ปิดงานก่อนเวลาเรียบร้อย • ' + (res.closedAtText || ''), 'success');
+    }
+
+    // 1) Sync RAM ล่าสุดก่อน เพื่อให้ปฏิทินวาดจากข้อมูลใหม่ทันที
+    try {
+      const initData = await googleScriptRunLimited('getWebAppInitialData', {});
+      if (
+        window.__berryEarlyCloseToken === reqToken &&
+        initData &&
+        initData.ok &&
+        initData.data
+      ) {
+        window.allBookingsData = initData.data.bookings || [];
+
+        if (initData.data.vehicles) {
+          window.vehiclesList = initData.data.vehicles;
+        }
+        if (Array.isArray(initData.data.drivers)) {
+          window.driversList = initData.data.drivers;
+        }
+        if (Array.isArray(initData.data.projects)) {
+          window.projectList = initData.data.projects;
+        }
+
+        if (typeof reindexBookings === 'function') {
+          reindexBookings(window.allBookingsData);
+        }
+
+        if (typeof updateCounters === 'function') {
+          updateCounters();
+        }
+
+        console.log('[EarlyClose] RAM sync success bookings=', (window.allBookingsData || []).length);
+      }
+    } catch (syncErr) {
+      console.warn('[EarlyClose] RAM sync failed:', syncErr);
+    }
+
+    // 2) Refresh dashboard aggregate ฝั่ง server แบบเงียบ ๆ
+    try {
+      await googleScriptRun('apiRefreshDashboard', {});
+    } catch (dashErr) {
+      console.warn('[EarlyClose] apiRefreshDashboard failed:', dashErr);
+    }
+
+    // 3) Refresh view ที่เกี่ยวข้อง
+    if (typeof loadBookingsView === 'function') {
+      loadBookingsView();
+    }
+
+    if (typeof loadAdminPanelData === 'function') {
+      await loadAdminPanelData();
+    }
+
+    if (typeof loadCalendarView === 'function' && window.calendarState) {
+      loadCalendarView(
+        window.calendarState.currentYear,
+        window.calendarState.currentMonth
+      );
+    } else if (typeof renderCalendar === 'function') {
+      var y = (window.calendarState && window.calendarState.currentYear)
+        ? window.calendarState.currentYear
+        : new Date().getFullYear();
+      var m = (window.calendarState && window.calendarState.currentMonth)
+        ? window.calendarState.currentMonth
+        : (new Date().getMonth() + 1);
+      renderCalendar(y, m);
+    }
+
+    if (typeof window.loadLiveStatusData === 'function') {
+      window.loadLiveStatusData();
+    } else if (typeof window.loadLiveStatus === 'function') {
+      window.loadLiveStatus();
+    }
+
+    if (typeof window.refreshRadarStatus === 'function') {
+      window.refreshRadarStatus();
+    }
+
+    if (typeof window.refreshDashboardRadar === 'function') {
+      window.refreshDashboardRadar();
+    }
+
+    console.log('[EarlyClose] refresh calendar / bookings / radar done');
+
+  } catch (err) {
+    console.error('[EarlyClose] fail', err);
+    if (typeof showToast === 'function') {
+      showToast('ปิดงานก่อนเวลาไม่สำเร็จ: ' + (err && err.message ? err.message : err), 'error');
+    }
+  } finally {
+    if (loadingTimer) clearTimeout(loadingTimer);
+
+    if (window.__berryEarlyCloseToken === reqToken) {
+      window.__berryEarlyCloseBusy = false;
+      window.__berryEarlyCloseToken = null;
+    }
+
+    if (btn) {
+      btn.disabled = oldDisabled;
+      btn.innerHTML = oldHtml;
+      btn.removeAttribute('aria-busy');
+    }
+
+    if (shouldHideLoading && typeof hideLoading === 'function') {
+      hideLoading();
+    }
+
+    console.log('[EarlyClose] finally cleanup done');
+  }
 };
 
 /* [ANCHOR: Open Cancel Modal from Details (Auto-fill & Auto-select)] */
@@ -6575,54 +6856,77 @@ window.handleAssignmentSave = async function () {
   }
 };
 
+// ANCHOR: handleAssignmentEarlyClose
 window.handleAssignmentEarlyClose = async function () {
   if (!window.__ASSIGN_CTX__) return;
 
-  const bId = String(window.__ASSIGN_CTX__.bookingId || '').trim();
+  var bId = String(window.__ASSIGN_CTX__.bookingId || '').trim();
   if (!bId) {
     if (typeof showToast === 'function') showToast('ไม่พบ Booking ID', 'error');
     return;
   }
 
-  const btn = document.getElementById('assignment-close-job-btn');
+  var btn = document.getElementById('assignment-close-job-btn');
   if (btn && btn.disabled) return;
+  if (window.__berryAssignmentEarlyCloseBusy === true) return;
 
-  const isConfirm = confirm(
-    "🚨 ยืนยันที่จะ 'ปิดงานก่อนเวลา' หรือไม่?\n\nรถและพนักงานขับทั้งหมดในงานนี้จะถูกตั้งค่าสถานะเป็น 'พร้อม' ทันทีครับ"
-  );
-  if (!isConfirm) return;
+  var adminName = (window.currentUser && (window.currentUser.name || window.currentUser.displayName))
+    ? (window.currentUser.name || window.currentUser.displayName)
+    : 'Admin';
 
-  const runner = (typeof window.googleScriptRunLimited !== 'undefined')
-    ? window.googleScriptRunLimited
-    : window.googleScriptRun;
-
-  const oldHtml = btn ? btn.innerHTML : '';
-  const reqToken = 'earlyclose_' + Date.now();
-  window.__EARLY_CLOSE_REQ_TOKEN__ = reqToken;
-
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = '⏳ กำลังบันทึก...';
+  var isConfirm = true;
+  if (typeof window.showCustomConfirm === 'function') {
+    isConfirm = await window.showCustomConfirm(
+      'ยืนยันปิดงานก่อนเวลา',
+      // 🍓 BERRY FIX: เปลี่ยนข้อความอธิบายให้ชัดเจนว่าจะมีการส่ง Telegram
+      'เมื่อยืนยันแล้ว ระบบจะปิดงานก่อนเวลา คืนสถานะรถและพนักงานขับรถให้พร้อมใช้งานทันที พร้อมส่งแจ้งเตือนเข้า Telegram',
+      '🏁 ยืนยันปิดงาน',
+      'ยกเลิก',
+      '#dc2626'
+    );
+  } else {
+    isConfirm = confirm("ยืนยันปิดงานก่อนเวลาและแจ้งเตือนเข้ากลุ่มใช่หรือไม่");
   }
 
+  if (!isConfirm) return;
+
+  window.__berryAssignmentEarlyCloseBusy = true;
+
+  var oldHtml = btn ? btn.innerHTML : '';
+  var oldDisabled = btn ? btn.disabled : false;
+  var loadingTimer = null;
+
   try {
-    const res = await runner('closeBookingActualEnd', {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '⏳ กำลังบันทึก...';
+      btn.setAttribute('aria-busy', 'true');
+    }
+
+    loadingTimer = setTimeout(function () {
+      if (typeof showLoading === 'function') showLoading();
+    }, 250);
+
+    var runner = (typeof window.googleScriptRunLimited !== 'undefined')
+      ? window.googleScriptRunLimited
+      : window.googleScriptRun;
+
+    var res = await runner('closeBookingActualEnd', {
       bookingId: bId,
       note: 'ปิดงานก่อนเวลา เนื่องจากภารกิจเสร็จเร็วกว่ากำหนด',
-      closedBy: (typeof getAdminName === 'function' ? getAdminName() : 'Admin')
+      closedBy: adminName,
+      noTelegram: false // 🍓 BERRY FIX: ปลดล็อกให้ส่ง Telegram สำหรับการปิดงานจองรถ
     });
 
-    if (window.__EARLY_CLOSE_REQ_TOKEN__ !== reqToken) return;
-    if (!res || !res.ok) throw new Error((res && res.error) || 'Server Error');
+    clearTimeout(loadingTimer);
+    if (typeof hideLoading === 'function') hideLoading();
+
+    if (!res || !res.ok) {
+      throw new Error((res && res.error) || 'บันทึกไม่สำเร็จ');
+    }
 
     if (typeof showToast === 'function') {
-      if (res.telegramOk === true) {
-        showToast(res.message || 'ปิดงานก่อนเวลาและส่ง Telegram เรียบร้อยแล้ว', 'success');
-      } else if (res.telegramOk === false) {
-        showToast('ปิดงานก่อนเวลาเรียบร้อย แต่แจ้ง Telegram ไม่สำเร็จ', 'warning');
-      } else {
-        showToast(res.message || 'ปิดงานก่อนเวลาเรียบร้อย', 'success');
-      }
+      showToast(res.message || 'ปิดงานก่อนเวลาและแจ้งเตือนเรียบร้อย', 'success');
     }
 
     if (typeof closeModalA11y === 'function') {
@@ -6631,25 +6935,43 @@ window.handleAssignmentEarlyClose = async function () {
 
     if (typeof loadBookingsView === 'function') loadBookingsView();
     if (typeof updateCounters === 'function') updateCounters();
+    if (typeof loadAdminPanelData === 'function') loadAdminPanelData();
 
-    if (typeof loadLiveStatusData === 'function') {
-      loadLiveStatusData();
-    } else if (typeof fetchLiveStatus === 'function') {
-      fetchLiveStatus();
+    if (typeof renderCalendar === 'function') {
+      var y = (window.calendarState && window.calendarState.currentYear)
+        ? window.calendarState.currentYear
+        : new Date().getFullYear();
+      var m = (window.calendarState && window.calendarState.currentMonth)
+        ? window.calendarState.currentMonth
+        : (new Date().getMonth() + 1);
+      renderCalendar(y, m);
     }
+
+    if (typeof window.loadLiveStatus === 'function') window.loadLiveStatus();
+    if (typeof window.refreshRadarStatus === 'function') window.refreshRadarStatus();
+    if (typeof window.refreshDashboardRadar === 'function') window.refreshDashboardRadar();
+    if (typeof window.loadLiveStatusData === 'function') window.loadLiveStatusData();
+    else if (typeof window.fetchLiveStatus === 'function') window.fetchLiveStatus();
+
+    console.log('[AssignmentEarlyClose] success bookingId=', bId);
   } catch (e) {
+    clearTimeout(loadingTimer);
+    if (typeof hideLoading === 'function') hideLoading();
     console.error('❌ Early Close Error:', e && e.message ? e.message : e);
-    if (window.__EARLY_CLOSE_REQ_TOKEN__ === reqToken && typeof showToast === 'function') {
+
+    if (typeof showToast === 'function') {
       showToast('เกิดข้อผิดพลาด: ' + (e && e.message ? e.message : 'Unknown Error'), 'error');
     }
   } finally {
-    if (window.__EARLY_CLOSE_REQ_TOKEN__ === reqToken) {
-      window.__EARLY_CLOSE_REQ_TOKEN__ = null;
-      if (btn) {
-        btn.disabled = false;
-        btn.innerHTML = oldHtml;
-      }
+    window.__berryAssignmentEarlyCloseBusy = false;
+
+    if (btn) {
+      btn.disabled = oldDisabled;
+      btn.innerHTML = oldHtml;
+      btn.removeAttribute('aria-busy');
     }
+
+    if (typeof hideLoading === 'function') hideLoading();
   }
 };
 
@@ -6892,30 +7214,28 @@ function renderTimelineGrid(bookings, selectedPlate){
   grid.innerHTML = html;
 }
 
-function changeTimelineDate(deltaDays){
-  // 🍓 BERRY FIX: จัดการเรื่อง Date ให้ทนทานขึ้น และกัน Invalid Date
-  let d = window.currentTimelineDate ? new Date(window.currentTimelineDate) : new Date();
-  if (isNaN(d.getTime())) d = new Date(); 
+function changeTimelineDate(deltaDays) {
+  var base = (window.currentTimelineDate instanceof Date && !isNaN(window.currentTimelineDate.getTime()))
+    ? new Date(window.currentTimelineDate.getTime())
+    : new Date();
 
-  d.setDate(d.getDate() + (parseInt(deltaDays, 10) || 0));
-  window.currentTimelineDate = d;
+  base.setDate(base.getDate() + (parseInt(deltaDays, 10) || 0));
+  window.currentTimelineDate = base;
 
   const lbl = document.getElementById('current-timeline-date');
-  if(lbl){
-    // 🍓 BERRY FIX: เลิกใช้ fmt2() ชั่วคราว ป้องกัน ReferenceError ใช้ padStart แทนจบปิ๊ง
-    const dd = String(d.getDate()).padStart(2, '0');
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yyyy = d.getFullYear() + 543;
-    lbl.textContent = `${dd}/${mm}/${yyyy}`;
+  if (lbl) {
+    const dd = String(base.getDate()).padStart(2, '0');
+    const mm = String(base.getMonth() + 1).padStart(2, '0');
+    const yyyy = base.getFullYear() + 543;
+    lbl.textContent = dd + '/' + mm + '/' + yyyy;
   }
-  
-  // 🍓 BERRY FIX: เช็กฟังก์ชันโหลดให้ชัวร์ก่อนเรียก
-  if (typeof loadTimelineView === 'function') {
-    loadTimelineView();
-  } else if (typeof window.loadTimelineView === 'function') {
+
+  if (typeof window.loadTimelineView === 'function') {
     window.loadTimelineView();
+  } else if (typeof loadTimelineView === 'function') {
+    loadTimelineView();
   } else {
-    console.error("🍓 [V-Berry] ไม่พบฟังก์ชัน loadTimelineView() ในระบบค่ะ");
+    console.error('🍓 [V-Berry] ไม่พบฟังก์ชัน loadTimelineView() ในระบบค่ะ');
   }
 }
 
@@ -7001,14 +7321,21 @@ function initializeApp() {
 
 
     function loadInitialData() {
-        console.log("🐱 กำลังโหลดข้อมูลเริ่มต้น (ปฏิทิน)...");
-        try {
-            renderCalendar(calendarState.currentYear, calendarState.currentMonth);
-        } catch (err) {
-            console.error("❌ Failed to render initial calendar:", err);
-            document.getElementById('calendar-grid').innerHTML = '<div class="calendar-error">😿 วาดปฏิทินเริ่มต้นไม่สำเร็จค่ะ</div>';
-        }
+  console.log("🐱 กำลังโหลดข้อมูลเริ่มต้น (ปฏิทิน)...");
+  try {
+    var st = window.calendarState || {
+      currentYear: new Date().getFullYear(),
+      currentMonth: new Date().getMonth() + 1
+    };
+    renderCalendar(st.currentYear, st.currentMonth);
+  } catch (err) {
+    console.error("❌ Failed to render initial calendar:", err);
+    var grid = document.getElementById('calendar-grid');
+    if (grid) {
+      grid.innerHTML = '<div class="calendar-error">😿 วาดปฏิทินเริ่มต้นไม่สำเร็จค่ะ</div>';
     }
+  }
+}
 
  /* ==================== BOOKING FILTER LOGIC (THAI DATE UPDATE) ==================== */
 
@@ -7219,101 +7546,104 @@ window.toggleDailySummary = function() {
     }
 };
 
+window.__BOOKINGS_FILTERED_CACHE__ = window.__BOOKINGS_FILTERED_CACHE__ || [];
+
 window.loadBookingsView = function() {
-    console.log("🚀 [V-Berry] Loading Bookings View with Status Grouping Fix...");
+  console.log("🚀 [V-Berry] Loading Bookings View with Status Grouping Fix...");
 
-    const tbody = document.getElementById('bookings-table-body');
-    const summaryBody = document.getElementById('daily-summary-tbody');
+  const tbody = document.getElementById('bookings-table-body');
+  const summaryBody = document.getElementById('daily-summary-tbody');
 
-    if (tbody) tbody.innerHTML = (typeof getSkeletonRows === 'function') ? getSkeletonRows(7, 5) : '<tr><td colspan="7">Loading...</td></tr>';
-    if (summaryBody) summaryBody.innerHTML = (typeof getSkeletonRows === 'function') ? getSkeletonRows(6, 3) : '<tr><td colspan="6">Loading...</td></tr>';
+  if (tbody) tbody.innerHTML = (typeof getSkeletonRows === 'function') ? getSkeletonRows(7, 5) : '<tr><td colspan="7">Loading...</td></tr>';
+  if (summaryBody) summaryBody.innerHTML = (typeof getSkeletonRows === 'function') ? getSkeletonRows(6, 3) : '<tr><td colspan="6">Loading...</td></tr>';
 
-    setTimeout(() => {
-        try {
-            // 🍓 BERRY FIX: กรอง BLK (driver_block / vehicle_block) ออกจากการแสดงผล "ทุกรูปแบบ" ในหน้ารายการจอง
-            const allData = (window.allBookingsData || []).filter(b => {
-                const bId = String(b.bookingId || b.id || '');
-                return !bId.startsWith('BLK-');
-            });
+  setTimeout(() => {
+    try {
+      const allData = (window.allBookingsData || []).filter(b => {
+        const bId = String(b.bookingId || b.id || '');
+        return !bId.startsWith('BLK-');
+      });
 
-            if (document.getElementById('total-bookings-badge')) {
-                document.getElementById('total-bookings-badge').textContent = allData.length;
-            }
+      if (document.getElementById('total-bookings-badge')) {
+        document.getElementById('total-bookings-badge').textContent = allData.length;
+      }
 
-            const today = new Date();
-            const todayISO = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      const today = new Date();
+      const todayISO = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
 
-            const todayBookings = allData.filter(b => {
-                const s = normalizeClientStatus(b.status || 'pending');
-                const allowedDaily = ['approved', 'pending', 'driver_special_approved'];
-                if (!allowedDaily.includes(s)) return false;
+      const todayBookings = allData.filter(b => {
+        const s = normalizeClientStatus(b.status || 'pending');
+        const allowedDaily = ['approved', 'pending', 'driver_special_approved'];
+        if (allowedDaily.indexOf(s) === -1) return false;
 
-                const start = b.startDate || '';
-                const end = b.endDate || start;
-                return todayISO >= start && todayISO <= end;
-            });
+        const start = b.startDate || '';
+        const end = b.endDate || start;
+        return todayISO >= start && todayISO <= end;
+      });
 
-            if (typeof renderBookingsTable === 'function') {
-                renderBookingsTable(todayBookings, 'daily-summary-tbody', 'daily');
-            }
+      if (typeof renderBookingsTable === 'function') {
+        renderBookingsTable(todayBookings, 'daily-summary-tbody', 'daily');
+      }
 
-            let filteredData = allData;
+      let filteredData = allData;
 
-            const includeBlocks = document.getElementById('chk-include-blocks') ? document.getElementById('chk-include-blocks').checked : false;
-            if (!includeBlocks && window.bookingsCurrentFilter !== 'blocks') {
-                 filteredData = filteredData.filter(b => {
-                     const s = normalizeClientStatus(b.status || 'pending');
-                     return s !== 'driver_block' && s !== 'vehicle_block' && s !== 'maintenance';
-                 });
-            }
+      const includeBlocks = document.getElementById('chk-include-blocks') ? document.getElementById('chk-include-blocks').checked : false;
+      if (!includeBlocks && window.bookingsCurrentFilter !== 'blocks') {
+        filteredData = filteredData.filter(b => {
+          const s = normalizeClientStatus(b.status || 'pending');
+          return s !== 'driver_block' && s !== 'vehicle_block' && s !== 'maintenance';
+        });
+      }
 
-            if (typeof window.filterBookingsByDateRange === 'function') {
-                filteredData = window.filterBookingsByDateRange(filteredData);
-            }
+      if (typeof window.filterBookingsByDateRange === 'function') {
+        filteredData = window.filterBookingsByDateRange(filteredData);
+      }
 
-            if (window.bookingsCurrentFilter) {
-                filteredData = filteredData.filter(b => {
-                    const s = normalizeClientStatus(b.status || 'pending');
+      if (window.bookingsCurrentFilter) {
+        filteredData = filteredData.filter(b => {
+          const s = normalizeClientStatus(b.status || 'pending');
 
-                    if (window.bookingsCurrentFilter === 'approved') {
-                        return s === 'approved' || s === 'driver_special_approved';
-                    }
-                    if (window.bookingsCurrentFilter === 'blocks') {
-                        return s === 'driver_block' || s === 'vehicle_block' || s === 'maintenance';
-                    }
+          if (window.bookingsCurrentFilter === 'approved') {
+            return s === 'approved' || s === 'driver_special_approved';
+          }
+          if (window.bookingsCurrentFilter === 'blocks') {
+            return s === 'driver_block' || s === 'vehicle_block' || s === 'maintenance';
+          }
 
-                    return s === window.bookingsCurrentFilter;
-                });
-            }
+          return s === window.bookingsCurrentFilter;
+        });
+      }
 
-            const totalItems = filteredData.length;
-            const totalPages = Math.max(1, Math.ceil(totalItems / BOOKINGS_PAGE_SIZE));
+      window.__BOOKINGS_FILTERED_CACHE__ = filteredData.slice();
 
-            if (bookingsCurrentPage > totalPages) bookingsCurrentPage = totalPages;
-            if (bookingsCurrentPage < 1) bookingsCurrentPage = 1;
+      const totalItems = filteredData.length;
+      const totalPages = Math.max(1, Math.ceil(totalItems / BOOKINGS_PAGE_SIZE));
 
-            const startIndex = (bookingsCurrentPage - 1) * BOOKINGS_PAGE_SIZE;
-            const pageData = filteredData.slice(startIndex, startIndex + BOOKINGS_PAGE_SIZE);
+      if (bookingsCurrentPage > totalPages) bookingsCurrentPage = totalPages;
+      if (bookingsCurrentPage < 1) bookingsCurrentPage = 1;
 
-            if (typeof renderBookingsTable === 'function') {
-                renderBookingsTable(pageData, 'bookings-table-body', 'full');
-            }
+      const startIndex = (bookingsCurrentPage - 1) * BOOKINGS_PAGE_SIZE;
+      const pageData = filteredData.slice(startIndex, startIndex + BOOKINGS_PAGE_SIZE);
 
-            const bookingsTableCard = document.getElementById('bookings-table-card');
-            const bookingsFooter = document.getElementById('bookings-footer');
+      if (typeof renderBookingsTable === 'function') {
+        renderBookingsTable(pageData, 'bookings-table-body', 'full');
+      }
 
-            if (bookingsTableCard) bookingsTableCard.style.display = '';
-            if (bookingsFooter) bookingsFooter.style.display = (totalItems > 0) ? 'block' : 'none';
+      const bookingsTableCard = document.getElementById('bookings-table-card');
+      const bookingsFooter = document.getElementById('bookings-footer');
 
-            if (typeof renderBookingsPagination === 'function') {
-                renderBookingsPagination(totalPages, totalItems);
-            }
+      if (bookingsTableCard) bookingsTableCard.style.display = '';
+      if (bookingsFooter) bookingsFooter.style.display = (totalItems > 0) ? 'block' : 'none';
 
-        } catch (e) {
-            console.error("❌ loadBookingsView Error:", e);
-            if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">เกิดข้อผิดพลาด: ${e.message}</td></tr>`;
-        }
-    }, 200);
+      if (typeof renderBookingsPagination === 'function') {
+        renderBookingsPagination(totalPages, totalItems);
+      }
+
+    } catch (e) {
+      console.error("❌ loadBookingsView Error:", e);
+      if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">เกิดข้อผิดพลาด: ' + e.message + '</td></tr>';
+    }
+  }, 200);
 };
 
 function renderBookingsTable(bookings, tbodyId, type) {
@@ -7598,34 +7928,36 @@ function renderBookingsPagination(totalPages, totalItems) {
 }
    
 
-    function changeBookingsPage(delta) {
-        const allData = window.allBookingsData || [];
-        const totalBookings = allData.length;
-        const totalPages = Math.max(1, Math.ceil(totalBookings / BOOKINGS_PAGE_SIZE));
+function changeBookingsPage(delta) {
+  const allData = Array.isArray(window.__BOOKINGS_FILTERED_CACHE__) && window.__BOOKINGS_FILTERED_CACHE__.length >= 0
+    ? window.__BOOKINGS_FILTERED_CACHE__
+    : (window.allBookingsData || []);
 
-        let newPage = bookingsCurrentPage + delta;
-        
-        if (newPage < 1) newPage = 1;
-        if (newPage > totalPages) newPage = totalPages;
+  const totalBookings = allData.length;
+  const totalPages = Math.max(1, Math.ceil(totalBookings / BOOKINGS_PAGE_SIZE));
 
-        if (newPage !== bookingsCurrentPage) {
-            bookingsCurrentPage = newPage;
-            console.log(`Changing to page ${newPage}`);
-            
-            const startIndex = (bookingsCurrentPage - 1) * BOOKINGS_PAGE_SIZE;
-            const endIndex = startIndex + BOOKINGS_PAGE_SIZE;
-            const pageData = allData.slice(startIndex, endIndex);
+  let newPage = bookingsCurrentPage + delta;
 
-            renderBookingsTable(pageData, 'bookings-table-body', 'full');
-            
-            renderBookingsPagination(totalPages, totalBookings);
-            
-            const tableCard = document.getElementById('bookings-table-card');
-            if (tableCard) {
-                tableCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        }
+  if (newPage < 1) newPage = 1;
+  if (newPage > totalPages) newPage = totalPages;
+
+  if (newPage !== bookingsCurrentPage) {
+    bookingsCurrentPage = newPage;
+    console.log('Changing to page ' + newPage);
+
+    const startIndex = (bookingsCurrentPage - 1) * BOOKINGS_PAGE_SIZE;
+    const endIndex = startIndex + BOOKINGS_PAGE_SIZE;
+    const pageData = allData.slice(startIndex, endIndex);
+
+    renderBookingsTable(pageData, 'bookings-table-body', 'full');
+    renderBookingsPagination(totalPages, totalBookings);
+
+    const tableCard = document.getElementById('bookings-table-card');
+    if (tableCard) {
+      tableCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+}
 
 
 /* ================== Dashboard View Functions (Ultimate Safe Mode) ================== */
@@ -9344,6 +9676,7 @@ function renderTablePage(type, containerId) {
     }
 }
 
+
 // =========================================
 // 3. UPDATED LOADERS (เชื่อมต่อกับ Pagination)
 // =========================================
@@ -9570,6 +9903,85 @@ async function loadLiveStatusData() {
   } finally {
     if (fab) fab.disabled = false;
   }
+}
+
+function switchTab(targetId) {
+    if (!targetId) return;
+
+    // กันยิงซ้ำ tab เดิม
+    if (window.__vbCurrentTab === targetId) return;
+
+    // ⭐ Busy Guard (กัน spam click)
+    if (window.__vbTabSwitchBusy) return;
+    window.__vbTabSwitchBusy = true;
+
+    var prevTab = window.__vbCurrentTab;
+    window.__vbCurrentTab = targetId;
+
+    console.log('🔄 Switched to tab:', targetId);
+
+    // ซ่อนทุก tab
+    var tabs = document.querySelectorAll('.tab-content');
+    for (var i = 0; i < tabs.length; i++) {
+        tabs[i].style.display = 'none';
+    }
+
+    // หา target
+    var target = document.querySelector(targetId);
+    if (!target) {
+        window.__vbTabSwitchBusy = false;
+        return;
+    }
+
+    // ⭐ ใส่ Loading กัน blank (150–300ms)
+    target.style.display = 'block';
+    target.innerHTML =
+        '<div class="text-center p-3">' +
+            '<div class="spinner" style="margin-bottom:8px;"></div>' +
+            '<div style="font-size:0.9rem;color:#64748b;">กำลังโหลดข้อมูล...</div>' +
+        '</div>';
+
+    // ⭐ delay เล็กน้อยให้ UX นุ่ม + กัน flash
+    var delay = 180;
+
+    setTimeout(function () {
+
+        // ❗ กัน stale render (สำคัญมาก)
+        if (window.__vbCurrentTab !== targetId) {
+            window.__vbTabSwitchBusy = false;
+            return;
+        }
+
+        try {
+            // ⭐ เรียก render ตาม tab
+            if (targetId === '#dashboard-tab' && typeof renderDashboard === 'function') {
+                renderDashboard('tab-switch');
+            } else if (targetId === '#calendar-tab' && typeof renderCalendar === 'function') {
+                renderCalendar();
+            } else if (targetId === '#bookings-tab' && typeof loadBookingsView === 'function') {
+                loadBookingsView();
+            } else if (targetId === '#timeline-tab' && typeof renderTimeline === 'function') {
+                renderTimeline();
+            } else if (targetId === '#fuel-tab' && typeof loadFuelView === 'function') {
+                loadFuelView();
+            } else if (targetId === '#insurance-tab' && typeof loadInsuranceView === 'function') {
+                loadInsuranceView();
+            } else if (targetId === '#maintenance-tab' && typeof loadMaintenanceView === 'function') {
+                loadMaintenanceView();
+            }
+
+        } catch (e) {
+            console.error('❌ switchTab render error:', e);
+            target.innerHTML =
+                '<div class="text-center p-3">' +
+                    '<div style="font-size:1.2rem;">😿</div>' +
+                    '<div>โหลดข้อมูลไม่สำเร็จ</div>' +
+                '</div>';
+        } finally {
+            window.__vbTabSwitchBusy = false;
+        }
+
+    }, delay);
 }
 /* ===================== SELF TEST (CLIENT + SERVER) — BERRY FIX ===================== */
 // ANCHOR: selfTest
@@ -9979,11 +10391,39 @@ function renderDashboardFuelWidget(source) {
     window.__dashboardFuelToken = Date.now() + '_' + Math.random();
     var requestToken = window.__dashboardFuelToken;
 
-    container.innerHTML =
-        '<div class="fuel-widget-loading">' +
-            '<div class="spinner" style="width:28px;height:28px;margin:0 auto 12px;border-width:3px;"></div>' +
-            '<span style="color:#64748b;">กำลังโหลดระดับน้ำมันล่าสุด...</span>' +
-        '</div>';
+    var renderSkeleton = function() {
+        var skeletonCards = '';
+        for (var i = 0; i < 4; i++) {
+            skeletonCards +=
+                '<div class="fuel-widget-card fuel-widget-skeleton" style="pointer-events:none;">' +
+                    '<div style="height:16px; width:68%; margin:0 auto 12px; border-radius:8px; background:linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 37%,#e5e7eb 63%); background-size:400% 100%; animation:fuelSkeletonShimmer 1.2s ease-in-out infinite;"></div>' +
+                    '<div style="width:34px; height:96px; margin:0 auto 12px; border-radius:999px; background:#e5e7eb; position:relative; overflow:hidden;">' +
+                        '<div style="position:absolute; left:0; right:0; bottom:0; height:38%; background:linear-gradient(90deg,#dbeafe 25%,#eff6ff 37%,#dbeafe 63%); background-size:400% 100%; animation:fuelSkeletonShimmer 1.2s ease-in-out infinite;"></div>' +
+                    '</div>' +
+                    '<div style="height:20px; width:46%; margin:0 auto 10px; border-radius:8px; background:linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 37%,#e5e7eb 63%); background-size:400% 100%; animation:fuelSkeletonShimmer 1.2s ease-in-out infinite;"></div>' +
+                    '<div style="height:14px; width:56%; margin:0 auto 8px; border-radius:8px; background:linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 37%,#e5e7eb 63%); background-size:400% 100%; animation:fuelSkeletonShimmer 1.2s ease-in-out infinite;"></div>' +
+                    '<div style="height:12px; width:62%; margin:0 auto; border-radius:8px; background:linear-gradient(90deg,#e5e7eb 25%,#f3f4f6 37%,#e5e7eb 63%); background-size:400% 100%; animation:fuelSkeletonShimmer 1.2s ease-in-out infinite;"></div>' +
+                '</div>';
+        }
+
+        if (!document.getElementById('fuel-widget-skeleton-style')) {
+            var styleEl = document.createElement('style');
+            styleEl.id = 'fuel-widget-skeleton-style';
+            styleEl.textContent =
+                '@keyframes fuelSkeletonShimmer {' +
+                    '0% { background-position: 100% 0; }' +
+                    '100% { background-position: 0 0; }' +
+                '}';
+            document.head.appendChild(styleEl);
+        }
+
+        container.innerHTML =
+            '<div class="fuel-widget-grid">' +
+                skeletonCards +
+            '</div>';
+    };
+
+    renderSkeleton();
 
     console.log('⛽ renderDashboardFuelWidget: Loading...', source || 'unknown');
 
@@ -10182,6 +10622,22 @@ function selfTestDashboardFuelWidget() {
     });
 }
 
+function copyFuelSelfTestLog(btn) {
+    var panel = btn.closest('.fuel-selftest-panel');
+    if (!panel) return;
+    var pre = panel.querySelector('pre');
+    if (!pre) return;
+    var t = pre.textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(t).then(function() {
+            btn.textContent = '✅ คัดลอกแล้ว!';
+            setTimeout(function() { btn.textContent = '📋 Copy Log'; }, 2000);
+        }).catch(function() { prompt('Copy:', t); });
+    } else {
+        prompt('Copy:', t);
+    }
+}
+
 function showSelfTestFuelResult(logs) {
     var container = document.getElementById('fuel-level-widget-container');
     if (!container) return;
@@ -10196,7 +10652,7 @@ function showSelfTestFuelResult(logs) {
     panel.innerHTML =
         '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">' +
             '<strong>🧪 Self-Test Results</strong>' +
-            '<button type="button" class="btn btn-sm btn-secondary" onclick="(function(){var t=this.closest(\'.fuel-selftest-panel\').querySelector(\'pre\').textContent;navigator.clipboard.writeText(t).then(function(){alert(\'Copied!\')}).catch(function(){prompt(\'Copy:\',t)})}).call(this)" style="font-size:0.75rem; padding:3px 10px;">📋 Copy Log</button>' +
+            '<button type="button" class="btn btn-sm btn-secondary" onclick="copyFuelSelfTestLog(this)" style="font-size:0.75rem; padding:3px 10px;">📋 Copy Log</button>' +
         '</div>' +
         '<pre style="margin:0;">' + logText.replace(/</g, '&lt;') + '</pre>';
     container.appendChild(panel);
@@ -10336,14 +10792,28 @@ window.clearFile = clearFile;
 window.loadFuelData = loadFuelData;
 
 // 5. กลุ่ม Admin & Authentication
-window.showAdminLogin = typeof window.showAdminLogin !== 'undefined' ? window.showAdminLogin : function() { openModalA11y('admin-login-modal'); };
-window.closeAdminLogin = typeof closeAdminLogin !== 'undefined' ? closeAdminLogin : function() { closeModalA11y('admin-login-modal'); };
-window.adminLogin = adminLogin;
-window.handleLogout = handleLogout;
-window.openAdminPanel = openAdminPanel;
-window.switchAdminTab = switchAdminTab;
-window.toggleDriverStatus = toggleDriverStatus;
-window.toggleVehicleStatus = toggleVehicleStatus;
+window.showAdminLogin = (typeof window.showAdminLogin === 'function')
+  ? window.showAdminLogin
+  : function () {
+      if (typeof window.openModalA11y === 'function') {
+        window.openModalA11y('admin-login-modal');
+      }
+    };
+
+window.closeAdminLogin = (typeof window.closeAdminLogin === 'function')
+  ? window.closeAdminLogin
+  : function () {
+      if (typeof window.closeModalA11y === 'function') {
+        window.closeModalA11y('admin-login-modal');
+      }
+    };
+
+if (typeof adminLogin === 'function') window.adminLogin = adminLogin;
+if (typeof handleLogout === 'function') window.handleLogout = handleLogout;
+if (typeof openAdminPanel === 'function') window.openAdminPanel = openAdminPanel;
+if (typeof switchAdminTab === 'function') window.switchAdminTab = switchAdminTab;
+if (typeof toggleDriverStatus === 'function') window.toggleDriverStatus = toggleDriverStatus;
+if (typeof toggleVehicleStatus === 'function') window.toggleVehicleStatus = toggleVehicleStatus;
 
 // 6. กลุ่ม Assignment (Admin Action)
 window.openAssignmentModal = openAssignmentModal;

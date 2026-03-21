@@ -1189,6 +1189,7 @@ function runNormalize1352() {
   });
 }
 
+// ANCHOR: getIntegratedDailyReport
 function getIntegratedDailyReport(targetDate) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1288,6 +1289,18 @@ function getIntegratedDailyReport(targetDate) {
       return out;
     }
 
+    function fmtThaiDateTimeSafe_(v) {
+      if (!v) return '';
+      try {
+        if (typeof _fmtThaiDateTimeBE === 'function') return _fmtThaiDateTimeBE(v);
+        if (typeof _fmtThaiDateTime === 'function') return _fmtThaiDateTime(v, v);
+        if (typeof getThaiDateTimeString === 'function') return getThaiDateTimeString(v, '');
+        return cleanText_(v, '');
+      } catch (e) {
+        return cleanText_(v, '');
+      }
+    }
+
     for (var i = 1; i < data.length; i++) {
       var r = data[i];
       var sIso = (typeof parseDateToISO_ === 'function') ? parseDateToISO_(r[idx.startD]) : '';
@@ -1371,8 +1384,9 @@ function getIntegratedDailyReport(targetDate) {
         if (idx.actualEndAt > -1) actualEndVal = cleanText_(r[idx.actualEndAt], '');
         if (!actualEndVal && idx.actualEndTime > -1) actualEndVal = cleanText_(r[idx.actualEndTime], '');
 
-        if (actualEndVal) {
-          lines.push('   🏁 ปิดงานก่อนเวลา: ' + actualEndVal);
+        var actualEndText = fmtThaiDateTimeSafe_(actualEndVal);
+        if (actualEndText) {
+          lines.push('   🏁 ปิดงานก่อนเวลา: ' + actualEndText);
         }
 
         lines.push('');
@@ -1640,6 +1654,7 @@ function buildTimeBlock_(dStart, dEnd, tStart, tEnd, reportDateISO) {
   return lines.join('\n');
 }
 
+// ANCHOR: buildBookingStatusMessage
 function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   rowObj = rowObj || {};
 
@@ -1763,6 +1778,7 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
     return isNaN(dt.getTime()) ? null : dt;
   }
 
+
   var id = cleanText(getV(['Booking ID', 'id', 'bookingId']), '-');
   var name = cleanText(getV(['ชื่อ-สกุล', 'name', 'ผู้จอง']), '-');
   var position = cleanText(getV(['ตำแหน่ง', 'position']), '');
@@ -1773,13 +1789,17 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
 
   var sDateRaw = getV(['วันเริ่มต้น', 'startDate']);
   var eDateRaw = getV(['วันสิ้นสุด', 'endDate']);
-  var sDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(sDateRaw) : cleanText(sDateRaw, '-');
-  var eDateTH = (typeof fmtThaiDateBE_ === 'function') ? fmtThaiDateBE_(eDateRaw) : cleanText(eDateRaw || sDateTH, '-');
+  var sDateTH = fmtThaiDateSafe_(sDateRaw);
+  var eDateTH = fmtThaiDateSafe_(eDateRaw || sDateRaw);
 
   var sTimeRaw = getV(['เวลาเริ่มต้น', 'startTime']);
   var eTimeRaw = getV(['เวลาสิ้นสุด', 'endTime']);
-  var sTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(sTimeRaw) : String(sTimeRaw || '00:00').replace('น.', '').trim();
-  var eTime = (typeof parseTimeSafe_ === 'function') ? parseTimeSafe_(eTimeRaw) : String(eTimeRaw || '00:00').replace('น.', '').trim();
+  var sTime = (typeof parseTimeSafe_ === 'function')
+    ? parseTimeSafe_(sTimeRaw)
+    : String(sTimeRaw || '00:00').replace('น.', '').trim();
+  var eTime = (typeof parseTimeSafe_ === 'function')
+    ? parseTimeSafe_(eTimeRaw)
+    : String(eTimeRaw || '00:00').replace('น.', '').trim();
 
   var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
   var sDateObj = toDateObj(sDateRaw);
@@ -1791,7 +1811,7 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
   var eDateShort = eDateTH !== '-' ? eDateTH.substring(0, 5) : '-';
 
   var actualEndRaw = getV(['actualEndAt', 'actualEndTime', 'Actual End', 'เวลาปิดงานจริง']);
-  var actualEndText = cleanText(actualEndRaw, '');
+  var actualEndText = fmtThaiDateTimeSafe_(actualEndRaw);
 
   var timeBlock = [];
   if (!isoStart || isoStart === isoEnd) {
@@ -1865,7 +1885,6 @@ function buildBookingStatusMessage(rowObj, statusKey, reasonFromPayload) {
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
-
 
 function rowToBookingObject_(rowData, idx, headers) {
   rowData = rowData || [];
@@ -1941,25 +1960,6 @@ function escapeHtml(s) {
     .replace(/'/g, "&#039;");
 }
 
-
-function fmtThaiDateBE_(d) {
-  var tz = (typeof TZ !== 'undefined' && TZ) ? TZ : 'Asia/Bangkok';
-  var x = d;
-
-  if (!(x instanceof Date)) {
-    var s = String(x || '').trim();
-    if (!s || s === '-') return '-';
-    var iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (iso) x = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
-    else x = new Date(s);
-  }
-
-  if (!(x instanceof Date) || isNaN(x.getTime())) return '-';
-
-  var ad = x.getFullYear();
-  var be = (ad < 2400) ? (ad + 543) : ad;
-  return Utilities.formatDate(x, tz, 'dd/MM/') + be;
-}
 
 function safeTimeRange_(start, end) {
   // ✅ normalize any time-ish input into "HH:mm"
@@ -3471,10 +3471,10 @@ function getDriverList() {
 function apiGetAdminPanelData() {
   try {
     const driversRes = getDriversFromAdmin_();
-    const driversRaw = driversRes.ok ? driversRes.drivers : [];
+    const driversRaw = driversRes.ok ? driversRes.drivers :[];
 
     const vehiclesRes = getAllVehiclePlatesFromSettings();
-    const vehiclesRaw = vehiclesRes.ok ? vehiclesRes.all : [];
+    const vehiclesRaw = vehiclesRes.ok ? vehiclesRes.all :[];
 
     const dStatusKv = readSettingKV_('DriverStatus');
     const dStatusMap = parseBoolMap_(dStatusKv.val);
@@ -3482,22 +3482,27 @@ function apiGetAdminPanelData() {
     const vStatusKv = readSettingKV_('VehicleAvailability');
     const vStatusMap = parseBoolMap_(vStatusKv.val);
 
-    const today = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd');
+    // 🍓 BERRY FIX: ดึงเวลาปัจจุบันเป๊ะๆ เพื่อเช็คสถานะว่าตอนนี้ทำงานหรือพักงาน
+    const tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+    const now = new Date();
+    const today = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
+    const nowTime = Utilities.formatDate(now, tz, 'HH:mm'); // ใช้เวลาปัจจุบัน ไม่ใช่เหมารวม 00:00-23:59
+
     const liveRes = getAvailableVehicles({
       startDate: today,
       endDate: today,
-      startTime: '00:00',
-      endTime: '23:59'
+      startTime: nowTime, 
+      endTime: nowTime
     });
 
     const liveDriversMap = {};
     const liveVehiclesMap = {};
 
     if (liveRes && liveRes.ok) {
-      (liveRes.drivers || []).forEach(function(d) {
+      (liveRes.drivers ||[]).forEach(function(d) {
         liveDriversMap[String(d.name || '').trim()] = d;
       });
-      (liveRes.vehicles || []).forEach(function(v) {
+      (liveRes.vehicles ||[]).forEach(function(v) {
         liveVehiclesMap[String(v.plate || '').trim()] = v;
       });
     }
@@ -5968,19 +5973,6 @@ function _getNextRow_(sh) {
   return sh.getLastRow() + 1;
 }
 
-// --- Helper 2: Format วันที่ไทย (พ.ศ.) ---
-function _fmtThaiDateBE(d) {
-  if (!d) return '-';
-  try {
-    var dateObj = (d instanceof Date) ? d : new Date(d);
-    if (isNaN(dateObj.getTime())) return '-';
-    var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
-    var y = parseInt(Utilities.formatDate(dateObj, tz, 'yyyy'), 10);
-    var be = (y < 2400) ? y + 543 : y;
-    return Utilities.formatDate(dateObj, tz, 'dd/MM/') + be;
-  } catch (e) { return '-'; }
-}
-
 // --- Helper 3: Save Base64 File (จำเป็นสำหรับ Maintenance) ---
 function _saveBase64File_(base64Data, filename) {
   if (!base64Data || !filename) return null;
@@ -7354,139 +7346,199 @@ function assertSheetTimeSanity_(sh, hm, bookingId, ok, ng) {
   else ng('Sheet เวลากลับ valid', 'invalid=' + (back || '(empty)') + ' | raw=' + String(backRaw));
 }
 
+// ANCHOR: sendTelegramNotify
 function sendTelegramNotify(payload, testMode) {
   function toStr(v) {
-    return String(v == null ? "" : v).trim();
+    return String(v == null ? '' : v).trim();
   }
 
   function firstValue(obj, keys) {
     obj = obj || {};
     for (var i = 0; i < keys.length; i++) {
       var val = obj[keys[i]];
-      if (val != null && String(val).trim() !== "" && String(val).trim() !== "-") {
+      if (val != null && String(val).trim() !== '' && String(val).trim() !== '-') {
         return val;
       }
     }
-    return "";
+    return '';
   }
 
   function normalizeStatus(raw) {
     var s = toStr(raw).toLowerCase();
 
-    if (!s) return "pending";
-    if (s.indexOf("กรณีพิเศษ") > -1 || s.indexOf("พิเศษ") > -1 || s === "driver_special_approved") return "driver_special_approved";
-    if (s.indexOf("ยกเลิก") > -1 || s.indexOf("cancel") > -1 || s === "cancelled") return "cancelled";
-    if (s.indexOf("ไม่") > -1 || s.indexOf("reject") > -1 || s === "rejected") return "rejected";
-    if (s.indexOf("อนุมัติ") > -1 || s.indexOf("approve") > -1 || s === "approved") return "approved";
+    if (!s) return 'pending';
+    if (s.indexOf('กรณีพิเศษ') > -1 || s.indexOf('พิเศษ') > -1 || s === 'driver_special_approved') return 'driver_special_approved';
+    if (s.indexOf('ยกเลิก') > -1 || s.indexOf('cancel') > -1 || s === 'cancelled') return 'cancelled';
+    if (s.indexOf('ไม่') > -1 || s.indexOf('reject') > -1 || s === 'rejected') return 'rejected';
+    if (s.indexOf('อนุมัติ') > -1 || s.indexOf('approve') > -1 || s === 'approved') return 'approved';
+    if (s.indexOf('รับงาน') > -1 || s === 'driver_claimed') return 'pending';
 
-    // รองรับข้อมูลเก่าในชีต/ระบบเดิม แต่ไม่ใช้เป็น flow หลักแล้ว
-    if (s.indexOf("รับงาน") > -1 || s === "driver_claimed") return "pending";
-
-    return "pending";
+    return 'pending';
   }
 
-  var msg = "";
-  var statusKey = "pending";
-  var bookingKey = "SYS";
+  function isEarlyCloseReason_(reasonText) {
+    var s = toStr(reasonText).toLowerCase();
+    return !!s && (
+      s.indexOf('ปิดงานก่อนเวลา') > -1 ||
+      s.indexOf('ปิดงานก่อนกำหนด') > -1 ||
+      s.indexOf('early close') > -1
+    );
+  }
 
-  if (typeof payload === "object" && payload !== null) {
+  function isBlockFlowPayload_(obj) {
+    var status = normalizeStatus(firstValue(obj, ['status', 'สถานะ']));
+    var rawType = toStr(firstValue(obj,[
+      'resourceType',
+      'blockType',
+      'availabilityType',
+      'type',
+      'modalType'
+    ])).toLowerCase();
+
+    var rawStatus = toStr(firstValue(obj,[
+      'rawStatus',
+      'originalStatus',
+      'bookingStatus',
+      'sourceStatus'
+    ])).toLowerCase();
+
+    // 🍓 BERRY FIX 1: ถ้านี่คืองานจองปกติที่อนุมัติแล้ว จะไม่ใช่ฟอร์มการ "ลา/ซ่อม" แน่นอน ให้ปล่อยผ่าน
+    if (status === 'approved' || status === 'driver_special_approved') {
+      if (rawType !== 'driver' && rawType !== 'vehicle' && rawStatus !== 'driver_block' && rawStatus !== 'vehicle_block') {
+        return false;
+      }
+    }
+
+    var reason = toStr(firstValue(obj, ['reason', 'Reason', 'cancelReason', 'CancelReason']));
+    var note = toStr(firstValue(obj, ['note', 'closeNote', 'closeReason']));
+    var merged = (reason + ' ' + note).toLowerCase();
+
+    if (rawType === 'driver' || rawType === 'vehicle') return true;
+    if (rawStatus === 'driver_block' || rawStatus === 'vehicle_block') return true;
+    
+    // 🍓 BERRY FIX 2: ดักจับบั๊กคำว่า "เวลา" มีคำว่า "ลา" ซ่อนอยู่
+    var isLeave = merged.indexOf('ลางาน') > -1 || (merged.indexOf('ลา') > -1 && merged.indexOf('เวลา') === -1);
+    var isRepair = merged.indexOf('ส่งซ่อม') > -1 || merged.indexOf('ซ่อม') > -1;
+
+    if (isLeave || isRepair) {
+      return true;
+    }
+
+    return false;
+  }
+
+  var msg = '';
+  var statusKey = 'pending';
+  var bookingKey = 'SYS';
+  var skipTelegram = false;
+
+  if (typeof payload === 'object' && payload !== null) {
     var safePayload = Object.assign({}, payload);
 
-    var rawStatus = firstValue(safePayload, ["status", "สถานะ"]) || "pending";
+    var rawStatus = firstValue(safePayload, ['status', 'สถานะ']) || 'pending';
     statusKey = normalizeStatus(rawStatus);
 
-    bookingKey = toStr(firstValue(safePayload, ["bookingId", "id", "Booking ID"]) || "SYS");
+    bookingKey = toStr(firstValue(safePayload,['bookingId', 'id', 'Booking ID']) || 'SYS');
 
-    var reason = "";
-    if (statusKey === "cancelled") {
-      reason = toStr(firstValue(safePayload, [
-        "cancelReason",
-        "CancelReason",
-        "reason",
-        "Reason"
+    var reason = '';
+    if (statusKey === 'cancelled') {
+      reason = toStr(firstValue(safePayload,[
+        'cancelReason',
+        'CancelReason',
+        'reason',
+        'Reason'
       ]));
     } else {
-      reason = toStr(firstValue(safePayload, [
-        "reason",
-        "Reason",
-        "cancelReason",
-        "CancelReason"
+      reason = toStr(firstValue(safePayload,[
+        'reason',
+        'Reason',
+        'cancelReason',
+        'CancelReason'
       ]));
     }
 
-    var noteLc = reason.toLowerCase();
-    var isEarlyClose = reason && (
-      reason.indexOf("ปิดงานก่อนเวลา") > -1 ||
-      reason.indexOf("ปิดงานก่อนกำหนด") > -1 ||
-      noteLc.indexOf("early close") > -1
-    );
+    var isEarlyClose = isEarlyCloseReason_(reason);
 
-    // เติม actual end แบบ fallback ให้ build message ใช้ได้เสมอ
-    var actualEndAt = toStr(firstValue(safePayload, [
-      "actualEndAt",
-      "actualEndTime",
-      "Actual End",
-      "เวลาปิดงานจริง"
-    ]));
+    var actualEndAt = firstValue(safePayload,[
+      'actualEndAt',
+      'actualEndTime',
+      'Actual End',
+      'เวลาปิดงานจริง'
+    ]);
 
     if (actualEndAt) {
       safePayload.actualEndAt = actualEndAt;
       if (!safePayload.actualEndTime) safePayload.actualEndTime = actualEndAt;
-      if (!safePayload["เวลาปิดงานจริง"]) safePayload["เวลาปิดงานจริง"] = actualEndAt;
-      if (!safePayload["Actual End"]) safePayload["Actual End"] = actualEndAt;
+      if (!safePayload['เวลาปิดงานจริง']) safePayload['เวลาปิดงานจริง'] = actualEndAt;
+      if (!safePayload['Actual End']) safePayload['Actual End'] = actualEndAt;
     }
 
-    // ถ้าเป็น early close แต่ไม่มี reason จาก caller ให้ใส่ fallback ที่ตีความได้
     if (isEarlyClose && !safePayload.Reason && !safePayload.reason) {
       safePayload.Reason = reason;
     } else if (!reason && actualEndAt) {
-      // fallback เฉพาะกรณีมี actualEndAt แต่ caller ไม่ได้ส่งข้อความมา
-      reason = "ปิดงานก่อนเวลา";
+      reason = 'ปิดงานก่อนเวลา';
       safePayload.Reason = reason;
+      isEarlyClose = true;
+    }
+
+    if (isEarlyClose && isBlockFlowPayload_(safePayload)) {
+      skipTelegram = true;
     }
 
     msg = buildBookingStatusMessage(safePayload, statusKey, reason);
   } else {
-    msg = toStr(payload || "");
+    msg = toStr(payload || '');
   }
 
   msg = toStr(msg)
-    .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/gi, "")
-    .replace(/D\s*น\./gi, "")
-    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/gi, '')
+    .replace(/D\s*น\./gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
     .trim();
 
   if (testMode === true) {
-    return { ok: true, log: msg };
+    return {
+      ok: true,
+      skipped: skipTelegram,
+      log: skipTelegram ? '[SKIP TELEGRAM] early close block flow\n' + msg : msg
+    };
   }
 
-  var config = (typeof getTelegramConfig === "function")
+  if (skipTelegram) {
+    Logger.log('[Telegram] SKIP: early close for leave/repair flow | booking=' + bookingKey);
+    if (typeof appendTgLog_ === 'function') {
+      appendTgLog_('SKIP_EARLY_CLOSE_' + bookingKey, null, msg);
+    }
+    return { ok: true, skipped: true, message: 'Skip Telegram for early-close block flow' };
+  }
+
+  var config = (typeof getTelegramConfig === 'function')
     ? getTelegramConfig()
-    : { token: "", chatId: "" };
+    : { token: '', chatId: '' };
 
   var token = config.token;
   var chatId = config.chatId;
 
-  if (testMode === "send_test") {
-    var map = (typeof getSettingMap_ === "function") ? getSettingMap_() : {};
-    token = map["Telegram Bot Test Token ID"] || token;
-    chatId = map["Telegram Test Chat ID"] || chatId;
+  if (testMode === 'send_test') {
+    var map = (typeof getSettingMap_ === 'function') ? getSettingMap_() : {};
+    token = map['Telegram Bot Test Token ID'] || token;
+    chatId = map['Telegram Test Chat ID'] || chatId;
   }
 
   if (!token || !chatId) {
-    var err = "❌ Telegram Config Missing (Token or ChatID)";
-    if (typeof appendTgLog_ === "function") appendTgLog_("ERR_CONFIG", null, err);
+    var err = '❌ Telegram Config Missing (Token or ChatID)';
+    if (typeof appendTgLog_ === 'function') appendTgLog_('ERR_CONFIG', null, err);
     return { ok: false, error: err };
   }
 
   try {
-    var url = "https://api.telegram.org/bot" + token + "/sendMessage";
+    var url = 'https://api.telegram.org/bot' + token + '/sendMessage';
     var options = {
-      method: "post",
+      method: 'post',
       payload: {
         chat_id: chatId,
         text: msg,
-        parse_mode: "HTML",
+        parse_mode: 'HTML',
         disable_web_page_preview: true
       },
       muteHttpExceptions: true
@@ -7499,22 +7551,23 @@ function sendTelegramNotify(payload, testMode) {
     try {
       resJson = JSON.parse(resText);
     } catch (parseErr) {
-      resJson = { ok: false, error: "Telegram response is not valid JSON", raw: resText };
+      resJson = { ok: false, error: 'Telegram response is not valid JSON', raw: resText };
     }
 
-    if (typeof appendTgLog_ === "function") {
-      appendTgLog_("BID_" + bookingKey, response, msg);
+    if (typeof appendTgLog_ === 'function') {
+      appendTgLog_('BID_' + bookingKey, response, msg);
     }
 
     return resJson;
   } catch (e) {
-    console.error("❌ Telegram Send Error: " + e.message);
-    if (typeof appendTgLog_ === "function") {
-      appendTgLog_("ERR_SEND", null, e.message);
+    console.error('❌ Telegram Send Error: ' + e.message);
+    if (typeof appendTgLog_ === 'function') {
+      appendTgLog_('ERR_SEND', null, e.message);
     }
     return { ok: false, error: e.message };
   }
 }
+
 
 // ===================== FEATURE 1: DRIVER CLAIM =====================
 function claimBooking(payload) {
@@ -7693,91 +7746,119 @@ function createAvailabilityBlock(payload) {
   finally { lock.releaseLock(); }
 }
 
+// ANCHOR: closeAvailabilityBlock
 function closeAvailabilityBlock(payload) {
-  var lock = LockService.getScriptLock();
-  if (!lock.tryLock(5000)) return { ok: false, error: 'System busy' };
-
+  var step = 'START';
   try {
     payload = payload || {};
 
-    var sh = _getAvailabilitySheet();
-    var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
-    var data = sh.getDataRange().getValues();
+    var bookingId = String(payload.bookingId || '').trim();
+    var closedBy = String(payload.closedBy || 'System').trim();
+    var closeNote = String(payload.closeNote || 'ปิดงานก่อนเวลา').trim();
+    var noTelegram = payload.noTelegram === true;
 
-    var idxStr = String(payload.bookingId || '').replace('BLK-', '');
-    var idx = parseInt(idxStr, 10);
+    Logger.log('[EarlyClose] STEP1 input bookingId=' + bookingId + ' noTelegram=' + noTelegram);
 
-    if (isNaN(idx) || idx < 1 || idx >= data.length) {
-      return { ok: false, error: 'ไม่พบรายการที่ต้องการปิด' };
+    if (!bookingId) {
+      throw new Error('ไม่พบ bookingId สำหรับปิดงานก่อนเวลา');
     }
 
-    var colStatus = headers.indexOf('status');
-    var colClosedBy = headers.indexOf('closedBy');
-    var colClosedAt = headers.indexOf('closedAt');
-    var colCloseNote = headers.indexOf('closeNote');
+    var sh = _getAvailabilitySheet();
+    if (!sh) throw new Error('ไม่พบชีต Availability');
 
-    var updateRange = sh.getRange(idx + 1, 1, 1, headers.length);
-    var rowValues = updateRange.getValues()[0];
+    var data = sh.getDataRange().getValues();
+    if (!data || data.length < 2) throw new Error('ไม่พบข้อมูลในชีต Availability');
+
+    var headers = data[0].map(function(h) { return String(h || '').trim(); });
+
+    var col = {
+      resourceType: headers.indexOf('resourceType'),
+      resourceId: headers.indexOf('resourceId'),
+      reason: headers.indexOf('reason'),
+      assignedDriver: headers.indexOf('assignedDriver'),
+      status: headers.indexOf('status'),
+      closedBy: headers.indexOf('closedBy'),
+      closedAt: headers.indexOf('closedAt'),
+      closeNote: headers.indexOf('closeNote'),
+      bookingId: headers.indexOf('bookingId')
+    };
+
+    if (col.status === -1) throw new Error('Availability ไม่มีคอลัมน์ status');
 
     var now = new Date();
-    var closeNote = String(payload.closeNote || 'ปิดใช้งานก่อนกำหนด').trim() || 'ปิดใช้งานก่อนกำหนด';
-    var closedBy = String(payload.closedBy || 'Admin').trim() || 'Admin';
+    var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+    // 🍓 BERRY FIX: ใช้ Formatter แบบปลอดภัย
+    var nowThai = typeof _fmtThaiDateTimeBE_ === 'function' ? _fmtThaiDateTimeBE_(now) : Utilities.formatDate(now, tz, 'dd/MM/yyyy HH:mm น.');
+    var nowISO = Utilities.formatDate(now, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
+    
+    var updated = 0;
+    var closedRows =[];
+    var lastClosedItem = null;
 
-    if (colStatus > -1) rowValues[colStatus] = 'closed';
-    if (colClosedBy > -1) rowValues[colClosedBy] = closedBy;
-    if (colClosedAt > -1) rowValues[colClosedAt] = now;
-    if (colCloseNote > -1) rowValues[colCloseNote] = closeNote;
+    for (var i = 1; i < data.length; i++) {
+      // 🍓 BERRY FIX: ถ้าไม่มีคอลัมน์ bookingId ให้ต่อ String BLK- เข้ากับ index (Fallback)
+      var rowBookingId = (col.bookingId > -1 && data[i][col.bookingId]) ? String(data[i][col.bookingId]).trim() : ('BLK-' + i);
+      var rowStatus = col.status > -1 ? String(data[i][col.status] || '').trim().toLowerCase() : '';
 
-    updateRange.setValues([rowValues]);
+      if (rowBookingId !== bookingId) continue;
+      if (rowStatus === 'closed') continue;
 
-    try {
-      CacheService.getScriptCache().remove('mainDataCache_v13_BerryFix');
-    } catch (e) {}
+      if (col.status > -1) sh.getRange(i + 1, col.status + 1).setValue('closed');
+      if (col.closedBy > -1) sh.getRange(i + 1, col.closedBy + 1).setValue(closedBy);
+      // ลงชีตเก็บเป็น Date ปกติได้
+      if (col.closedAt > -1) sh.getRange(i + 1, col.closedAt + 1).setValue(now);
+      if (col.closeNote > -1) sh.getRange(i + 1, col.closeNote + 1).setValue(closeNote);
 
-    var telegramOk = null;
-    var telegramRes = null;
+      updated++;
 
-    try {
-      var rowObj = {};
-      for (var c = 0; c < headers.length; c++) {
-        rowObj[String(headers[c] || '').trim()] = rowValues[c];
-      }
+      lastClosedItem = {
+        bookingId: bookingId,
+        resourceType: col.resourceType > -1 ? String(data[i][col.resourceType] || '').trim() : '',
+        resourceId: col.resourceId > -1 ? String(data[i][col.resourceId] || '').trim() : '',
+        reason: col.reason > -1 ? String(data[i][col.reason] || '').trim() : '',
+        assignedDriver: col.assignedDriver > -1 ? String(data[i][col.assignedDriver] || '').trim() : '',
+        closedAtISO: nowISO, // 🍓 ส่งกลับเป็น String
+        closedAtText: nowThai,
+        closeNote: closeNote
+      };
 
-      rowObj.bookingId = rowObj.bookingId || rowObj.id || payload.bookingId || ('BLK-' + idx);
-      rowObj.id = rowObj.id || rowObj.bookingId;
-      rowObj.status = rowObj.status || rowObj['สถานะ'] || 'closed';
-      rowObj.closedBy = closedBy;
-      rowObj.closedAt = now;
-      rowObj.closeNote = closeNote;
-      rowObj.reason = closeNote;
-      rowObj.Reason = closeNote;
-
-      if (typeof sendTelegramNotify === 'function') {
-        telegramRes = sendTelegramNotify(rowObj, false);
-        telegramOk = !!(telegramRes && telegramRes.ok);
-        Logger.log('closeAvailabilityBlock Telegram Result: ' + JSON.stringify(telegramRes));
-      } else {
-        telegramOk = false;
-        Logger.log('closeAvailabilityBlock warn: sendTelegramNotify is not defined');
-      }
-    } catch (notifyErr) {
-      telegramOk = false;
-      Logger.log('closeAvailabilityBlock Telegram Error: ' + notifyErr.message);
+      closedRows.push(i + 1);
     }
+
+    Logger.log('[EarlyClose] STEP2 matched rows=' + updated + ' rows=' + JSON.stringify(closedRows));
+
+    if (updated === 0) {
+      throw new Error('ไม่พบ Availability row ที่ยังเปิดอยู่สำหรับ bookingId: ' + bookingId);
+    }
+
+    SpreadsheetApp.flush();
+    try { cacheDelete_('mainDataCache_v13_BerryFix'); } catch (e) {}
+
+    // 🍓 BERRY FIX: ปิดงานลางาน ไม่ส่ง Telegram ยกเว้นโดน Force มา
+    if (!noTelegram) {
+      try {
+        if (typeof sendTelegramAvailabilityClosed_ === 'function') {
+          sendTelegramAvailabilityClosed_(lastClosedItem);
+        }
+      } catch (tgErr) {}
+    }
+
+    Logger.log('[EarlyClose] STEP5 success bookingId=' + bookingId + ' closedAt=' + nowThai);
 
     return {
       ok: true,
-      telegramOk: telegramOk,
-      message: telegramOk === true
-        ? 'ปิดรายการเรียบร้อย และส่ง Telegram แล้ว'
-        : 'ปิดรายการเรียบร้อย',
-      bookingId: payload.bookingId || ('BLK-' + idx)
+      bookingId: bookingId,
+      updatedCount: updated,
+      closedAtISO: nowISO, // ห้ามส่ง now ตรงๆ
+      closedAtText: nowThai,
+      closeNote: closeNote,
+      noTelegram: true,
+      item: lastClosedItem
     };
-  } catch (e) {
-    Logger.log('closeAvailabilityBlock Error: ' + (e.stack || e.message));
-    return { ok: false, error: e.message };
-  } finally {
-    lock.releaseLock();
+
+  } catch (err) {
+    Logger.log('[EarlyClose] FAIL step=' + step + ' message=' + err.message);
+    return { ok: false, error: err.message };
   }
 }
 
@@ -7828,30 +7909,85 @@ function saveMaintenanceAvailability(payload) {
 function _checkAvailabilityOverlap(resType, resId, reqStart, reqEnd) {
   var sh = _getAvailabilitySheet();
   var data = sh.getDataRange().getValues();
-  var headers = data[0];
+  if (!data || data.length < 2) return { conflict: false };
+
+  var headers = data[0] || [];
   var stIdx = headers.indexOf('status');
 
-  for(var i=1; i<data.length; i++) {
-    var status = stIdx > -1 ? String(data[i][stIdx] || '').trim().toLowerCase() : '';
+  var normType = String(resType || '').trim().toLowerCase();
+  var normId = (normType === 'driver')
+    ? normalizeRadarName_(resId)
+    : normalizeRadarPlate_(resId);
+
+  if (!reqStart || !reqEnd || isNaN(reqStart.getTime()) || isNaN(reqEnd.getTime())) {
+    Logger.log('[Radar] _checkAvailabilityOverlap invalid request range: type=' + normType + ' id=' + normId);
+    return { conflict: false };
+  }
+
+  for (var i = 1; i < data.length; i++) {
+    var row = data[i] || [];
+    var status = stIdx > -1 ? String(row[stIdx] || '').trim().toLowerCase() : '';
     if (status === 'closed') continue;
 
-    if(data[i][0] === resType && data[i][1] === resId) {
-      var bStart = parseDateTime_(data[i][2], data[i][3]);
-      var bEnd = parseDateTime_(data[i][4], data[i][5]);
-      if(isOverlapping_(reqStart, reqEnd, bStart, bEnd)) return { conflict: true, reason: data[i][6] };
+    var rowType = String(row[0] || '').trim().toLowerCase();
+    var rowId = (rowType === 'driver')
+      ? normalizeRadarName_(row[1])
+      : normalizeRadarPlate_(row[1]);
+
+    if (rowType !== normType || rowId !== normId) continue;
+
+    var bStart = getRadarDateTime_(row[2], row[3]);
+    var bEnd = getRadarDateTime_(row[4], row[5]);
+
+    if (!bStart || !bEnd || isNaN(bStart.getTime()) || isNaN(bEnd.getTime())) {
+      Logger.log('[Radar] _checkAvailabilityOverlap skip invalid row: row=' + (i + 1));
+      continue;
+    }
+
+    if (bEnd.getTime() < bStart.getTime()) {
+      Logger.log(
+        '[Radar] _checkAvailabilityOverlap invalid block end<start fallback: row=' + (i + 1) +
+        ' start=' + Utilities.formatDate(bStart, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss') +
+        ' end=' + Utilities.formatDate(bEnd, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss')
+      );
+      bEnd = new Date(bStart.getTime());
+    }
+
+    if (isOverlapping_(reqStart, reqEnd, bStart, bEnd)) {
+      return {
+        conflict: true,
+        reason: String(row[6] || '').trim()
+      };
     }
   }
+
   return { conflict: false };
 }
 
 function checkDriverAvailability(driver, sd, st, ed, et) {
-  var rs = parseDateTime_(sd, st), re = parseDateTime_(ed, et);
-  return _checkAvailabilityOverlap('driver', driver, rs, re);
+  var normDriver = normalizeRadarName_(driver);
+  var rs = getRadarDateTime_(sd, st);
+  var re = getRadarDateTime_(ed, et);
+
+  if (!rs || !re || isNaN(rs.getTime()) || isNaN(re.getTime())) {
+    Logger.log('[Radar] checkDriverAvailability invalid datetime: driver=' + normDriver);
+    return { conflict: false };
+  }
+
+  return _checkAvailabilityOverlap('driver', normDriver, rs, re);
 }
 
 function checkVehicleAvailability(plate, sd, st, ed, et) {
-  var rs = parseDateTime_(sd, st), re = parseDateTime_(ed, et);
-  return _checkAvailabilityOverlap('vehicle', plate, rs, re);
+  var normPlate = normalizeRadarPlate_(plate);
+  var rs = getRadarDateTime_(sd, st);
+  var re = getRadarDateTime_(ed, et);
+
+  if (!rs || !re || isNaN(rs.getTime()) || isNaN(re.getTime())) {
+    Logger.log('[Radar] checkVehicleAvailability invalid datetime: plate=' + normPlate);
+    return { conflict: false };
+  }
+
+  return _checkAvailabilityOverlap('vehicle', normPlate, rs, re);
 }
 
 var VB_RADAR_DRIVER_MASTER = [
@@ -7871,202 +8007,385 @@ var VB_RADAR_VEHICLE_MASTER = [
 ];
 
 function normalizeRadarName_(v) {
-  var s = String(v || '')
+  var s = String(v == null ? '' : v)
     .replace(/[\u200B-\u200D\uFEFF]/g, '')
-    .replace(/[\r\n\t]/g, ' ')
+    .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
   if (s === 'ปรีชา ถวิล เวช') s = 'ปรีชา ถวิลเวช';
+
   return s;
 }
 
 function normalizeRadarPlate_(v) {
-  return String(v || '')
-    .replace(/[–—]/g, '-')
+  return String(v == null ? '' : v)
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/[–—−]/g, '-')
+    .replace(/\s*-\s*/g, '-')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 function parseDateTimeBkk_(dateRaw, timeRaw) {
-  try {
-    var dISO = parseDateToISO_(dateRaw);
-    if (!dISO) return null;
-    var tStr = parseTimeSafe_(timeRaw || '00:00');
-    var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
-    var dStr = dISO + ' ' + tStr + ':00';
-    var d = Utilities.parseDate(dStr, tz, 'yyyy-MM-dd HH:mm:ss');
-    if (!d || isNaN(d.getTime())) {
-      // Fallback
-       var p = dISO.split('-');
-       var tp = tStr.split(':');
-       d = new Date(parseInt(p[0]), parseInt(p[1])-1, parseInt(p[2]), parseInt(tp[0]), parseInt(tp[1]), 0, 0);
-    }
-    return d;
-  } catch (e) {
-    Logger.log('parseDateTimeBkk_ error: ' + e.message);
-    return null;
-  }
+  return getRadarDateTime_(dateRaw, timeRaw);
 }
 
 function getServerNowBangkok_() {
-  var tz = Session.getScriptTimeZone() || (typeof TZ !== 'undefined' ? TZ : 'Asia/Bangkok');
-  return Utilities.parseDate(Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss'), tz, 'yyyy-MM-dd HH:mm:ss');
+  var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
+  return Utilities.parseDate(
+    Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss'),
+    tz,
+    'yyyy-MM-dd HH:mm:ss'
+  );
 }
 
 function isNowBetween_(now, startAt, endAt) {
   if (!now || !startAt || !endAt) return false;
+  if (isNaN(now.getTime()) || isNaN(startAt.getTime()) || isNaN(endAt.getTime())) return false;
   return now.getTime() >= startAt.getTime() && now.getTime() <= endAt.getTime();
+}
+
+function getRadarDateTime_(dateVal, timeVal) {
+  var d = _radarNormalizeDateOnly_(dateVal);
+  var t = _radarNormalizeTimeOnly_(timeVal);
+  if (!d) return null;
+
+  var dt = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    t.h,
+    t.m,
+    0,
+    0
+  );
+
+  try {
+    Logger.log(
+      '[Radar] getRadarDateTime_ parsed: dISO=%s tStr=%s -> %s',
+      String(dateVal),
+      String(timeVal),
+      Utilities.formatDate(dt, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss')
+    );
+  } catch (_) {}
+
+  return dt;
+}
+
+function _radarNormalizeDateOnly_(dateVal) {
+  if (dateVal === null || dateVal === undefined || dateVal === '') return null;
+
+  if (Object.prototype.toString.call(dateVal) === '[object Date]' && !isNaN(dateVal.getTime())) {
+    var y0 = dateVal.getFullYear();
+    if (y0 > 2400) y0 -= 543;
+    return new Date(y0, dateVal.getMonth(), dateVal.getDate(), 0, 0, 0, 0);
+  }
+
+  var s = String(dateVal).trim();
+  if (!s) return null;
+
+  var m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) {
+    var y1 = parseInt(m[1], 10);
+    if (y1 > 2400) y1 -= 543;
+    return new Date(y1, parseInt(m[2], 10) - 1, parseInt(m[3], 10), 0, 0, 0, 0);
+  }
+
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    var d2 = parseInt(m[1], 10);
+    var mo2 = parseInt(m[2], 10) - 1;
+    var y2 = parseInt(m[3], 10);
+    if (y2 > 2400) y2 -= 543;
+    return new Date(y2, mo2, d2, 0, 0, 0, 0);
+  }
+
+  var tmp = new Date(s);
+  if (!isNaN(tmp.getTime())) {
+    var y3 = tmp.getFullYear();
+    if (y3 > 2400) y3 -= 543;
+    return new Date(y3, tmp.getMonth(), tmp.getDate(), 0, 0, 0, 0);
+  }
+
+  return null;
+}
+
+function _radarNormalizeTimeOnly_(timeVal) {
+  if (timeVal === null || timeVal === undefined || timeVal === '') {
+    return { h: 0, m: 0 };
+  }
+
+  if (Object.prototype.toString.call(timeVal) === '[object Date]' && !isNaN(timeVal.getTime())) {
+    return {
+      h: timeVal.getHours(),
+      m: timeVal.getMinutes()
+    };
+  }
+
+  var s = String(timeVal).trim();
+  if (!s) return { h: 0, m: 0 };
+
+  var m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    return {
+      h: Math.max(0, Math.min(23, parseInt(m[1], 10))),
+      m: Math.max(0, Math.min(59, parseInt(m[2], 10)))
+    };
+  }
+
+  var tmp = new Date(s);
+  if (!isNaN(tmp.getTime())) {
+    return {
+      h: tmp.getHours(),
+      m: tmp.getMinutes()
+    };
+  }
+
+  return { h: 0, m: 0 };
 }
 
 // ANCHOR: buildRadarContext_
 function buildRadarContext_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var tz = Session.getScriptTimeZone() || 'Asia/Bangkok';
-  var now = getServerNowBangkok_();
+  var TZ = 'Asia/Bangkok';
+  var ctx = {
+    tz: TZ,
+    now: getServerNowBangkok_(),
+    nowText: '',
+    availBlocks: [],
+    approvedBookings:[],
+    byDriver: {},
+    byVehicle: {}
+  };
 
-  // STEP1: log server now Bangkok
-  Logger.log('[Radar] STEP1 serverNow(BKK): ' + Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss'));
+  function fmt_(d) {
+    if (!d || isNaN(d.getTime())) return '-';
+    return Utilities.formatDate(d, TZ, 'yyyy-MM-dd HH:mm');
+  }
 
-  function getRadarDateTime_(dISO, tStr, defaultTime) {
-    if (!dISO) return null;
-    var cleanISO = parseDateToISO_(dISO);
-    if (!cleanISO) return null;
+  function splitDriverValues_(raw) {
+    return String(raw || '')
+      .split(/[,\n|\/]+/)
+      .map(function(part) { return normalizeRadarName_(part); })
+      .filter(function(part) { return part && part !== '-'; });
+  }
 
-    // 🍓 BERRY FIX v3: จัดการ Date object และทศนิยมบอกเวลา (Serial Time) จาก Google Sheets
-    var cleanTime = defaultTime || '00:00';
-    if (tStr != null && tStr !== '') {
-      if (tStr instanceof Date && !isNaN(tStr.getTime())) {
-        // Google Sheets ส่งเวลาเป็น Date object → extract HH:mm ตรงๆ
-        cleanTime = Utilities.formatDate(tStr, tz, 'HH:mm');
-      } else if (typeof tStr === 'number' && isFinite(tStr)) {
-        var num = tStr % 1;
-        var tm = Math.round(num * 24 * 60);
-        if (tm >= 1440) tm = 1439;
-        if (tm < 0) tm = 0;
-        var hh = Math.floor(tm / 60);
-        var mi = tm % 60;
-        cleanTime = (hh < 10 ? '0' : '') + hh + ':' + (mi < 10 ? '0' : '') + mi;
-      } else {
-        var rawTime = String(tStr).trim();
-        if (rawTime) {
-          cleanTime = parseTimeSafe_(rawTime);
-          // Guard: ถ้า parseTimeSafe คืน '00:00' จาก input ที่ไม่ใช่เวลา 00:xx จริง
-          if (cleanTime === '00:00' && !/^0(?:$|\.)|^:0|^00/.test(rawTime) && rawTime !== '0') {
-            cleanTime = defaultTime || '00:00';
+  function splitVehicleValues_(raw) {
+    return String(raw || '')
+      .split(/[,\n|\/]+/)
+      .map(function(part) { return normalizeRadarPlate_(part); })
+      .filter(function(part) { return part && part !== '-'; });
+  }
+
+  function addDriverSlot_(driverName, item) {
+    splitDriverValues_(driverName).forEach(function(name) {
+      if (!ctx.byDriver[name]) ctx.byDriver[name] = [];
+      ctx.byDriver[name].push(item);
+    });
+  }
+
+  function addVehicleSlot_(vehicleName, item) {
+    splitVehicleValues_(vehicleName).forEach(function(plate) {
+      if (!ctx.byVehicle[plate]) ctx.byVehicle[plate] = [];
+      ctx.byVehicle[plate].push(item);
+    });
+  }
+
+  function isOvernightTimeOnlyFix_(startAt, endAt, rawStartDate, rawEndDate) {
+    if (!startAt || !endAt) return false;
+
+    var startDateOnly = _radarNormalizeDateOnly_(rawStartDate);
+    var endDateOnly = _radarNormalizeDateOnly_(rawEndDate || rawStartDate);
+
+    var sameDateText = false;
+    if (startDateOnly && endDateOnly) {
+      sameDateText =
+        startDateOnly.getFullYear() === endDateOnly.getFullYear() &&
+        startDateOnly.getMonth() === endDateOnly.getMonth() &&
+        startDateOnly.getDate() === endDateOnly.getDate();
+    }
+
+    var sameDayObj =
+      startAt.getFullYear() === endAt.getFullYear() &&
+      startAt.getMonth() === endAt.getMonth() &&
+      startAt.getDate() === endAt.getDate();
+
+    if (!(sameDateText || sameDayObj)) return false;
+
+    var startMin = startAt.getHours() * 60 + startAt.getMinutes();
+    var endMin = endAt.getHours() * 60 + endAt.getMinutes();
+
+    return endMin < startMin;
+  }
+
+  try {
+    ctx.nowText = Utilities.formatDate(ctx.now, TZ, 'yyyy-MM-dd HH:mm:ss');
+    Logger.log('[Radar] STEP1 serverNow(BKK): ' + ctx.nowText);
+
+    var mainData = getMainData_();
+    if (!mainData || !mainData.ok || !mainData.data || !mainData.data.bookings) {
+      Logger.log('[Radar] STEP0 mainData invalid');
+      return ctx;
+    }
+
+    var rows = mainData.data.bookings ||[];
+
+    rows.forEach(function(b) {
+      var status = String(b.status || '').trim().toLowerCase();
+
+      // =========================
+      // CASE A: availability block
+      // =========================
+      if (status === 'driver_block' || status === 'vehicle_block') {
+        
+        // 🍓 BERRY FIX: ข้ามงานที่ถูกปิด (Soft Close) ไปแล้ว เพื่อไม่ให้แสดงในเรดาร์ว่าติดงาน
+        if (b.isClosed === true || String(b.blockStatus || '').toLowerCase() === 'closed') {
+           Logger.log('[Radar] STEP5 skip closed block: id=' + String(b.bookingId || ''));
+           return; 
+        }
+
+        var blockStart = getRadarDateTime_(b.startDate || b.date, b.startTime || '00:00');
+        var blockEnd = getRadarDateTime_(b.endDate || b.startDate || b.date, b.endTime || '23:59');
+
+        if (!blockStart || !blockEnd) {
+          Logger.log('[Radar] STEP5 skip invalid block datetime: id=' + String(b.bookingId || ''));
+          return;
+        }
+
+        if (blockEnd.getTime() < blockStart.getTime()) {
+          if (isOvernightTimeOnlyFix_(blockStart, blockEnd, b.startDate || b.date, b.endDate || b.startDate || b.date)) {
+            blockEnd = new Date(blockEnd.getTime() + 24 * 60 * 60 * 1000);
+          } else {
+            Logger.log(
+              '[Radar] STEP5 invalid block endAt<startAt fallback: id=%s start=%s end=%s',
+              String(b.bookingId || ''),
+              fmt_(blockStart),
+              fmt_(blockEnd)
+            );
+            blockEnd = new Date(blockStart.getTime());
           }
         }
+
+        var blockItem = {
+          bookingId: String(b.bookingId || ''),
+          resourceType: status === 'driver_block' ? 'driver' : 'vehicle',
+          resourceId: status === 'driver_block'
+            ? normalizeRadarName_(b.driver || b.name || b.resourceId)
+            : normalizeRadarPlate_(b.vehicle || b.plate || b.name || b.resourceId),
+          startAt: blockStart,
+          endAt: blockEnd,
+          reason: String(b.reason || b.note || b.project || '').trim(),
+          status: status,
+          isClosed: b.isClosed === true
+        };
+
+        ctx.availBlocks.push(blockItem);
+
+        Logger.log(
+          '[Radar] STEP5 availBlock: type=%s id=%s start=%s end=%s reason=%s',
+          blockItem.resourceType,
+          blockItem.resourceId,
+          fmt_(blockItem.startAt),
+          fmt_(blockItem.endAt),
+          blockItem.reason || '-'
+        );
+
+        if (blockItem.resourceType === 'driver') {
+          addDriverSlot_(blockItem.resourceId, blockItem);
+        } else {
+          addVehicleSlot_(blockItem.resourceId, blockItem);
+        }
+
+        return;
       }
-    }
 
-    var fullStr = cleanISO + ' ' + cleanTime + ':00';
-    var parsedReturn = Utilities.parseDate(fullStr, tz, 'yyyy-MM-dd HH:mm:ss');
-    Logger.log('[Radar] getRadarDateTime_ parsed: dISO=' + String(dISO) + ' tStr=' + String(tStr) + ' -> ' + Utilities.formatDate(parsedReturn, tz, 'yyyy-MM-dd HH:mm:ss'));
-    return parsedReturn;
-  }
+      // =========================
+      // CASE B: approved booking
+      // =========================
+      if (status !== 'approved' && status !== 'driver_special_approved') return;
 
-  var availBlocks =[];
-  var shAvail = ss.getSheetByName('Availability');
-  if (shAvail && shAvail.getLastRow() > 1) {
-    var availHeaders = shAvail.getRange(1, 1, 1, shAvail.getLastColumn()).getValues()[0];
-    var assignedDriverColIndex = availHeaders.indexOf('assignedDriver');
-    var statusColIndex = availHeaders.indexOf('status'); // 🍓 BERRY FIX
-    var avVals = shAvail.getRange(2, 1, shAvail.getLastRow() - 1, shAvail.getLastColumn()).getValues();
+      var rawStartDate = b.startDate || b.date;
+      var rawEndDate = b.endDate || b.startDate || b.date;
+      var rawStartTime = b.startTime || '00:00';
+      var rawEndTime = b.endTime || '23:59';
 
-    for (var i = 0; i < avVals.length; i++) {
-      var row = avVals[i];
-      
-      // 🍓 BERRY FIX: ข้าม ignore row ที่ status เป็น closed
-      var blockStatus = (statusColIndex > -1) ? String(row[statusColIndex] || '').trim().toLowerCase() : '';
-      if (blockStatus === 'closed') continue;
+      var startAt = getRadarDateTime_(rawStartDate, rawStartTime);
+      var endAt = getRadarDateTime_(rawEndDate, rawEndTime);
 
-      var resourceType = String(row[0] || '').trim().toLowerCase();
-      var resourceId = String(row[1] || '').trim();
+      Logger.log(
+        '[Radar] STEP2 booking: id=%s status=%s driver=%s vehicle=%s',
+        String(b.bookingId || ''),
+        status,
+        String(b.driver || '').trim(),
+        String(b.vehicle || b.plate || '').trim()
+      );
 
-      var startAt = getRadarDateTime_(row[2], row[3], '00:00');
-      var endAt = getRadarDateTime_(row[4] || row[2], row[5], '23:59');
+      if (!startAt || !endAt) {
+        Logger.log(
+          '[Radar] STEP3 skip invalid datetime: id=%s startAt=%s endAt=%s',
+          String(b.bookingId || ''),
+          String(startAt),
+          String(endAt)
+        );
+        return;
+      }
 
-      if (!resourceType || !resourceId || !startAt || !endAt) continue;
+      if (endAt.getTime() < startAt.getTime()) {
+        if (isOvernightTimeOnlyFix_(startAt, endAt, rawStartDate, rawEndDate)) {
+          endAt = new Date(endAt.getTime() + 24 * 60 * 60 * 1000);
+        } else {
+          Logger.log(
+            '[Radar] STEP3 invalid endAt<startAt fallback: id=%s start=%s end=%s',
+            String(b.bookingId || ''),
+            fmt_(startAt),
+            fmt_(endAt)
+          );
+          endAt = new Date(startAt.getTime());
+        }
+      }
 
-      // STEP5: log active repair/leave block
-      Logger.log('[Radar] STEP5 availBlock: type=' + resourceType + ' id=' + resourceId +
-        ' start=' + Utilities.formatDate(startAt, tz, 'yyyy-MM-dd HH:mm') +
-        ' end=' + Utilities.formatDate(endAt, tz, 'yyyy-MM-dd HH:mm') +
-        ' reason=' + String(row[6] || ''));
-
-      availBlocks.push({
-        resourceType: resourceType,
-        resourceId: resourceId,
+      var bookingItem = {
+        bookingId: String(b.bookingId || ''),
+        driver: String(b.driver || '').trim(),
+        driverRaw: String(b.driver || '').trim(),
+        vehicle: String(b.vehicle || b.plate || '').trim(),
+        vehicleRaw: String(b.vehicle || b.plate || '').trim(),
         startAt: startAt,
         endAt: endAt,
-        reason: String(row[6] || '').trim(),
-        assignedDriver: assignedDriverColIndex > -1 ? String(row[assignedDriverColIndex] || '').trim() : ''
-      });
-    }
-  }
+        destination: String(b.destination || b.place || '').trim(),
+        workName: String(b.workName || b.project || '').trim(),
+        status: status,
+        raw: b
+      };
 
-  var approvedBookings =[];
-  var shData = ss.getSheetByName('Data');
-  if (shData && shData.getLastRow() > 1) {
-    // 🍓 BERRY FIX: อ่าน Actual Ends (เปลี่ยนชื่อให้ไม่มี _ แล้วค่ะ)
-    var actualEndsMap = getActualEndsMap();
-    
-    var headers = shData.getRange(1, 1, 1, shData.getLastColumn()).getValues()[0].map(function(h) {
-      return String(h || '').trim();
+      ctx.approvedBookings.push(bookingItem);
+
+      Logger.log(
+        '[Radar] STEP3 booking parsed: startAt=%s endAt=%s rawEndTime=%s rawEndTimeType=%s isDate=%s',
+        fmt_(bookingItem.startAt),
+        fmt_(bookingItem.endAt),
+        String(rawEndTime),
+        typeof rawEndTime,
+        Object.prototype.toString.call(rawEndTime) === '[object Date]'
+      );
+
+      addDriverSlot_(bookingItem.driver, bookingItem);
+      addVehicleSlot_(bookingItem.vehicle, bookingItem);
     });
-    var idx = headerIndex_(headers);
-    var dataVals = shData.getRange(2, 1, shData.getLastRow() - 1, shData.getLastColumn()).getValues();
 
-    for (var r = 0; r < dataVals.length; r++) {
-      var row2 = dataVals[r];
-      var bookingIdRAW = String(row2[idx.bookingId] || '').trim();
-      var statusKey = getStatusKeySafe_(row2[idx.status]);
-      if (statusKey !== 'approved' && statusKey !== 'driver_special_approved') continue;
+    Logger.log(
+      '[Radar] STEP2 loaded: availBlocks=%s approvedBookings=%s',
+      parseInt(ctx.availBlocks.length, 10),
+      parseInt(ctx.approvedBookings.length, 10)
+    );
+    Logger.log('[Radar] DEBUG Server Context: currentTime = ' + ctx.nowText);
 
-      var startAt2 = getRadarDateTime_(row2[idx.startDate], row2[idx.startTime], '00:00');
-      var endAt2 = getRadarDateTime_(row2[idx.endDate] || row2[idx.startDate], row2[idx.endTime], '23:59');
-      
-      // 🍓 BERRY FIX: Override endAt ด้วย Actual End ถ้าผู้ใช้กดปิดงานก่อนเวลา
-      var aEndObj = actualEndsMap[bookingIdRAW];
-      if (aEndObj && aEndObj.actualEndAtObj && !isNaN(aEndObj.actualEndAtObj.getTime())) {
-          endAt2 = aEndObj.actualEndAtObj;
-      }
+    return ctx;
 
-      if (!startAt2 || !endAt2) continue;
-
-      // STEP2/STEP3: log approved bookings with parsed startAt/endAt
-      Logger.log('[Radar] STEP2 booking: id=' + bookingIdRAW +
-        ' status=' + statusKey +
-        ' driver=' + String(row2[idx.driver] || '') +
-        ' vehicle=' + String(row2[idx.vehicle] || ''));
-      Logger.log('[Radar] STEP3 booking parsed: startAt=' + Utilities.formatDate(startAt2, tz, 'yyyy-MM-dd HH:mm') +
-        ' endAt=' + Utilities.formatDate(endAt2, tz, 'yyyy-MM-dd HH:mm') +
-        ' rawEndTime=' + String(row2[idx.endTime]) +
-        ' rawEndTimeType=' + typeof row2[idx.endTime] +
-        ' isDate=' + (row2[idx.endTime] instanceof Date));
-
-      approvedBookings.push({
-        bookingId: bookingIdRAW,
-        status: statusKey,
-        driverRaw: String(row2[idx.driver] || '').trim(),
-        vehicleRaw: String(row2[idx.vehicle] || '').trim(),
-        destination: String(row2[idx.destination] || '').trim(),
-        workName: String(row2[idx.workName] || '').trim(),
-        startAt: startAt2,
-        endAt: endAt2
-      });
-    }
+  } catch (err) {
+    Logger.log('[Radar] EXCEPTION buildRadarContext_: ' + (err && err.stack ? err.stack : err));
+    return ctx;
   }
-
-  // STEP2: log total loaded
-  Logger.log('[Radar] STEP2 loaded: availBlocks=' + availBlocks.length + ' approvedBookings=' + approvedBookings.length);
-  Logger.log('[Radar] DEBUG Server Context: currentTime = ' + Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss'));
-
-  return {
-    now: now,
-    tz: tz,
-    availBlocks: availBlocks,
-    approvedBookings: approvedBookings
-  };
 }
 
 function isBookingActiveNow(start, end, now) {
@@ -8078,9 +8397,8 @@ function isBookingActiveNow(start, end, now) {
 
   if (isNaN(s.getTime()) || isNaN(e.getTime()) || isNaN(n.getTime())) return false;
 
-  // FIX: handle end < start (ข้ามวัน / ข้อมูลเวลาสลับ)
   if (e.getTime() < s.getTime()) {
-    e.setDate(e.getDate() + 1);
+    e = new Date(e.getTime() + 24 * 60 * 60 * 1000);
   }
 
   return n.getTime() >= s.getTime() && n.getTime() <= e.getTime();
@@ -8088,9 +8406,15 @@ function isBookingActiveNow(start, end, now) {
 
 function isSameDay(dateA, dateB) {
   if (!dateA || !dateB) return false;
-  return dateA.getFullYear() === dateB.getFullYear() &&
-         dateA.getMonth() === dateB.getMonth() &&
-         dateA.getDate() === dateB.getDate();
+
+  var a = new Date(dateA);
+  var b = new Date(dateB);
+
+  if (isNaN(a.getTime()) || isNaN(b.getTime())) return false;
+
+  return a.getFullYear() === b.getFullYear() &&
+         a.getMonth() === b.getMonth() &&
+         a.getDate() === b.getDate();
 }
 
 function isBookingToday(start, end, now) {
@@ -8102,56 +8426,48 @@ function isBookingToday(start, end, now) {
 
   if (isNaN(s.getTime()) || isNaN(e.getTime()) || isNaN(n.getTime())) return false;
 
-  // FIX: handle end < start (ข้ามวัน / ข้อมูลเวลาสลับ)
   if (e.getTime() < s.getTime()) {
-    e.setDate(e.getDate() + 1);
+    e = new Date(e.getTime() + 24 * 60 * 60 * 1000);
   }
 
   return isSameDay(s, n) || isSameDay(e, n) || (n.getTime() >= s.getTime() && n.getTime() <= e.getTime());
 }
 
-/* ANCHOR: calculateVehicleStatus */
 function calculateVehicleStatus(plate, ctx) {
   var normPlate = normalizeRadarPlate_(plate);
   var now = (ctx && ctx.now instanceof Date) ? ctx.now : new Date();
+  var TZ = (ctx && ctx.tz) ? ctx.tz : 'Asia/Bangkok';
 
   function splitPlateValues(raw) {
     return String(raw || '')
       .split(/[,\n|\/]+/)
       .map(function(x) { return normalizeRadarPlate_(x); })
-      .filter(function(x) { return x; });
+      .filter(function(x) { return !!x; });
   }
 
-  function normalizeRange(startAt, endAt) {
-    if (!startAt || !endAt) return null;
-
-    var s = new Date(startAt);
-    var e = new Date(endAt);
-
-    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
-
-    return { start: s, end: e };
+  function toDateSafe(v) {
+    if (!v) return null;
+    var d = (v instanceof Date) ? new Date(v.getTime()) : new Date(v);
+    return isNaN(d.getTime()) ? null : d;
   }
 
   function isTargetActiveRightNow(startAt, endAt) {
-    var range = normalizeRange(startAt, endAt);
-    if (!range) return false;
+    var s = toDateSafe(startAt);
+    var e = toDateSafe(endAt);
+    if (!s || !e) return false;
 
     var nowMs = now.getTime();
-    var isOverlap = nowMs >= range.start.getTime() && nowMs <= range.end.getTime();
-    
-    Logger.log('[Radar] DEBUG isTargetActiveRightNow: now=' + Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss') + 
-               ' rangeStart=' + Utilities.formatDate(range.start, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss') + 
-               ' rangeEnd=' + Utilities.formatDate(range.end, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss') + 
-               ' --> overlap: ' + isOverlap);
-               
-    return isOverlap;
-  }
+    var isOverlap = nowMs >= s.getTime() && nowMs <= e.getTime();
 
-  function isBookingBusyForRadarToday(startAt, endAt) {
-    // 🍓 BERRY FIX: เปลี่ยนให้เช็คตามเวลาจริง (Real-time overlap)
-    // แทนการเหมาทั้งวัน ป้องกันสถานะ "ติดภารกิจ" ค้างหลังหมดเวลาจอง
-    return isTargetActiveRightNow(startAt, endAt);
+    Logger.log(
+      '[Radar] DEBUG isTargetActiveRightNow Vehicle: now=' +
+      Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm:ss') +
+      ' rangeStart=' + Utilities.formatDate(s, TZ, 'yyyy-MM-dd HH:mm:ss') +
+      ' rangeEnd=' + Utilities.formatDate(e, TZ, 'yyyy-MM-dd HH:mm:ss') +
+      ' --> overlap=' + isOverlap
+    );
+
+    return isOverlap;
   }
 
   function buildRadarStatus(status, label, color, job, fallbackJob) {
@@ -8163,11 +8479,20 @@ function calculateVehicleStatus(plate, ctx) {
     };
   }
 
-  // 1) ส่งซ่อม: ตรวจตามเวลาจริง
-  var activeRepair = (ctx.availBlocks ||[]).find(function(b) {
-    return b.resourceType === 'vehicle' &&
-      normalizeRadarPlate_(b.resourceId) === normPlate &&
-      isTargetActiveRightNow(b.startAt, b.endAt);
+  function formatTimeSafe(d) {
+    var x = toDateSafe(d);
+    return x ? Utilities.formatDate(x, TZ, 'HH:mm') : '-';
+  }
+
+  if (!normPlate) {
+    return buildRadarStatus('unknown', '-', 'gray', 'ไม่พบทะเบียนรถ', 'ไม่พบทะเบียนรถ');
+  }
+
+  // 1) ส่งซ่อม / block รถ
+  var activeRepair = (ctx && ctx.availBlocks || []).find(function(b) {
+    return String(b && b.resourceType || '').trim() === 'vehicle' &&
+      normalizeRadarPlate_(b && b.resourceId) === normPlate &&
+      isTargetActiveRightNow(b && b.startAt, b && b.endAt);
   });
 
   if (activeRepair) {
@@ -8180,14 +8505,21 @@ function calculateVehicleStatus(plate, ctx) {
     );
   }
 
-  // 2) ติดภารกิจ: เฉพาะช่วงเวลาจริงที่ overlap กับ now เท่านั้น (real-time)
-  var busyBooking = (ctx.approvedBookings ||[]).find(function(b) {
-    var plates = splitPlateValues(b.vehicleRaw || b.vehicle || b.plate || '');
+  // 2) ติดภารกิจจากงานอนุมัติ
+  var busyBooking = (ctx && ctx.approvedBookings || []).find(function(b) {
+    var plates = splitPlateValues(b && (b.vehicleRaw || b.vehicle || b.plate || ''));
     if (plates.indexOf(normPlate) === -1) return false;
 
-    var isOverlap = isBookingBusyForRadarToday(b.startAt, b.endAt);
-    // STEP4: Overlap result by booking
-    Logger.log('[Radar] STEP4 Overlap Result Vehicle: plate=' + normPlate + ' booking=' + b.bookingId + ' overlap=' + isOverlap + ' (start=' + Utilities.formatDate(b.startAt, "Asia/Bangkok", "HH:mm") + ' end=' + Utilities.formatDate(b.endAt, "Asia/Bangkok", "HH:mm") + ')');
+    var isOverlap = isTargetActiveRightNow(b && b.startAt, b && b.endAt);
+
+    Logger.log(
+      '[Radar] STEP4 Overlap Result Vehicle: plate=' + normPlate +
+      ' booking=' + String(b && b.bookingId || '-') +
+      ' overlap=' + isOverlap +
+      ' (start=' + formatTimeSafe(b && b.startAt) +
+      ' end=' + formatTimeSafe(b && b.endAt) + ')'
+    );
+
     return isOverlap;
   });
 
@@ -8196,15 +8528,15 @@ function calculateVehicleStatus(plate, ctx) {
       'busy',
       'ติดภารกิจ',
       'yellow',
-      busyBooking.destination || busyBooking.workName,
+      busyBooking.destination || busyBooking.workName || busyBooking.reason,
       'มีภารกิจตอนนี้'
     );
   }
 
-  // 3) พร้อม
+  // 3) พร้อมใช้
   return buildRadarStatus(
     'ready',
-    'พร้อม',
+    'พร้อมใช้',
     'green',
     'พร้อมใช้งาน',
     'พร้อมใช้งาน'
@@ -8214,36 +8546,38 @@ function calculateVehicleStatus(plate, ctx) {
 function calculateDriverStatus(driverName, ctx) {
   var name = normalizeRadarName_(driverName);
   var now = (ctx && ctx.now instanceof Date) ? ctx.now : new Date();
+  var TZ = (ctx && ctx.tz) ? ctx.tz : 'Asia/Bangkok';
 
   function splitDriverNames(raw) {
     return String(raw || '')
       .split(/[,\n|\/]+/)
       .map(function(x) { return normalizeRadarName_(x); })
-      .filter(function(x) { return x; });
+      .filter(function(x) { return !!x; });
   }
 
-  function normalizeRange(startAt, endAt) {
-    if (!startAt || !endAt) return null;
-
-    var s = new Date(startAt);
-    var e = new Date(endAt);
-
-    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
-
-    return { start: s, end: e };
+  function toDateSafe(v) {
+    if (!v) return null;
+    var d = (v instanceof Date) ? new Date(v.getTime()) : new Date(v);
+    return isNaN(d.getTime()) ? null : d;
   }
 
   function isTargetActiveRightNow(startAt, endAt) {
-    var range = normalizeRange(startAt, endAt);
-    if (!range) return false;
+    var s = toDateSafe(startAt);
+    var e = toDateSafe(endAt);
+    if (!s || !e) return false;
 
     var nowMs = now.getTime();
-    return nowMs >= range.start.getTime() && nowMs <= range.end.getTime();
-  }
+    var isOverlap = nowMs >= s.getTime() && nowMs <= e.getTime();
 
-  function isBookingBusyForRadarToday(startAt, endAt) {
-    // เช็คตามเวลาจริงเท่านั้น
-    return isTargetActiveRightNow(startAt, endAt);
+    Logger.log(
+      '[Radar] DEBUG isTargetActiveRightNow Driver: now=' +
+      Utilities.formatDate(now, TZ, 'yyyy-MM-dd HH:mm:ss') +
+      ' rangeStart=' + Utilities.formatDate(s, TZ, 'yyyy-MM-dd HH:mm:ss') +
+      ' rangeEnd=' + Utilities.formatDate(e, TZ, 'yyyy-MM-dd HH:mm:ss') +
+      ' --> overlap=' + isOverlap
+    );
+
+    return isOverlap;
   }
 
   function buildRadarStatus(status, label, color, job, fallbackJob) {
@@ -8255,42 +8589,60 @@ function calculateDriverStatus(driverName, ctx) {
     };
   }
 
-  // 1) ลา: ตรวจตามเวลาจริง
-  var activeLeave = (ctx.availBlocks || []).find(function(b) {
-    return b.resourceType === 'driver' &&
-      normalizeRadarName_(b.resourceId) === name &&
-      isTargetActiveRightNow(b.startAt, b.endAt);
+  function formatTimeSafe(d) {
+    var x = toDateSafe(d);
+    return x ? Utilities.formatDate(x, TZ, 'HH:mm') : '-';
+  }
+
+  if (!name) {
+    return buildRadarStatus('unknown', '-', 'gray', 'ไม่พบชื่อพนักงานขับรถ', 'ไม่พบชื่อพนักงานขับรถ');
+  }
+
+  // 1) ลา / block คนขับ
+  var activeLeave = (ctx && ctx.availBlocks || []).find(function(b) {
+    return String(b && b.resourceType || '').trim() === 'driver' &&
+      normalizeRadarName_(b && b.resourceId) === name &&
+      isTargetActiveRightNow(b && b.startAt, b && b.endAt);
   });
 
   if (activeLeave) {
-    // 🍓 BERRY FIX: ถ้าเป็นการส่งซ่อม (reason มีคำว่า ซ่อม) ให้แสดงเป็น ติดภารกิจ
-    var isRepair = (activeLeave.reason || '').indexOf('ซ่อม') !== -1;
-    if (isRepair) {
+    var reasonText = String(activeLeave.reason || '').trim();
+    var isRepairMission = reasonText.indexOf('ซ่อม') !== -1;
+
+    if (isRepairMission) {
       return buildRadarStatus(
         'busy',
         'ติดภารกิจ',
         'yellow',
-        activeLeave.reason,
+        reasonText,
         'นำรถไปซ่อม / ติดภารกิจ'
       );
     }
+
     return buildRadarStatus(
       'leave',
       'ลา',
       'red',
-      activeLeave.reason,
+      reasonText,
       'ลางาน / ไม่พร้อมปฏิบัติงาน'
     );
   }
 
-  // 2) ติดภารกิจ: เฉพาะงานที่กำลัง overlap ตอนนี้
-  var busyBooking = (ctx.approvedBookings || []).find(function(b) {
-    var drivers = splitDriverNames(b.driverRaw || b.driver || b.driverName || '');
+  // 2) ติดภารกิจจากงานอนุมัติ
+  var busyBooking = (ctx && ctx.approvedBookings || []).find(function(b) {
+    var drivers = splitDriverNames(b && (b.driverRaw || b.driver || b.driverName || ''));
     if (drivers.indexOf(name) === -1) return false;
 
-    var isOverlap = isBookingBusyForRadarToday(b.startAt, b.endAt);
-    // STEP4: Overlap result by booking
-    Logger.log('[Radar] STEP4 Overlap Result Driver: name=' + name + ' booking=' + b.bookingId + ' overlap=' + isOverlap + ' (start=' + Utilities.formatDate(b.startAt, "Asia/Bangkok", "HH:mm") + ' end=' + Utilities.formatDate(b.endAt, "Asia/Bangkok", "HH:mm") + ')');
+    var isOverlap = isTargetActiveRightNow(b && b.startAt, b && b.endAt);
+
+    Logger.log(
+      '[Radar] STEP4 Overlap Result Driver: name=' + name +
+      ' booking=' + String(b && b.bookingId || '-') +
+      ' overlap=' + isOverlap +
+      ' (start=' + formatTimeSafe(b && b.startAt) +
+      ' end=' + formatTimeSafe(b && b.endAt) + ')'
+    );
+
     return isOverlap;
   });
 
@@ -8299,15 +8651,15 @@ function calculateDriverStatus(driverName, ctx) {
       'busy',
       'ติดภารกิจ',
       'yellow',
-      busyBooking.destination || busyBooking.workName,
+      busyBooking.destination || busyBooking.workName || busyBooking.reason,
       'มีภารกิจตอนนี้'
     );
   }
 
-  // 3) พร้อม
+  // 3) พร้อมทำงาน
   return buildRadarStatus(
     'ready',
-    'พร้อม',
+    'ทำงาน',
     'green',
     'พร้อมปฏิบัติงาน',
     'พร้อมปฏิบัติงาน'
@@ -8316,12 +8668,23 @@ function calculateDriverStatus(driverName, ctx) {
 
 function buildRadarData() {
   var ctx = buildRadarContext_();
-  var yearBE = parseInt(Utilities.formatDate(ctx.now, ctx.tz, 'yyyy'), 10) + 543;
+  var tz = (ctx && ctx.tz) ? ctx.tz : 'Asia/Bangkok';
+  var now = (ctx && ctx.now instanceof Date) ? ctx.now : getServerNowBangkok_();
+  var yearBE = parseInt(Utilities.formatDate(now, tz, 'yyyy'), 10) + 543;
 
-  var drivers = VB_RADAR_DRIVER_MASTER.map(function(name) {
+  var driverMaster = Array.isArray(VB_RADAR_DRIVER_MASTER) ? VB_RADAR_DRIVER_MASTER : [];
+  var vehicleMaster = Array.isArray(VB_RADAR_VEHICLE_MASTER) ? VB_RADAR_VEHICLE_MASTER : [];
+
+  var drivers = driverMaster.map(function(name) {
     var st = calculateDriverStatus(name, ctx);
-    // STEP6: log final driver status
-    Logger.log('[Radar] STEP6 driver: ' + name + ' → status=' + st.status + ' label=' + st.label + ' job=' + st.job);
+
+    Logger.log(
+      '[Radar] STEP6 driver: ' + name +
+      ' → status=' + st.status +
+      ' label=' + st.label +
+      ' job=' + st.job
+    );
+
     return {
       name: name,
       active: true,
@@ -8332,10 +8695,16 @@ function buildRadarData() {
     };
   });
 
-  var vehicles = VB_RADAR_VEHICLE_MASTER.map(function(plate) {
+  var vehicles = vehicleMaster.map(function(plate) {
     var st = calculateVehicleStatus(plate, ctx);
-    // STEP6: log final vehicle status
-    Logger.log('[Radar] STEP6 vehicle: ' + plate + ' → status=' + st.status + ' label=' + st.label + ' job=' + st.job);
+
+    Logger.log(
+      '[Radar] STEP6 vehicle: ' + plate +
+      ' → status=' + st.status +
+      ' label=' + st.label +
+      ' job=' + st.job
+    );
+
     return {
       plate: plate,
       active: true,
@@ -8348,25 +8717,35 @@ function buildRadarData() {
 
   return {
     ok: true,
-    serverNow: Utilities.formatDate(ctx.now, ctx.tz, 'yyyy-MM-dd HH:mm:ss'),
-    serverDateThai: Utilities.formatDate(ctx.now, ctx.tz, 'dd/MM/') + yearBE,
+    serverNow: Utilities.formatDate(now, tz, 'yyyy-MM-dd HH:mm:ss'),
+    serverDateThai: Utilities.formatDate(now, tz, 'dd/MM/') + yearBE,
     drivers: drivers,
     vehicles: vehicles
   };
 }
 
-
 function apiGetLiveStatus() {
   try {
     var data = buildRadarData();
-    Logger.log('apiGetLiveStatus Success: ' + JSON.stringify(data));
+
+    Logger.log(
+      '[Radar] apiGetLiveStatus OK: drivers=' +
+      ((data && data.drivers) ? data.drivers.length : 0) +
+      ' vehicles=' +
+      ((data && data.vehicles) ? data.vehicles.length : 0) +
+      ' serverNow=' +
+      (data && data.serverNow ? data.serverNow : '-')
+    );
+
     return data;
   } catch (e) {
-    Logger.log('apiGetLiveStatus Error: ' + (e && e.stack ? e.stack : e));
-    return { ok: false, error: e.message };
+    Logger.log('[Radar] apiGetLiveStatus ERROR: ' + (e && e.stack ? e.stack : e));
+    return {
+      ok: false,
+      error: e && e.message ? e.message : String(e)
+    };
   }
 }
-
 // ===================== BERRY FIX: ACTUAL END MANAGEMENT =====================
 // ANCHOR: getActualEndsMap
 function getActualEndsMap() {
@@ -8428,6 +8807,7 @@ function getActualEndsMap() {
   return map;
 }
 
+// ANCHOR: closeBookingActualEnd
 function closeBookingActualEnd(payload) {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(15000)) return { ok: false, error: "ระบบยุ่ง กรุณาลองใหม่ค่ะ" };
@@ -8462,6 +8842,8 @@ function closeBookingActualEnd(payload) {
     var aDateISO = Utilities.formatDate(now, tz, 'yyyy-MM-dd');
     var aTimeStr = Utilities.formatDate(now, tz, 'HH:mm');
     var aFullAt = new Date(now.getTime());
+    // 🍓 BERRY FIX: สร้าง ISO String สำหรับส่งกลับ Client โดยเฉพาะ
+    var aFullAtISO = Utilities.formatDate(now, tz, "yyyy-MM-dd'T'HH:mm:ssXXX");
 
     var finalNote = noteText || 'ปิดงานก่อนเวลา เนื่องจากภารกิจเสร็จเร็วกว่ากำหนด';
 
@@ -8469,7 +8851,7 @@ function closeBookingActualEnd(payload) {
       sh.getRange(foundIdx, 2, 1, 6).setValues([[
         aDateISO,
         aTimeStr,
-        aFullAt,
+        aFullAt, // ลงชีตเป็น Date Obj ปกติ
         closedBy,
         new Date(),
         finalNote
@@ -8496,8 +8878,6 @@ function closeBookingActualEnd(payload) {
         var bookingRes = getBookingById(bId);
         if (bookingRes && bookingRes.ok && bookingRes.data) {
           bookingObj = bookingRes.data;
-        } else if (bookingRes && !bookingRes.ok) {
-          Logger.log('closeBookingActualEnd warn(getBookingById): ' + JSON.stringify(bookingRes));
         }
       }
 
@@ -8505,33 +8885,28 @@ function closeBookingActualEnd(payload) {
         var fallbackRes = getById(bId);
         if (fallbackRes && fallbackRes.ok && fallbackRes.data) {
           bookingObj = fallbackRes.data;
-        } else if (fallbackRes && !fallbackRes.ok) {
-          Logger.log('closeBookingActualEnd warn(getById): ' + JSON.stringify(fallbackRes));
         }
       }
 
       if (!bookingObj) {
-        bookingObj = {
-          bookingId: bId,
-          status: 'approved'
-        };
+        bookingObj = { bookingId: bId, status: 'approved' };
       }
 
       bookingObj.bookingId = bookingObj.bookingId || bookingObj.id || bId;
       bookingObj.id = bookingObj.id || bId;
       bookingObj.status = bookingObj.status || bookingObj['สถานะ'] || 'approved';
-      bookingObj.actualEndAt = aFullAt;
+      bookingObj.actualEndAt = aFullAtISO; // ส่งเข้า Telegram เป็น ISO/String
       bookingObj.actualEndTime = aTimeStr;
       bookingObj['เวลาปิดงานจริง'] = aTimeStr;
       bookingObj.reason = finalNote;
       bookingObj.Reason = finalNote;
       bookingObj.closedBy = closedBy;
 
-      if (typeof sendTelegramNotify === 'function') {
-        notifyResult = sendTelegramNotify(bookingObj, false);
-        Logger.log('closeBookingActualEnd Telegram Result: ' + JSON.stringify(notifyResult));
-      } else {
-        Logger.log('closeBookingActualEnd warn: sendTelegramNotify is not defined');
+      if (!payload.noTelegram) {
+          if (typeof sendTelegramNotify === 'function') {
+            notifyResult = sendTelegramNotify(bookingObj, false);
+            Logger.log('closeBookingActualEnd Telegram Result: ' + JSON.stringify(notifyResult));
+          }
       }
     } catch (notifyErr) {
       Logger.log('closeBookingActualEnd Telegram Error: ' + notifyErr.message);
@@ -8539,7 +8914,7 @@ function closeBookingActualEnd(payload) {
 
     return {
       ok: true,
-      actualEndAt: aFullAt,
+      actualEndAtISO: aFullAtISO, // 🍓 ห้ามคืนค่า aFullAt ที่เป็น Date Obj เด็ดขาด
       actualEndDate: aDateISO,
       actualEndTime: aTimeStr,
       telegramOk: !!(notifyResult && notifyResult.ok),
@@ -8554,6 +8929,77 @@ function closeBookingActualEnd(payload) {
   }
 }
 
+// ANCHOR: Thai Date/Time Formatter Utilities (Unified)
+// ============================================================================
+// Helper: ตัวแปลงวันที่อัจฉริยะ (ดึงเวลามาด้วย ไม่ให้หาย)
+function _parseAnyDateString_(s) {
+  if (!s || s === '-') return null;
+  s = String(s).trim();
+  
+  // 1. ISO Date Exact (เช่น 2026-03-21 ไม่มีเวลา)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    var parts = s.split('-');
+    return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  }
+  
+  // 2. Thai Date Format (เช่น 21/03/2569 14:30 น.)
+  var dm = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (dm) {
+    var yy = Number(dm[3]);
+    if (yy > 2400) yy -= 543; // แปลง พ.ศ. เป็น ค.ศ.
+    var hh = 0, mi = 0;
+    var tm = s.match(/(\d{1,2}):(\d{2})/);
+    if (tm) {
+      hh = Number(tm[1]);
+      mi = Number(tm[2]);
+    }
+    return new Date(yy, Number(dm[2]) - 1, Number(dm[1]), hh, mi);
+  }
+
+  // 3. ปล่อยให้ Javascript จัดการ (รองรับ ISO เต็มรูปแบบ เช่น 2026-03-21T23:55:12+07:00)
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// 1. Core Date Formatter
+function _fmtThaiDateBE_(value) {
+  var tz = (typeof TZ !== 'undefined' && TZ) ? TZ : (Session.getScriptTimeZone() || 'Asia/Bangkok');
+  var d = (value instanceof Date) ? value : _parseAnyDateString_(value);
+
+  if (!d || isNaN(d.getTime())) return '-';
+
+  var adYear = parseInt(Utilities.formatDate(d, tz, 'yyyy'), 10);
+  var beYear = (adYear < 2400) ? (adYear + 543) : adYear;
+  return Utilities.formatDate(d, tz, 'dd/MM/') + beYear;
+}
+
+// 2. Core DateTime Formatter
+function _fmtThaiDateTimeBE_(value) {
+  var tz = (typeof TZ !== 'undefined' && TZ) ? TZ : (Session.getScriptTimeZone() || 'Asia/Bangkok');
+  var d = (value instanceof Date) ? value : _parseAnyDateString_(value);
+
+  if (!d || isNaN(d.getTime())) return '-';
+
+  // 🍓 BERRY FIX: ใช้ดึงวันที่และเวลาแยกกัน แล้วเอามาประกอบใหม่ (เวลาจะไม่กลายเป็น 00:00 แล้ว)
+  var dateText = _fmtThaiDateBE_(d);
+  var timeText = Utilities.formatDate(d, tz, 'HH:mm');
+  return dateText + ' ' + timeText + ' น.';
+}
+
+// 3. Safe Wrappers (หุ้มด้วย Try-Catch กันระบบพัง)
+function fmtThaiDateSafe_(v) {
+  try { return _fmtThaiDateBE_(v); } catch (e) { return '-'; }
+}
+
+function fmtThaiDateTimeSafe_(v) {
+  try { return _fmtThaiDateTimeBE_(v); } catch (e) { return ''; }
+}
+
+// 4. Aliases (ชื่อเดิมที่ระบบเคยเรียกใช้ จะถูกส่งต่อมายัง Core Function ตัวใหม่)
+function fmtThaiDateBE_(d) { return _fmtThaiDateBE_(d); }
+function _fmtThaiDateBE(value) { return _fmtThaiDateBE_(value); } 
+// ============================================================================
+// ANCHOR: runFullTelegramLogTest
 function runFullTelegramLogTest() {
   Logger.log('🚀 === เริ่มต้นการทดสอบระบบ V-Berry Diagnostics (Log Only) ===\n');
 
@@ -8589,12 +9035,22 @@ function runFullTelegramLogTest() {
     var payload = Object.assign({}, mockPayload, extraData || {});
     payload.status = status;
 
-    var res = sendTelegramNotify(payload, true);
-    if (res && res.ok) {
-      Logger.log('\n' + res.log + '\n');
-    } else {
-      Logger.log('❌ Test case failed: ' + caseTitle);
-      if (res) Logger.log(JSON.stringify(res));
+    var msg = buildBookingStatusMessage(payload, status, payload.Reason || payload.reason || payload.CancelReason || payload.cancelReason || '');
+    Logger.log('\n' + msg + '\n');
+
+    if (typeof sendTelegramNotify === 'function') {
+      try {
+        var res = sendTelegramNotify(payload, true);
+        if (res && res.ok && res.log) {
+          Logger.log('[Telegram Preview OK]');
+          Logger.log(res.log);
+        } else {
+          Logger.log('[Telegram Preview Skip/Fail]');
+          if (res) Logger.log(JSON.stringify(res));
+        }
+      } catch (e) {
+        Logger.log('[Telegram Preview Error] ' + e.message);
+      }
     }
 
     logDivider();
@@ -8693,7 +9149,7 @@ function runFullTelegramLogTest() {
       'เลขทะเบียนรถ': 'ฮค-4964',
       'พนักงานขับรถ': 'ประเสริฐ หน่อแก้ว',
       'Reason': 'ปิดงานก่อนเวลา เนื่องจากภารกิจเสร็จเร็วกว่ากำหนด',
-      'actualEndAt': '2026-03-12 14:10'
+      'actualEndAt': '2026-03-12T14:10:00+07:00'
     });
 
     runIndividualCase('7. ไม่อนุมัติ', 'rejected', {
@@ -8765,7 +9221,7 @@ function runFullTelegramLogTest() {
       '13. รายงานสรุปประจำวัน (มีงานปิดก่อนเวลา)',
       [
         mockHeaders,
-        ['BK-040', 'approved', 'เจ้าหน้าที่ทดสอบปิดงาน', 'ติดตั้ง', 'งานระบบ', 'อาคาร A', 'ฮค-4964', 'ประเสริฐ', '2026-03-12', '09:00', '2026-03-12', '17:00', '1', '2026-03-12 14:10']
+        ['BK-040', 'approved', 'เจ้าหน้าที่ทดสอบปิดงาน', 'ติดตั้ง', 'งานระบบ', 'อาคาร A', 'ฮค-4964', 'ประเสริฐ', '2026-03-12', '09:00', '2026-03-12', '17:00', '1', '2026-03-12T14:10:00+07:00']
       ],
       new Date(2026, 2, 12)
     );
@@ -8784,150 +9240,27 @@ function runFullTelegramLogTest() {
   Logger.log('\n🏁 === สิ้นสุดการทดสอบระบบ V-Berry Diagnostics ===');
 }
 
-// ANCHOR: selfTestEarlyClose_All
-function selfTestEarlyClose_All() {
-  var logs = [];
-  var passed = 0;
-  var failed = 0;
-  var testId = 'TEST-EARLY-' + new Date().getTime();
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('BookingActualEnd');
 
-  function add(msg) { logs.push(msg); Logger.log(msg); }
-  function ok(name, detail) {
-    passed++;
-    add('✅ ' + name + (detail ? ' | ' + detail : ''));
-  }
-  function no(name, detail) {
-    failed++;
-    add('❌ ' + name + (detail ? ' | ' + detail : ''));
+
+function selfTestRadarStatusSnapshot() {
+  var data = apiGetLiveStatus();
+  Logger.log('=== START selfTestRadarStatusSnapshot ===');
+
+  if (!data || !data.ok) {
+    Logger.log('❌ FAIL: apiGetLiveStatus failed -> ' + (data ? data.error : 'no response'));
+    return;
   }
 
-  add('🚀 === START: selfTestEarlyClose_All ===');
+  Logger.log('✅ PASS: serverNow=' + data.serverNow);
+  Logger.log('✅ PASS: drivers=' + data.drivers.length + ', vehicles=' + data.vehicles.length);
 
-  try {
-    add('--- [SERVER PHASE 1] ตรวจสอบ Logic ปิดงานก่อนเวลา ---');
-
-    var nowObj = new Date(2026, 2, 20, 14, 0, 0);
-    var pStart = new Date(2026, 2, 20, 8, 0, 0);
-    var plannedEnd1800 = new Date(2026, 2, 20, 18, 0, 0);
-    var plannedEnd1200 = new Date(2026, 2, 20, 12, 0, 0);
-    var actualEnd1200 = new Date(2026, 2, 20, 12, 0, 0);
-
-    var caseA = isBookingActiveNow(pStart, plannedEnd1800, nowObj); // active
-    var caseB = isBookingActiveNow(pStart, plannedEnd1200, nowObj); // ready
-    var caseC = isBookingActiveNow(pStart, actualEnd1200, nowObj);  // ready
-
-    if (caseA === true) ok('CASE A', 'ไม่มี actual end และยังไม่ถึง planned end => ติดภารกิจ');
-    else no('CASE A', 'ผลลัพธ์ไม่ตรงคาด');
-
-    if (caseB === false) ok('CASE B', 'ไม่มี actual end แต่เลย planned end แล้ว => พร้อม');
-    else no('CASE B', 'ผลลัพธ์ไม่ตรงคาด');
-
-    if (caseC === false) ok('CASE C', 'มี actual end ก่อน planned end => พร้อม');
-    else no('CASE C', 'ผลลัพธ์ไม่ตรงคาด');
-
-    ok('CASE D', 'repair block เป็น logic คนละ priority layer ของ radar ไม่ชนกับ early close');
-
-    add('--- [SERVER PHASE 2] ตรวจสอบเขียน BookingActualEnd จริง ---');
-
-    var closeRes = closeBookingActualEnd({
-      bookingId: testId,
-      closedBy: 'SystemTester',
-      note: 'SelfTest Early Close'
-    });
-
-    if (closeRes && closeRes.ok) {
-      ok('closeBookingActualEnd', 'บันทึกสำเร็จ actualEndAt=' + closeRes.actualEndAt);
-    } else {
-      no('closeBookingActualEnd', closeRes ? closeRes.error : 'Unknown');
-      throw new Error('closeBookingActualEnd failed');
-    }
-
-    add('--- [SERVER PHASE 3] ตรวจสอบอ่านกลับผ่าน getActualEndsMap ---');
-
-    var map = getActualEndsMap();
-    if (map && map[testId]) {
-      ok(
-        'getActualEndsMap',
-        'พบข้อมูล testId=' + testId +
-        ' date=' + map[testId].actualEndDate +
-        ' time=' + map[testId].actualEndTime
-      );
-    } else {
-      no('getActualEndsMap', 'บันทึกแล้วแต่ map ไม่พบข้อมูล');
-    }
-
-    add('--- [SERVER PHASE 4] Cleanup ข้อมูลทดสอบ ---');
-
-    sheet = ss.getSheetByName('BookingActualEnd');
-    if (!sheet) {
-      no('Cleanup', 'ไม่พบชีต BookingActualEnd');
-    } else {
-      var data = sheet.getDataRange().getValues();
-      var deleted = false;
-
-      for (var i = data.length - 1; i >= 1; i--) {
-        if (String(data[i][0]).trim() === testId) {
-          sheet.deleteRow(i + 1);
-          deleted = true;
-          break;
-        }
-      }
-
-      if (deleted) ok('Cleanup', 'ลบข้อมูลทดสอบออกแล้ว');
-      else no('Cleanup', 'หาแถวข้อมูลทดสอบไม่เจอ');
-    }
-
-    add('🏁 === END: selfTestEarlyClose_All ===');
-
-    return {
-      ok: failed === 0,
-      status: failed === 0 ? 'PASS' : 'FAIL',
-      passed: passed,
-      failed: failed,
-      total: passed + failed,
-      logs: logs
-    };
-
-  } catch (e) {
-    no('FATAL', e.message);
-    if (e && e.stack) add('📨 stack: ' + e.stack);
-
-    return {
-      ok: false,
-      status: 'FAIL',
-      passed: passed,
-      failed: failed,
-      total: passed + failed,
-      logs: logs
-    };
-  }
-}
-
-/* ANCHOR: ensureAvailabilityColumns */
-function ensureAvailabilityColumns() {
-  var sh = SpreadsheetApp.getActiveSpreadsheet()
-             .getSheetByName(SHEET_AVAILABILITY);
-  if (!sh) return { ok: false, error: 'ไม่พบ Sheet Availability' };
-
-  var headers = sh.getRange(1, 1, 1, sh.getLastColumn())
-                  .getValues()[0]
-                  .map(function(h) { return String(h || '').trim(); });
-
-  var required = ['status', 'closedBy', 'closedAt', 'closeNote'];
-  var added = [];
-
-  required.forEach(function(col) {
-    if (headers.indexOf(col) === -1) {
-      var nextCol = sh.getLastColumn() + 1;
-      sh.getRange(1, nextCol).setValue(col);
-      headers.push(col);
-      added.push(col);
-    }
+  data.drivers.forEach(function(d) {
+    Logger.log('[DRIVER] ' + d.name + ' => ' + d.label + ' | ' + d.job);
   });
 
-  Logger.log('[ensureAvailabilityColumns] added: ' + JSON.stringify(added));
-  return { ok: true, added: added };
-}
+  data.vehicles.forEach(function(v) {
+    Logger.log('[VEHICLE] ' + v.plate + ' => ' + v.label + ' | ' + v.job);
+  });
 
+  Logger.log('=== END selfTestRadarStatusSnapshot ===');
+}
