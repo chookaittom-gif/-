@@ -1643,43 +1643,60 @@ async function handleMaintenanceSubmit(e) {
 
 // 2. ฟังก์ชันตัวกลาง (Wiring Function)
 // =========================================
+// ANCHOR: wireFormSubmissions
 function wireFormSubmissions() {
-  console.log("🔌 Wiring Form Submissions (Stable Mode)...");
+  console.log("🔌 Wiring Form Submissions (Stable Mode)...");
 
-  const bindForm = (id, handler) => {
-    const form = document.getElementById(id);
-    if (!form) return;
-
-    // 🚨 เช็คก่อนว่ามี Handler ส่งมาไหม ถ้าไม่มีต้องด่า (เตือน)
-    if (typeof handler !== 'function') {
-        console.error(`❌ Error: Form #${id} ไม่มีฟังก์ชัน Handler ส่งมาด้วย!`);
-        return; 
+  const bindForm = (id, handler, label) => {
+    const form = document.getElementById(id);
+    if (!form) {
+      console.warn(`⚠️ Form #${id} not found`);
+      return;
     }
 
-    if (form.dataset.wired === "true") {
-      console.log(`   ℹ️ Form #${id} already wired. Skipping.`);
-      return;
-    }
+    if (typeof handler !== 'function') {
+      console.error(`❌ Handler missing for #${id}`);
+      return;
+    }
 
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        console.log(`🚀 Form #${id} submitted via JS`);
-        // เรียกใช้ handler ที่ส่งมา
-        await handler(e);
-        return false;
-    });
+    if (form.dataset.wired === 'true') {
+      console.log(`ℹ️ Form #${id} already wired`);
+      return;
+    }
 
-    form.dataset.wired = "true";
-    console.log(`   ✅ Form #${id} wired successfully.`);
-  };
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      e.stopPropagation();
 
-  // 3. เรียกใช้งาน (ต้องส่งคู่กันแบบนี้) ✅
-  bindForm('insurance-form', handleInsuranceSubmit);
-  bindForm('maintenance-form', handleMaintenanceSubmit);
-  
-  bindForm('fuel-form', submitFuel); // เปิดการทำงานของ submitFuel
+      if (form.dataset.submitting === 'true') {
+        console.warn(`🚫 Duplicate submit blocked: #${id}`);
+        return false;
+      }
+
+      form.dataset.submitting = 'true';
+      console.log(`🚀 Form #${id} submitted via JS`);
+
+      try {
+        await handler(e);
+      } catch (err) {
+        console.error(`❌ Submit error on #${id}:`, err);
+        if (typeof showToast === 'function') {
+          showToast(`เกิดข้อผิดพลาด: ${err.message || err}`, 'error');
+        }
+      } finally {
+        form.dataset.submitting = 'false';
+      }
+
+      return false;
+    });
+
+    form.dataset.wired = 'true';
+    console.log(`✅ ${label || id} wired successfully`);
+  };
+
+  bindForm('fuel-form', submitFuel, 'Fuel Form');
+  bindForm('insurance-form', handleInsuranceSubmit, 'Insurance Form');
+  bindForm('maintenance-form', handleMaintenanceSubmit, 'Maintenance Form');
 }
 
 async function handleBookingSubmit(event) {
@@ -2562,64 +2579,204 @@ async function loadFuelData() {
 
 /* [ANCHOR: Client - Load Insurance & Maintenance Tab Options] */
 async function loadInsuranceTabOptions() {
-    _scheduleTabLoad(async () => {
-        if (window.__loaded_insurance_opts) {
-            // 🍓 BERRY FIX: เปลี่ยนไปเรียกฟังก์ชัน List สำหรับระบบ Pagination
-            if (typeof loadInsuranceList === 'function') loadInsuranceList(); 
-            return;
-        }
+  _scheduleTabLoad(async () => {
+    if (window.__vbCurrentTab !== '#insurance-tab') return;
 
-        var plateEl = document.getElementById('insurance-plate');
-        if (plateEl) {
-             plateEl.innerHTML = '<option>กำลังโหลด...</option>';
-             try {
-                 var res = await googleScriptRunLimited('apiGetInsurancePlates');
-                 if (res && res.ok) {
-                     var plates = res.plates ||[];
-                     plateEl.innerHTML = '<option value="">-- เลือกรถ --</option>' +
-                        plates.map(p => {
-                            var val = (typeof p === 'object') ? p.plate : p;
-                            return `<option value="${val}">${val}</option>`;
-                        }).join('');
-                     window.__loaded_insurance_opts = true;
-                 }
-             } catch(e) {}
-        }
-        // 🍓 BERRY FIX: เปลี่ยนไปเรียกฟังก์ชัน List
-        if (typeof loadInsuranceList === 'function') loadInsuranceList(); 
-    });
+    const plateEl = document.getElementById('insurance-plate');
+    const driverEl = document.getElementById('insurance-driver-select');
+
+    if (!plateEl && !driverEl) return;
+    if (window.__loading_insurance_opts) return;
+
+    window.__loading_insurance_opts = true;
+
+    if (plateEl) {
+      plateEl.innerHTML = '<option value="">⏳ กำลังโหลดรายการรถ...</option>';
+    }
+    if (driverEl) {
+      driverEl.innerHTML = '<option value="">⏳ กำลังโหลดรายชื่อผู้บันทึก...</option>';
+    }
+
+    try {
+      const run = (typeof window.gas === 'function')
+        ? window.gas
+        : (typeof window.googleScriptRunLimited === 'function'
+            ? window.googleScriptRunLimited
+            : window.googleScriptRun);
+
+      const [plateRes, driverRes] = await Promise.all([
+        run('apiGetInsurancePlates', {}),
+        new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)
+            .getDriverList();
+        })
+      ]);
+
+      if (window.__vbCurrentTab !== '#insurance-tab') return;
+
+      if (!plateRes || !plateRes.ok) {
+        throw new Error((plateRes && plateRes.error) || 'โหลดทะเบียนรถไม่สำเร็จ');
+      }
+
+      const plates = Array.isArray(plateRes.plates) ? plateRes.plates : [];
+      const drivers = Array.isArray(driverRes) ? driverRes : [];
+
+      if (plateEl) {
+        plateEl.innerHTML =
+          '<option value="">-- เลือกรถ --</option>' +
+          plates.map(function(p) {
+            const val = (typeof p === 'object') ? (p.plate || '') : String(p || '');
+            return `<option value="${String(val).replace(/"/g, '&quot;')}">${String(val)}</option>`;
+          }).join('');
+      }
+
+      if (driverEl) {
+        driverEl.innerHTML =
+          '<option value="">-- เลือกผู้บันทึก --</option>' +
+          drivers.map(function(name) {
+            const val = String(name || '').trim();
+            return `<option value="${val.replace(/"/g, '&quot;')}">${val}</option>`;
+          }).join('');
+      }
+
+      window.__loaded_insurance_opts = true;
+      console.log('✅ Insurance Tab Options loaded:', {
+        plates: plates.length,
+        drivers: drivers.length
+      });
+
+    } catch (e) {
+      console.error('❌ loadInsuranceTabOptions error:', e);
+
+      if (plateEl) {
+        plateEl.innerHTML = '<option value="">❌ โหลดรายการรถไม่สำเร็จ</option>';
+      }
+      if (driverEl) {
+        driverEl.innerHTML = '<option value="">❌ โหลดรายชื่อผู้บันทึกไม่สำเร็จ</option>';
+      }
+
+      if (typeof showToast === 'function') {
+        showToast('โหลดข้อมูลแท็บประกันภัยไม่สำเร็จ: ' + e.message, 'error');
+      }
+
+    } finally {
+      window.__loading_insurance_opts = false;
+
+      if (window.__vbCurrentTab === '#insurance-tab' && typeof loadInsuranceList === 'function') {
+        loadInsuranceList();
+      }
+    }
+  });
 }
 
+// ANCHOR: loadMaintenanceTabOptions
 async function loadMaintenanceTabOptions() {
     _scheduleTabLoad(async () => {
+        if (window.__vbCurrentTab !== '#maintenance-tab') return;
+        if (window.__loading_maintenance_opts) return;
+
+        const plateEl = document.getElementById('maintenance-plate');
+        const driverEl = document.getElementById('maintenance-driver-select');
+
+        if (!plateEl && !driverEl) return;
+
         if (window.__loaded_maintenance_opts) {
-            // 🍓 BERRY FIX: เปลี่ยนไปเรียกฟังก์ชัน List สำหรับระบบ Pagination
-            if (typeof loadMaintenanceList === 'function') loadMaintenanceList(); 
+            if (window.__vbCurrentTab === '#maintenance-tab' && typeof loadMaintenanceList === 'function') {
+                loadMaintenanceList();
+            }
             return;
         }
 
-        var plateEl = document.getElementById('maintenance-plate');
+        window.__loading_maintenance_opts = true;
+
         if (plateEl) {
-             plateEl.innerHTML = '<option>กำลังโหลด...</option>';
-             try {
-                 var res = await googleScriptRunLimited('apiGetMaintenancePlates');
-                 if (res && res.ok) {
-                     var plates = res.plates ||[];
-                     plateEl.innerHTML = '<option value="">-- เลือกรถ --</option>' +
-                        plates.map(p => {
-                            var val = (typeof p === 'object') ? p.plate : p;
-                            return `<option value="${val}">${val}</option>`;
-                        }).join('');
-                     window.__loaded_maintenance_opts = true;
-                 }
-             } catch(e) {}
+            plateEl.innerHTML = '<option value="">⏳ กำลังโหลดรายการรถ...</option>';
         }
-        // 🍓 BERRY FIX: เปลี่ยนไปเรียกฟังก์ชัน List
-        if (typeof loadMaintenanceList === 'function') loadMaintenanceList(); 
+        if (driverEl) {
+            driverEl.innerHTML = '<option value="">⏳ กำลังโหลดรายชื่อพนักงานขับรถ...</option>';
+        }
+
+        try {
+            const runner = (typeof window.googleScriptRunLimited === 'function')
+                ? window.googleScriptRunLimited
+                : window.googleScriptRun;
+
+            const [plateRes, driverRes] = await Promise.all([
+                runner('apiGetMaintenancePlates', {}),
+                runner('getDriverList', {})
+            ]);
+
+            if (window.__vbCurrentTab !== '#maintenance-tab') return;
+
+            if (!plateRes || !plateRes.ok) {
+                throw new Error((plateRes && (plateRes.error || plateRes.message)) || 'โหลดรายการรถไม่สำเร็จ');
+            }
+
+            const plates = Array.isArray(plateRes.plates) ? plateRes.plates : [];
+            const drivers = Array.isArray(driverRes) ? driverRes : [];
+
+            if (plateEl) {
+                plateEl.innerHTML =
+                    '<option value="">-- เลือกรถ --</option>' +
+                    plates.map(p => {
+                        const val = (typeof p === 'object') ? (p.plate || '') : String(p || '');
+                        return `<option value="${escapeHtml(val)}">${escapeHtml(val)}</option>`;
+                    }).join('');
+            }
+
+            if (driverEl) {
+                driverEl.innerHTML =
+                    '<option value="">-- เลือกพนักงานขับรถ --</option>' +
+                    drivers.map(name => {
+                        const val = String(name || '').trim();
+                        return `<option value="${escapeHtml(val)}">${escapeHtml(val)}</option>`;
+                    }).join('');
+            }
+
+            window.__loaded_maintenance_opts = true;
+
+        } catch (e) {
+            console.warn('[MaintenanceTab] load options error:', e);
+
+            if (plateEl) {
+                plateEl.innerHTML = '<option value="">❌ โหลดรถไม่สำเร็จ (แตะเพื่อลองใหม่)</option>';
+                plateEl.onclick = function () {
+                    if (plateEl.value === '') {
+                        window.__loaded_maintenance_opts = false;
+                        window.__loading_maintenance_opts = false;
+                        plateEl.onclick = null;
+                        loadMaintenanceTabOptions();
+                    }
+                };
+            }
+
+            if (driverEl) {
+                driverEl.innerHTML = '<option value="">❌ โหลดรายชื่อคนขับไม่สำเร็จ (แตะเพื่อลองใหม่)</option>';
+                driverEl.onclick = function () {
+                    if (driverEl.value === '') {
+                        window.__loaded_maintenance_opts = false;
+                        window.__loading_maintenance_opts = false;
+                        driverEl.onclick = null;
+                        loadMaintenanceTabOptions();
+                    }
+                };
+            }
+
+            if (typeof showToast === 'function') {
+                showToast('โหลดตัวเลือกฟอร์มซ่อมบำรุงไม่สำเร็จ: ' + e.message, 'error');
+            }
+
+        } finally {
+            window.__loading_maintenance_opts = false;
+
+            if (window.__vbCurrentTab === '#maintenance-tab' && typeof loadMaintenanceList === 'function') {
+                loadMaintenanceList();
+            }
+        }
     });
 }
-    
-    
 
     function normalizeTabId(val) {
         if (!val) return '#calendar-tab';
@@ -2710,12 +2867,12 @@ function closeModalA11y(id) {
 /**
  * [SECTION 1] Initializer - ตัวควบคุมการเริ่มต้นระบบ (Berry Optimized v2)
  */
+// ANCHOR: initUiComponents
 function initUiComponents() {
-  // ✅ บูรณาการ Guard: ถ้า wired ไปแล้ว ให้เช็คเฉพาะจุด ไม่ต้องเริ่มใหม่หมด
   if (window.vberryUiWired) {
     console.log('⚠️ initUiComponents(): Already wired. Refreshing essential listeners...');
     if (typeof setupDateInputs === 'function') {
-      window.vberryDateSetup = false; // ปลดล็อกชั่วคราวเพื่อให้ตั้งค่าใหม่แบบคลีนๆ
+      window.vberryDateSetup = false;
       setupDateInputs();
     }
     return;
@@ -2744,27 +2901,26 @@ function initUiComponents() {
 
   console.log('🧩 initUiComponents(): Starting wiring phases...');
 
-  // --- PHASE A: Wiring ทันที (UI ส่วนหน้า) ---
   safeCall('wireDashboardButtons', 'Dashboard Buttons');
   safeCall('wireTabRouter', 'Tab Router');
-  safeCall('wireHeaderButtons', 'Header Buttons'); 
+  safeCall('wireHeaderButtons', 'Header Buttons');
   safeCall('wireMonthButtons', 'Calendar Month Controls');
   safeCall('wireStatusFilters', 'Status Filters');
-  
+
   if (typeof forceShowFooter === 'function') forceShowFooter();
 
-  // --- PHASE B: DEFER (รอ DOM พร้อมสำหรับระบบข้อมูล) ---
   const deferWiring = () => {
     console.log('🧪 initUiComponents(): Starting deferred wiring...');
 
     safeCall('setupDateInputs', 'Thai Date System');
-    safeCall('wireBookingFormSubmit', 'Submit Logic (With Locking)'); // 👈 ตัวสำคัญกันเด้งซ้ำ
+    safeCall('wireBookingFormSubmit', 'Submit Logic (With Locking)');
+    safeCall('wireFormSubmissions', 'Fuel/Insurance/Maintenance Submit Wiring');
     safeCall('installVehicleLoaderOnce', 'Vehicle Loader');
     safeCall('wireAvailabilityListeners', 'Availability Listeners');
     safeCall('wireVehicleCountClamp', 'Vehicle Count Clamp');
     safeCall('installSelfTestFloatingButton', 'Self-Test Button');
     safeCall('wireSuspendQuickTimeButtonsOnce', 'Suspend Quick Time Buttons');
-    
+
     console.log('✅ initUiComponents(): All phases complete.');
   };
 
@@ -3110,15 +3266,27 @@ function wireStatusFilters() {
     });
 }
 
+
 /**
  * [SECTION 5] Global Master Exports - หัวใจสำคัญของการแก้ Error
  */
 const berryExports = {
-    initUiComponents, wireHeaderButtons, wireTabRouter, wireMonthButtons,
-    setupDateInputs, wireBookingFormSubmit, installVehicleLoaderOnce,
-    wireAvailabilityListeners, wireVehicleCountClamp, wireStatusFilters,
-    installSelfTestFloatingButton, syncReturnDateMin, syncAllThaiDateInputs,
-    wireDashboardButtons, forceShowFooter
+    initUiComponents,
+    wireHeaderButtons,
+    wireTabRouter,
+    wireMonthButtons,
+    setupDateInputs,
+    wireBookingFormSubmit,
+    wireFormSubmissions,
+    installVehicleLoaderOnce,
+    wireAvailabilityListeners,
+    wireVehicleCountClamp,
+    wireStatusFilters,
+    installSelfTestFloatingButton,
+    syncReturnDateMin,
+    syncAllThaiDateInputs,
+    wireDashboardButtons,
+    forceShowFooter
 };
 
 Object.entries(berryExports).forEach(([name, fn]) => {
